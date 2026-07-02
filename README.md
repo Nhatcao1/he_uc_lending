@@ -32,6 +32,10 @@ Web app planning:
 
 - `docs/WEB_APP_PLAN.md`
 
+Web receiver:
+
+- `code/server/web/he_job_server.py`
+
 Client prep code:
 
 - `code/client/prepare_lending_payload.py`
