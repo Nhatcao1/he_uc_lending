@@ -27,3 +27,18 @@ Local-only paths are ignored by git:
 - `ciphertexts/`
 - `encrypted_payloads/`
 - `server_returns/`
+
+## Build Server Code
+
+From the repo root:
+
+```bash
+cmake -S . -B build -DOpenFHE_DIR=/path/to/OpenFHEConfig.cmake-directory
+cmake --build build
+```
+
+The first tracked executable is:
+
+```text
+server_numeric_summary
+```

@@ -18,11 +18,14 @@ Local-only folders ignored by git:
 Planned server executables:
 
 ```text
-server_missing_counts
+server_numeric_summary
 server_policy_counts
 server_rule_score
 ```
 
-Input/output contract will be added once the first OpenFHE C++ command is
-implemented.
+First executable:
+
+- `numeric_summary/server_numeric_summary.cpp`
+- computes encrypted sums for prepared numeric columns
+- writes encrypted sum ciphertexts and a `summary_manifest.csv`
 
