@@ -55,6 +55,36 @@ OpenFHE C++ binaries:
 
 The web layer calls these binaries with `subprocess`.
 
+## Native Boundary Clarification
+
+Node.js and Go are not meaningfully more "C++ native" for this project.
+
+The useful integration boundary is:
+
+```text
+HTTP server process
+  -> validates job bundle
+  -> calls C++ OpenFHE executable
+  -> packages result
+```
+
+That is a process boundary, not a language-binding boundary. Python, Node.js,
+Go, and Rust can all call the same C++ binary.
+
+The fastest practical path is Python/FastAPI because:
+
+```text
+less boilerplate
+simple upload/download APIs
+easy JSON handling
+easy subprocess orchestration
+fits the repo's current Python-oriented data preparation flow
+```
+
+Go becomes attractive later if the receiver needs to be a durable standalone
+service with one static-ish binary. Node.js is fine, but it does not add much
+for this workflow. C++ should stay focused on HE compute.
+
 ## Framework Choice
 
 | Option | Fit | Pros | Cons | Decision |
@@ -125,6 +155,37 @@ job.tar.gz
     ...
 ```
 
+The client must send everything the server needs to compute, except the secret
+key.
+
+Required client-sent files:
+
+```text
+job.json
+crypto_context.bin
+eval_sum_keys.bin
+column_manifest.csv
+columns/*.bin
+```
+
+Optional client-sent files:
+
+```text
+public_key.bin
+schema_manifest.json
+normalization_manifest.json
+```
+
+Not allowed:
+
+```text
+secret_key.bin
+private_key.bin
+raw CSV
+plaintext prepared CSV
+decrypted reports
+```
+
 `job.json`:
 
 ```json
@@ -136,6 +197,25 @@ job.tar.gz
   "manifest": "column_manifest.csv",
   "input_dir": "columns"
 }
+```
+
+`column_manifest.csv` must match the existing server binary contract:
+
+```csv
+column,ciphertext,rows,slots
+loan_amnt,loan_amnt_0000.bin,4096,4096
+loan_amnt,loan_amnt_0001.bin,904,904
+annual_inc,annual_inc_0000.bin,4096,4096
+```
+
+The receiver maps this bundle into the server command:
+
+```text
+--context       work/crypto_context.bin
+--eval-sum-keys work/eval_sum_keys.bin
+--manifest      work/column_manifest.csv
+--input-dir     work/columns
+--output-dir    work/output
 ```
 
 Do not include:
@@ -333,4 +413,3 @@ Tailscale = private network
 Git = code only
 Ignored folders = data, keys, payloads, server jobs
 ```
-
