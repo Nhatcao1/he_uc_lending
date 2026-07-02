@@ -22,6 +22,18 @@ export HE_RECEIVER_TOKEN="long-random-token"
 python3 code/server/web/he_job_server.py --host 100.84.97.118 --port 8080
 ```
 
+For always-running server deployment, use:
+
+```bash
+deploy/systemd/install_he_job_service.sh "$USER" "$PWD"
+```
+
+Then start it with:
+
+```bash
+sudo systemctl start he-uc-lending@$USER.service
+```
+
 Open:
 
 ```text

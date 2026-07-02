@@ -35,6 +35,7 @@ Web app planning:
 Web receiver:
 
 - `code/server/web/he_job_server.py`
+- `deploy/systemd/README.md`
 
 Client prep code:
 

@@ -92,6 +92,10 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
 }
 
 
+class ReusableThreadingHTTPServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
+
 INDEX_HTML = r"""<!doctype html>
 <html lang="en">
 <head>
@@ -915,7 +919,7 @@ def main() -> None:
     HEJobHandler.jobs_dir = jobs_dir
     HEJobHandler.build_dir = build_dir
 
-    server = ThreadingHTTPServer((args.host, args.port), HEJobHandler)
+    server = ReusableThreadingHTTPServer((args.host, args.port), HEJobHandler)
     print(f"HE job web receiver listening on http://{args.host}:{args.port}")
     print(f"jobs_dir={jobs_dir}")
     print(f"build_dir={build_dir}")
