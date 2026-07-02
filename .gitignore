@@ -16,8 +16,6 @@ encrypted_payloads/
 server_returns/
 server_jobs/
 
-code/client/
-
 build/
 dist/
 *.egg-info/

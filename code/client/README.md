@@ -1,0 +1,39 @@
+# Client Code
+
+Client code runs where the raw lending data and secret key live.
+
+Tracked here:
+
+- data preparation scripts
+- future keygen/encrypt/decrypt wrappers
+- future upload/download helpers
+
+Ignored by git:
+
+- raw data under `data/`
+- generated prepared CSVs under `encrypted_payloads/`
+- secret keys under `keys/`
+- returned encrypted results under `server_returns/`
+
+## Prepare LendingClub Payload
+
+```bash
+python3 code/client/prepare_lending_payload.py \
+  --input data/lending_club_loan_two.csv \
+  --output encrypted_payloads/prepared_lending_values.csv \
+  --clean-output encrypted_payloads/prepared_lending_clean_values.csv \
+  --policy-mask-output encrypted_payloads/prepared_lending_policy_masks.csv \
+  --manifest encrypted_payloads/prepared_lending_manifest.json \
+  --report encrypted_payloads/prepared_lending_report.json
+```
+
+Outputs:
+
+- `prepared_lending_values.csv`: normalized numeric payload for CKKS encryption
+- `prepared_lending_clean_values.csv`: cleaned but unnormalized local baseline
+- `prepared_lending_policy_masks.csv`: local threshold masks for future count EDA
+- `prepared_lending_manifest.json`: schema and normalization metadata
+- `prepared_lending_report.json`: client-side cleaning/quality report
+
+These outputs are local artifacts and are ignored by git.
+

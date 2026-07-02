@@ -33,6 +33,10 @@ Web app planning:
 
 - `docs/WEB_APP_PLAN.md`
 
+Client prep code:
+
+- `code/client/prepare_lending_payload.py`
+
 ## Build Server Code
 
 From the repo root:
