@@ -35,18 +35,19 @@ WORKER_SEMAPHORE = threading.Semaphore(MAX_WORKERS)
 
 
 JOB_TYPES: dict[str, dict[str, Any]] = {
-    "ckks_numeric_summary": {
-        "label": "CKKS Numeric Summary",
-        "family": "Lending",
-        "stage": "EDA aggregate",
+    "home_credit_numeric_summary": {
+        "label": "Home Credit Numeric Summary",
+        "family": "Home Credit",
+        "stage": "Application-train aggregate",
         "scheme": "CKKS",
         "binary": "server_numeric_summary",
-        "description": "Packed numeric sums for prepared lending columns.",
+        "description": "Packed encrypted sums for selected Home Credit numeric columns.",
         "required": ["crypto_context.bin", "eval_sum_keys.bin", "column_manifest.csv", "columns/"],
         "client_requirements": [
-            "Rows with null or invalid selected numeric values removed or imputed before encryption.",
-            "Numeric columns normalized and packed into encrypted column chunks.",
-            "No raw CSV, plaintext prepared CSV, secret key, or decrypted report in the upload.",
+            "Use application_train.csv as the first Home Credit source table.",
+            "Rows with null/invalid selected numeric fields removed or imputed before encryption.",
+            "Numeric columns such as AMT_CREDIT, AMT_INCOME_TOTAL, AMT_ANNUITY, EXT_SOURCE_1/2/3, and DAYS_BIRTH packed into encrypted chunks.",
+            "No raw CSV, plaintext prepared CSV, SK_ID-level plaintext joins, secret key, or decrypted report in the upload.",
             "Manifest rows must point to ciphertext files under columns/.",
         ],
         "client_artifacts": [
@@ -69,83 +70,61 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
             "output/numeric_summary",
         ],
     },
-    "binfhe_outlier_flags": {
-        "label": "BinFHE Outlier Flags",
-        "family": "Lending",
-        "stage": "Rule/outlier cleaning",
-        "scheme": "BinFHE/FHEW",
-        "binary": "server_binfhe_outlier_flags",
-        "description": "Encrypted threshold/LUT flags for scalar or packed outlier manifests.",
-        "required": [
-            "binfhe_context.bin",
-            "binfhe_refresh_key.bin",
-            "binfhe_switch_key.bin",
-            "outlier_ciphertexts.csv",
-            "columns/",
-        ],
-        "client_requirements": [
-            "Outlier source columns parsed as numbers with missing/invalid rows removed before encryption.",
-            "Use packed bucket files for normal tests or scalar files when exact per-rule flags are needed.",
-            "Upload BinFHE context plus refresh/switch keys only; never upload binfhe_secret_key.bin.",
-            "The server returns encrypted flags; the client decrypts and removes rows locally.",
-        ],
-        "client_artifacts": [
-            "binfhe_context.bin",
-            "binfhe_refresh_key.bin",
-            "binfhe_switch_key.bin",
-            "outlier_ciphertexts.csv",
-            "columns/*.bin",
-        ],
-        "server_returns": ["binfhe_outliers/outlier_flag_manifest.csv", "binfhe_outliers/flags/*.flag.bin"],
-        "command": [
-            "--context",
-            "binfhe_context.bin",
-            "--refresh-key",
-            "binfhe_refresh_key.bin",
-            "--switch-key",
-            "binfhe_switch_key.bin",
-            "--manifest",
-            "outlier_ciphertexts.csv",
-            "--input-dir",
-            "columns",
-            "--output-dir",
-            "output/binfhe_outliers",
-        ],
-    },
-    "lending_rule_score": {
-        "label": "Rule-Based Risk Score",
-        "family": "Lending",
-        "stage": "Rule scoring planned",
-        "scheme": "CKKS planned",
-        "binary": "",
-        "description": "Planned weighted rule score over encrypted normalized lending features.",
-        "required": ["crypto_context.bin", "eval_mult_keys.bin", "score_manifest.csv", "features/"],
-        "client_requirements": [
-            "Client must prepare numeric feature vectors and public rule weights.",
-            "Categorical inputs must be encoded before encryption.",
-            "No plaintext labels, raw CSV, or secret key in the upload.",
-        ],
-        "client_artifacts": ["crypto_context.bin", "eval keys", "score_manifest.csv", "features/*.bin"],
-        "server_returns": ["risk_score_manifest.csv", "scores/*.bin"],
-        "command": [],
-        "disabled": True,
-    },
     "home_credit_category_eda": {
-        "label": "Home Credit Category EDA",
+        "label": "Category Default-Rate EDA",
         "family": "Home Credit",
         "stage": "Category-risk EDA planned",
         "scheme": "CKKS/BFV planned",
         "binary": "",
-        "description": "Planned encrypted category-risk tables. UI placeholder only for now.",
-        "required": ["category_manifest.csv", "masks/", "target/"],
+        "description": "Encrypted applicant counts, default counts, and amount sums by one-hot Home Credit category buckets.",
+        "required": ["category_manifest.csv", "masks/", "target/", "amounts/"],
         "client_requirements": [
-            "Client must encode categories as one-hot encrypted masks.",
-            "Target/default labels must be encrypted as masks or omitted for non-target reports.",
-            "Null category values must be mapped to an explicit bucket before encryption.",
-            "No raw string categories, SK_ID-level plaintext joins, or secret keys in the upload.",
+            "Encode categories such as NAME_INCOME_TYPE, OCCUPATION_TYPE, NAME_EDUCATION_TYPE, and ORGANIZATION_TYPE as one-hot encrypted masks.",
+            "Map null category values into an explicit NULL_OR_UNKNOWN bucket before encryption.",
+            "Encrypt TARGET as a 0/1 default mask when target-conditioned reports are requested.",
+            "Encrypt numeric amount vectors such as AMT_CREDIT, AMT_INCOME_TOTAL, and AMT_ANNUITY for grouped sums.",
+            "No raw strings, raw CSV, plaintext SK_ID joins, or secret keys in the upload.",
         ],
-        "client_artifacts": ["category_manifest.csv", "masks/*.bin", "target/*.bin", "eval keys"],
+        "client_artifacts": ["category_manifest.csv", "masks/*.bin", "target/*.bin", "amounts/*.bin", "eval keys"],
         "server_returns": ["category_summary_manifest.csv", "aggregates/*.bin"],
+        "command": [],
+        "disabled": True,
+    },
+    "home_credit_bucket_eda": {
+        "label": "Age / EXT_SOURCE Bucket EDA",
+        "family": "Home Credit",
+        "stage": "Bucket-risk EDA planned",
+        "scheme": "CKKS/BFV planned",
+        "binary": "",
+        "description": "Encrypted default-rate tables for age bins, DAYS_EMPLOYED anomaly, and EXT_SOURCE score buckets.",
+        "required": ["bucket_manifest.csv", "bucket_masks/", "target/"],
+        "client_requirements": [
+            "Convert DAYS_BIRTH to positive age years and bucket client-side.",
+            "Encode DAYS_EMPLOYED == 365243 as an explicit anomaly mask before encryption.",
+            "Bucket EXT_SOURCE_1/2/3 after null handling or explicit null bucket creation.",
+            "Encrypt bucket masks and TARGET mask; server only aggregates encrypted masks.",
+        ],
+        "client_artifacts": ["bucket_manifest.csv", "bucket_masks/*.bin", "target/*.bin", "eval keys"],
+        "server_returns": ["bucket_summary_manifest.csv", "aggregates/*.bin"],
+        "command": [],
+        "disabled": True,
+    },
+    "home_credit_domain_ratio_eda": {
+        "label": "Domain Ratio EDA",
+        "family": "Home Credit",
+        "stage": "Financial-ratio EDA planned",
+        "scheme": "CKKS planned",
+        "binary": "",
+        "description": "Encrypted aggregate tables for CREDIT_INCOME_PERCENT, ANNUITY_INCOME_PERCENT, CREDIT_TERM, and DAYS_EMPLOYED_PERCENT buckets.",
+        "required": ["ratio_manifest.csv", "ratio_buckets/", "target/"],
+        "client_requirements": [
+            "Client computes domain ratios from application_train numeric columns before encryption.",
+            "Handle division by zero/nulls client-side with explicit invalid/null buckets.",
+            "Encrypt ratio bucket masks and TARGET mask for server-side aggregate counts.",
+            "Raw financial values and secret keys stay on the client.",
+        ],
+        "client_artifacts": ["ratio_manifest.csv", "ratio_buckets/*.bin", "target/*.bin", "eval keys"],
+        "server_returns": ["ratio_summary_manifest.csv", "aggregates/*.bin"],
         "command": [],
         "disabled": True,
     },
@@ -161,7 +140,7 @@ INDEX_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>HE UC Lending Receiver</title>
+  <title>HE UC Credit Receiver</title>
   <style>
     :root {
       color-scheme: light;
@@ -403,7 +382,7 @@ INDEX_HTML = r"""<!doctype html>
 <body>
 <header>
   <div class="wrap">
-    <h1>HE UC Lending Receiver</h1>
+    <h1>HE UC Credit Receiver</h1>
     <div class="meta" id="health">Checking server...</div>
   </div>
 </header>

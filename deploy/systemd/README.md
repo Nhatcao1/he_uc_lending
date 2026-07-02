@@ -9,7 +9,7 @@ The service:
 
 - starts on boot
 - restarts if the Python receiver crashes
-- reads `/etc/he-uc-lending.env`
+- reads `/etc/he-uc-credit.env`
 - runs from your clone directory
 - stores jobs under `<clone>/server_jobs/web`
 
@@ -26,7 +26,7 @@ chmod +x deploy/systemd/install_he_job_service.sh
 Edit the env file:
 
 ```bash
-sudo nano /etc/he-uc-lending.env
+sudo nano /etc/he-uc-credit.env
 ```
 
 Set:
@@ -49,14 +49,14 @@ cmake --build build
 Start and enable:
 
 ```bash
-sudo systemctl start he-uc-lending@$USER.service
-sudo systemctl status he-uc-lending@$USER.service
+sudo systemctl start he-uc-credit@$USER.service
+sudo systemctl status he-uc-credit@$USER.service
 ```
 
 Logs:
 
 ```bash
-journalctl -u he-uc-lending@$USER.service -f
+journalctl -u he-uc-credit@$USER.service -f
 ```
 
 Restart after code/build changes:
@@ -64,7 +64,7 @@ Restart after code/build changes:
 ```bash
 git pull
 cmake --build build
-sudo systemctl restart he-uc-lending@$USER.service
+sudo systemctl restart he-uc-credit@$USER.service
 ```
 
 Open:
@@ -75,12 +75,12 @@ http://100.84.97.118:8080
 
 ## Manual Service Install
 
-If you do not want the installer, edit `deploy/systemd/he-uc-lending.service`
-and replace all `/opt/he_uc_lending` paths with your clone path, then:
+If you do not want the installer, edit `deploy/systemd/he-uc-credit.service`
+and replace all `/opt/he_uc_credit` paths with your clone path, then:
 
 ```bash
-sudo cp deploy/systemd/he-uc-lending.service /etc/systemd/system/he-uc-lending@.service
+sudo cp deploy/systemd/he-uc-credit.service /etc/systemd/system/he-uc-credit@.service
 sudo systemctl daemon-reload
-sudo systemctl enable he-uc-lending@$USER.service
-sudo systemctl start he-uc-lending@$USER.service
+sudo systemctl enable he-uc-credit@$USER.service
+sudo systemctl start he-uc-credit@$USER.service
 ```

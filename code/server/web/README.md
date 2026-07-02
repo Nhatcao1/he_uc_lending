@@ -8,7 +8,7 @@ shows status/output files.
 
 The page is organized as:
 
-- job catalog for Lending and Home Credit workflows
+- job catalog for Home Credit workflows
 - selected workflow requirements
 - encrypted artifact upload validation
 - server job status and encrypted result downloads
@@ -38,7 +38,7 @@ deploy/systemd/install_he_job_service.sh "$USER" "$PWD"
 Then start it with:
 
 ```bash
-sudo systemctl start he-uc-lending@$USER.service
+sudo systemctl start he-uc-credit@$USER.service
 ```
 
 Open:
@@ -50,37 +50,13 @@ http://100.84.97.118:8080
 ## Supported Job Types
 
 ```text
-ckks_numeric_summary
-binfhe_outlier_flags
-home_credit_category_eda   planned UI placeholder only
+home_credit_numeric_summary
+home_credit_category_eda       planned UI placeholder only
+home_credit_bucket_eda         planned UI placeholder only
+home_credit_domain_ratio_eda   planned UI placeholder only
 ```
 
-## BinFHE Outlier Upload
-
-Upload these files:
-
-```text
-binfhe_context.bin
-binfhe_refresh_key.bin
-binfhe_switch_key.bin
-outlier_ciphertexts.csv
-columns/
-```
-
-The UI preserves files under `columns/` and saves top-level files by basename.
-The server runs:
-
-```bash
-./build/server_binfhe_outlier_flags \
-  --context <work>/binfhe_context.bin \
-  --refresh-key <work>/binfhe_refresh_key.bin \
-  --switch-key <work>/binfhe_switch_key.bin \
-  --manifest <work>/outlier_ciphertexts.csv \
-  --input-dir <work>/columns \
-  --output-dir <work>/output/binfhe_outliers
-```
-
-## CKKS Numeric Summary Upload
+## Home Credit Numeric Summary Upload
 
 Upload these files:
 

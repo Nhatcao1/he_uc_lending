@@ -1,415 +1,53 @@
-# Web App Plan For Client And Server
+# Home Credit Web App Plan
 
-## Goal
+The web app is a thin receiver for encrypted Home Credit HE jobs.
 
-Build a simple HTTP workflow so the local client can send encrypted lending
-payloads to the server at the Tailscale IP and receive encrypted EDA results.
+It should not implement HE math. It should:
 
-The web layer should be boring. It should not implement HE math. It should only
-move job bundles around and invoke the C++ OpenFHE binaries.
+- show available Home Credit workflows
+- show client-side preparation requirements
+- validate required encrypted artifacts before submit
+- store each upload under `server_jobs/web/<job_id>/work`
+- invoke the matching C++ server executable
+- expose job status and encrypted result downloads
 
-```text
-Client web/CLI wrapper
-  prepare data
-  keygen/encrypt locally
-  upload encrypted job bundle
-  poll job status
-  download encrypted result bundle
-  decrypt locally
-
-Server web receiver
-  accept encrypted job bundle
-  validate files
-  run server_numeric_summary
-  package encrypted results
-  expose status/result
-```
-
-## Recommendation
-
-Use Python first.
-
-For the server receiver:
+## Active Workflows
 
 ```text
-FastAPI if installing dependencies is OK.
-Python standard library http.server if zero-dependency is more important.
+home_credit_numeric_summary
+home_credit_category_eda       planned
+home_credit_bucket_eda         planned
+home_credit_domain_ratio_eda   planned
 ```
 
-For the client:
+## Runtime
 
-```text
-Python CLI first.
-Optional tiny local web UI later.
+Manual run:
+
+```bash
+python3 code/server/web/he_job_server.py \
+  --host 100.84.97.118 \
+  --port 8080 \
+  --build-dir build
 ```
 
-The HE compute should stay in C++:
-
-```text
-OpenFHE C++ binaries:
-  client_keygen
-  client_encrypt
-  server_numeric_summary
-  client_decrypt
-```
-
-The web layer calls these binaries with `subprocess`.
-
-## Native Boundary Clarification
-
-Node.js and Go are not meaningfully more "C++ native" for this project.
-
-The useful integration boundary is:
-
-```text
-HTTP server process
-  -> validates job bundle
-  -> calls C++ OpenFHE executable
-  -> packages result
-```
-
-That is a process boundary, not a language-binding boundary. Python, Node.js,
-Go, and Rust can all call the same C++ binary.
-
-The fastest practical path is Python/FastAPI because:
-
-```text
-less boilerplate
-simple upload/download APIs
-easy JSON handling
-easy subprocess orchestration
-fits the repo's current Python-oriented data preparation flow
-```
-
-Go becomes attractive later if the receiver needs to be a durable standalone
-service with one static-ish binary. Node.js is fine, but it does not add much
-for this workflow. C++ should stay focused on HE compute.
-
-## Framework Choice
-
-| Option | Fit | Pros | Cons | Decision |
-| --- | --- | --- | --- | --- |
-| FastAPI | Best for V1 web receiver | Small code, good upload API, easy status endpoints, easy docs | Needs `fastapi` and `uvicorn` install | Recommended if server can install Python deps |
-| Python stdlib HTTP | Good fallback | No dependencies, works anywhere Python exists | More manual multipart/upload handling, less ergonomic | Use if dependency install is annoying |
-| Node.js | Fine but not better | Easy web APIs, good upload libraries | Adds npm dependency tree, no advantage for OpenFHE | Skip for now |
-| Go | Strong production option | Single binary web server, good concurrency, easy deploy | More code, separate toolchain, still calls C++ binary | Later if receiver becomes important |
-| Rust | Strong but heavier | Safe, fast, robust | More build friction, slower iteration | Not V1 |
-| C++ native HTTP | Possible but wrong first move | Same language as OpenFHE | HTTP server, upload parsing, security handling become distractions | Avoid |
-
-## Why Not C++ For Web
-
-C++ should own HE compute. HTTP should be a thin orchestration layer.
-
-Putting the web server in C++ would mean spending time on:
-
-```text
-HTTP routing
-multipart upload parsing
-auth headers
-path traversal protection
-tar extraction safety
-job status storage
-result download
-logging
-```
-
-None of that benefits from being close to OpenFHE. It increases risk and slows
-iteration.
-
-## Deployment Boundary
-
-Server listens only on Tailscale:
-
-```text
-100.84.97.118:8080
-```
-
-Use a shared bearer token:
+Optional web token:
 
 ```bash
 export HE_RECEIVER_TOKEN="long-random-token"
 ```
 
-Requests include:
+The token is only web access control. It is not an HE key.
+
+## Bundle Rule
+
+Client sends encrypted artifacts and manifests only.
+
+Never upload:
 
 ```text
-Authorization: Bearer <token>
-```
-
-This is enough for V1 because Tailscale already provides private network access.
-
-## Job Bundle Contract
-
-Client uploads one archive:
-
-```text
-job.tar.gz
-  job.json
-  crypto_context.bin
-  eval_sum_keys.bin
-  column_manifest.csv
-  columns/
-    loan_amnt_0000.bin
-    annual_inc_0000.bin
-    dti_0000.bin
-    ...
-```
-
-The client must send everything the server needs to compute, except the secret
-key.
-
-Required client-sent files:
-
-```text
-job.json
-crypto_context.bin
-eval_sum_keys.bin
-column_manifest.csv
-columns/*.bin
-```
-
-Optional client-sent files:
-
-```text
-public_key.bin
-schema_manifest.json
-normalization_manifest.json
-```
-
-Not allowed:
-
-```text
-secret_key.bin
-private_key.bin
 raw CSV
 plaintext prepared CSV
-decrypted reports
-```
-
-`job.json`:
-
-```json
-{
-  "job_type": "numeric_summary",
-  "schema_version": 1,
-  "serialization": "binary",
-  "scheme": "CKKS",
-  "manifest": "column_manifest.csv",
-  "input_dir": "columns"
-}
-```
-
-`column_manifest.csv` must match the existing server binary contract:
-
-```csv
-column,ciphertext,rows,slots
-loan_amnt,loan_amnt_0000.bin,4096,4096
-loan_amnt,loan_amnt_0001.bin,904,904
-annual_inc,annual_inc_0000.bin,4096,4096
-```
-
-The receiver maps this bundle into the server command:
-
-```text
---context       work/crypto_context.bin
---eval-sum-keys work/eval_sum_keys.bin
---manifest      work/column_manifest.csv
---input-dir     work/columns
---output-dir    work/output
-```
-
-Do not include:
-
-```text
 secret key
-raw CSV
-decrypted values
-client local config with secrets
-```
-
-Reject bundles containing suspicious names:
-
-```text
-secret
-private
-sk
-raw
-.ssh
-```
-
-## Result Bundle Contract
-
-Server returns:
-
-```text
-result.tar.gz
-  status.json
-  summary_manifest.csv
-  sums/
-    loan_amnt.sum.bin
-    annual_inc.sum.bin
-    dti.sum.bin
-    ...
-  server_log.txt
-```
-
-`status.json`:
-
-```json
-{
-  "job_id": "20260702-abc123",
-  "job_type": "numeric_summary",
-  "status": "done",
-  "result": "result.tar.gz"
-}
-```
-
-## API Design
-
-Minimal endpoints:
-
-```text
-GET  /health
-POST /jobs
-GET  /jobs/{job_id}
-GET  /jobs/{job_id}/result
-```
-
-`POST /jobs`:
-
-```text
-Input:
-  multipart file field named "bundle"
-
-Output:
-  {"job_id": "...", "status": "queued"}
-```
-
-`GET /jobs/{job_id}`:
-
-```text
-Output:
-  {"job_id": "...", "status": "queued|running|done|failed"}
-```
-
-`GET /jobs/{job_id}/result`:
-
-```text
-Output:
-  result.tar.gz
-```
-
-## Server Runtime Layout
-
-Ignored by git:
-
-```text
-server_jobs/
-  incoming/
-  running/
-  done/
-  failed/
-```
-
-For each job:
-
-```text
-server_jobs/running/<job_id>/
-  input/job.tar.gz
-  work/
-    crypto_context.bin
-    eval_sum_keys.bin
-    column_manifest.csv
-    columns/
-  output/
-    summary_manifest.csv
-    *.sum.bin
-  server_log.txt
-```
-
-## Server Command
-
-The receiver invokes:
-
-```bash
-./build/server_numeric_summary \
-  --context <work>/crypto_context.bin \
-  --eval-sum-keys <work>/eval_sum_keys.bin \
-  --manifest <work>/column_manifest.csv \
-  --input-dir <work>/columns \
-  --output-dir <work>/output
-```
-
-Then it packages `<work>/output` into `result.tar.gz`.
-
-## Client Flow
-
-V1 client can be a CLI:
-
-```bash
-python3 code/client/prepare_lending_payload.py
-./build/client_keygen ...
-./build/client_encrypt ...
-python3 code/client/upload_job.py \
-  --server http://100.84.97.118:8080 \
-  --bundle encrypted_payloads/job.tar.gz
-python3 code/client/download_result.py \
-  --server http://100.84.97.118:8080 \
-  --job-id <job_id>
-./build/client_decrypt ...
-```
-
-Later, a local client web UI can wrap these same commands.
-
-## Implementation Order
-
-1. Track server receiver code:
-
-```text
-code/server/receiver/receiver.py
-code/server/receiver/README.md
-```
-
-2. Add server ignored runtime path:
-
-```text
-server_jobs/
-```
-
-3. Add simple upload validation:
-
-```text
-max file size
-required files
-allowed job_type
-safe tar extraction
-reject secret-key-looking filenames
-```
-
-4. Add client upload/download helpers under tracked `code/client/` only if we
-decide client code should be cloned on both machines. Keep data, keys, and
-payloads ignored.
-
-5. Add optional local client web UI after CLI works.
-
-## Decision For This Project
-
-Use:
-
-```text
-FastAPI receiver on server
-Python CLI client first
-C++ OpenFHE binaries for all HE operations
-Tailscale IP for transport
-Bearer token for V1 auth
-```
-
-This keeps the system practical:
-
-```text
-Python = web/job orchestration
-C++ = HE compute
-Tailscale = private network
-Git = code only
-Ignored folders = data, keys, payloads, server jobs
+decrypted report
 ```

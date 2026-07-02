@@ -4,9 +4,9 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 SERVICE_USER="${1:-$USER}"
 SERVICE_REPO_DIR="${2:-$REPO_DIR}"
-ENV_FILE="/etc/he-uc-lending.env"
-UNIT_NAME="he-uc-lending@${SERVICE_USER}.service"
-UNIT_PATH="/etc/systemd/system/he-uc-lending@.service"
+ENV_FILE="/etc/he-uc-credit.env"
+UNIT_NAME="he-uc-credit@${SERVICE_USER}.service"
+UNIT_PATH="/etc/systemd/system/he-uc-credit@.service"
 
 if ! command -v systemctl >/dev/null 2>&1; then
   echo "systemctl not found; this installer is for Linux systemd servers." >&2
@@ -24,14 +24,14 @@ if [ ! -f "$SERVICE_REPO_DIR/code/server/web/he_job_server.py" ]; then
 fi
 
 if [ ! -f "$ENV_FILE" ]; then
-  sudo cp "$REPO_DIR/deploy/systemd/he-uc-lending.env.example" "$ENV_FILE"
+  sudo cp "$REPO_DIR/deploy/systemd/he-uc-credit.env.example" "$ENV_FILE"
   sudo chmod 600 "$ENV_FILE"
   echo "Created $ENV_FILE. Edit HE_RECEIVER_TOKEN before opening the service to clients."
 fi
 
 sudo tee "$UNIT_PATH" >/dev/null <<UNIT
 [Unit]
-Description=HE UC Lending encrypted job receiver
+Description=HE UC Credit encrypted job receiver
 After=network-online.target
 Wants=network-online.target
 

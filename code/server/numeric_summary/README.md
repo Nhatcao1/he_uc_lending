@@ -28,10 +28,10 @@ CSV format:
 
 ```csv
 column,ciphertext,rows,slots
-loan_amnt,loan_amnt_0000.bin,4096,4096
-loan_amnt,loan_amnt_0001.bin,904,904
-annual_inc,annual_inc_0000.bin,4096,4096
-annual_inc,annual_inc_0001.bin,904,904
+AMT_CREDIT,AMT_CREDIT_0000.bin,4096,4096
+AMT_CREDIT,AMT_CREDIT_0001.bin,904,904
+AMT_INCOME_TOTAL,AMT_INCOME_TOTAL_0000.bin,4096,4096
+AMT_INCOME_TOTAL,AMT_INCOME_TOTAL_0001.bin,904,904
 ```
 
 Fields:
@@ -75,8 +75,8 @@ Run:
 
 ```csv
 column,encrypted_sum_ciphertext,total_rows,total_slots,chunk_count
-loan_amnt,loan_amnt.sum.bin,5000,5000,2
-annual_inc,annual_inc.sum.bin,5000,5000,2
+AMT_CREDIT,AMT_CREDIT.sum.bin,5000,5000,2
+AMT_INCOME_TOTAL,AMT_INCOME_TOTAL.sum.bin,5000,5000,2
 ```
 
 The client decrypts each encrypted sum and computes:

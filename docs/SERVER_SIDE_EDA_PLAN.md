@@ -1,293 +1,129 @@
-# Server-Side HE EDA Plan
+# Server-Side Home Credit EDA Plan
 
-## Boundary
+The server-side HE plan is now Home Credit first.
 
-All exploratory analysis happens on the server, but only over encrypted or
-public-safe inputs.
-
-```text
-Client/local:
-  owns raw LendingClub data
-  prepares selected fields and masks
-  generates HE keys/context
-  encrypts payloads
-  sends encrypted payloads to server
-  keeps secret key local
-  decrypts encrypted server results
-
-Server:
-  receives encrypted payloads
-  receives crypto context and evaluation material
-  runs EDA-style aggregate computations under HE
-  returns encrypted results
-  never receives raw data
-  never receives secret key
-```
-
-## Dataset For V1
-
-Use the LendingClub single-table dataset first.
-
-Local raw file location is intentionally ignored by git:
+Initial source table:
 
 ```text
-data/lending_club_loan_two.csv
+data/home_credit/application_train.csv
 ```
 
-Fields to prepare locally for V1:
+Notebook context:
 
 ```text
-row_id
-loan_amnt
-annual_inc
-dti
-open_acc
-total_acc
-revol_util
-revol_bal
-pub_rec
-mort_acc
-pub_rec_bankruptcies
-term
-loan_status
+home_credit_start-here-a-gentle-introduction.ipynb
 ```
 
-The `loan_status` field is useful for validation and aggregate EDA, but V1 is
-not an ML training project.
+## Privacy Boundary
 
-## EDA Tasks To Implement
+Client owns:
 
-### 1. Missing-Value Counts
+- raw Home Credit CSVs
+- null handling and bucket policy
+- one-hot/category encoding
+- secret key
+- final decrypted report
 
-Question:
+Server receives:
+
+- encrypted masks and numeric vectors
+- public/evaluation keys
+- plain manifests describing encrypted artifact names and aggregate labels
+
+Server must not receive:
+
+- raw CSV
+- plaintext prepared CSV
+- secret key
+- row-level decrypted values
+- plaintext applicant joins
+
+## Active Server Shape
+
+Keep the server as an aggregate executor:
 
 ```text
-How many missing values exist per selected column?
+encrypted inputs + manifests -> encrypted aggregate outputs
 ```
 
-Client prepares encrypted 0/1 null masks:
+The first reusable executable remains:
 
 ```text
-is_null_annual_inc
-is_null_dti
-is_null_revol_util
-...
+server_numeric_summary
 ```
 
-Server computes encrypted sums.
-
-Important limitation:
+It can sum packed encrypted Home Credit numeric columns such as:
 
 ```text
-The server cannot infer CSV missingness from only encrypted raw values.
-Missingness must be encoded before encryption as is_missing/is_valid masks,
-or missing values must be dropped/filled before encryption.
+AMT_CREDIT
+AMT_INCOME_TOTAL
+AMT_ANNUITY
+EXT_SOURCE_1
+EXT_SOURCE_2
+EXT_SOURCE_3
+DAYS_BIRTH
 ```
 
-Suggested scheme:
+## Planned Home Credit EDA Jobs
 
-```text
-BFV/BGV for exact counts, or CKKS for approximate packed sums
-```
-
-Practical V1 decision:
-
-```text
-Do not start with server-side missing detection.
-Prepare clean values on the client first, then start server HE EDA with
-aggregate sums/means or rule-score summaries.
-```
-
-### 2. Policy Threshold Counts
-
-Questions from the notebook:
-
-```text
-How many applicants have annual_inc > 250000?
-How many applicants have dti > 50?
-How many applicants have open_acc > 40?
-How many applicants have total_acc > 80?
-How many applicants have revol_util > 120?
-How many applicants have revol_bal > 250000?
-```
-
-V1 approach:
-
-```text
-Client creates plaintext threshold masks locally.
-Client encrypts each mask.
-Server sums encrypted masks.
-Client decrypts aggregate counts.
-```
-
-Later approach:
-
-```text
-Server computes encrypted comparisons with BinFHE or another comparison flow.
-```
-
-### 3. Distribution / Bin Counts
+### 1. Category Default-Rate EDA
 
 Questions:
 
-```text
-What is the distribution of DTI?
-What is the distribution of annual income?
-What is the distribution of revolving utilization?
-```
+- What is the default rate by `NAME_INCOME_TYPE`?
+- What is the default rate by `OCCUPATION_TYPE`?
+- What is the default rate by `NAME_EDUCATION_TYPE`?
+- What is the default rate by `ORGANIZATION_TYPE`?
 
-V1 approach:
-
-```text
-Client creates bin-membership masks.
-Server sums encrypted masks per bin.
-```
-
-Example bins:
+Server operations:
 
 ```text
-dti:        [0,10), [10,20), [20,30), [30,40), [40,50), [50,+)
-revol_util: [0,20), [20,40), [40,60), [60,80), [80,100), [100,+)
-annual_inc: [0,25000), [25000,50000), [50000,100000), [100000,250000), [250000,+)
+sum(category_mask)
+sum(category_mask * target_mask)
+sum(category_mask * AMT_CREDIT)
+sum(category_mask * AMT_INCOME_TOTAL)
 ```
 
-### 4. Aggregate Sums And Means
+Client decrypts aggregates and computes rates/averages.
+
+### 2. Age / Source Bucket EDA
 
 Questions:
 
+- What is default rate by age bucket?
+- What is default rate by `EXT_SOURCE_1/2/3` bucket?
+- How different is the `DAYS_EMPLOYED == 365243` anomaly group?
+
+Server operations:
+
 ```text
-Average loan amount?
-Average annual income?
-Average DTI?
-Average revolving balance?
+sum(bucket_mask)
+sum(bucket_mask * target_mask)
 ```
 
-Server computes encrypted sums. Count can be public if row count is not
-sensitive, or encrypted if needed.
+### 3. Domain Ratio EDA
 
-Suggested scheme:
+Client computes and buckets:
 
 ```text
-CKKS for packed approximate real-valued sums
+CREDIT_INCOME_PERCENT = AMT_CREDIT / AMT_INCOME_TOTAL
+ANNUITY_INCOME_PERCENT = AMT_ANNUITY / AMT_INCOME_TOTAL
+CREDIT_TERM = AMT_ANNUITY / AMT_CREDIT
+DAYS_EMPLOYED_PERCENT = DAYS_EMPLOYED / DAYS_BIRTH
 ```
 
-### 5. Category Counts
+Server aggregates encrypted bucket counts/default counts.
 
-Questions:
+## Next Implementation
+
+Build client preparation first:
 
 ```text
-How many loans are 36-month vs 60-month?
-How many records per home_ownership bucket?
-How many records per purpose bucket?
+code/client/prepare_home_credit_category_eda.py
 ```
 
-V1 approach:
+Then build server aggregate support:
 
 ```text
-Client normalizes categories and creates one-hot masks.
-Server sums encrypted category masks.
-```
-
-Start with `term`, because it has only two values:
-
-```text
-36 months
-60 months
-```
-
-### 6. Rule-Based Risk Score Summary
-
-This is not ML. It is a transparent policy score.
-
-Example:
-
-```text
-risk_score =
-    0.30 * dti_scaled
-  + 0.25 * revol_util_scaled
-  + 0.15 * revol_bal_scaled
-  + 0.10 * pub_rec
-  + 0.10 * pub_rec_bankruptcies
-  + 0.05 * term_60_month_flag
-  - 0.15 * annual_inc_scaled
-```
-
-Server computes encrypted score vector or encrypted aggregate score statistics.
-
-Suggested scheme:
-
-```text
-CKKS
-```
-
-V1 output:
-
-```text
-encrypted risk_score per row
-encrypted sum risk_score
-```
-
-Client decrypts and validates against a plaintext baseline.
-
-## Key And File Handling
-
-Ignored local folders:
-
-```text
-keys/
-data/
-ciphertexts/
-encrypted_payloads/
-server_returns/
-```
-
-The server may receive:
-
-```text
-crypto context
-public key
-evaluation keys
-encrypted input payloads
-public EDA config
-```
-
-The server must not receive:
-
-```text
-secret key
-raw CSV
-decrypted intermediate values
-```
-
-## First Implementation Order
-
-```text
-1. Prepare clean numeric payload on the client.
-2. Define encrypted payload format for prepared values.
-3. Implement OpenFHE encrypted sums/means or rule-score summary.
-4. Split commands into client encrypt, server eval, client decrypt.
-5. Add encrypted missing/valid masks only if missing report is still needed.
-```
-
-## Tracked Vs Ignored
-
-Tracked:
-
-```text
-code/server/
-docs/
-README.md
-.gitignore
-```
-
-Ignored:
-
-```text
-code/client/
-data/
-keys/
-results/
-ciphertexts/
-encrypted_payloads/
-server_returns/
+code/server/home_credit_category_eda/server_home_credit_category_eda.cpp
 ```

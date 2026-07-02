@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(he_uc_lending LANGUAGES CXX)
+project(he_uc_credit LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,28 +15,8 @@ add_executable(server_numeric_summary
     code/server/numeric_summary/server_numeric_summary.cpp
 )
 
-add_executable(client_binfhe_keygen
-    code/client/binfhe_outliers/client_binfhe_keygen.cpp
-)
-
-add_executable(client_binfhe_encrypt_outliers
-    code/client/binfhe_outliers/client_binfhe_encrypt_outliers.cpp
-)
-
-add_executable(client_binfhe_decrypt_outliers
-    code/client/binfhe_outliers/client_binfhe_decrypt_outliers.cpp
-)
-
-add_executable(server_binfhe_outlier_flags
-    code/server/binfhe_outliers/server_binfhe_outlier_flags.cpp
-)
-
 set(HE_UC_OPENFHE_TARGETS
     server_numeric_summary
-    client_binfhe_keygen
-    client_binfhe_encrypt_outliers
-    client_binfhe_decrypt_outliers
-    server_binfhe_outlier_flags
 )
 
 foreach(target_name IN LISTS HE_UC_OPENFHE_TARGETS)
@@ -51,7 +31,6 @@ foreach(target_name IN LISTS HE_UC_OPENFHE_TARGETS)
         ${OpenFHE_INCLUDE}/third-party/include
         ${OpenFHE_INCLUDE}/core
         ${OpenFHE_INCLUDE}/pke
-        ${OpenFHE_INCLUDE}/binfhe
     )
 
     target_link_directories(${target_name} PRIVATE
