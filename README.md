@@ -27,6 +27,11 @@ Local-only paths are ignored by git:
 - `ciphertexts/`
 - `encrypted_payloads/`
 - `server_returns/`
+- `server_jobs/`
+
+Web app planning:
+
+- `docs/WEB_APP_PLAN.md`
 
 ## Build Server Code
 
