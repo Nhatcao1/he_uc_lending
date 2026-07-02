@@ -19,6 +19,7 @@ Planned server executables:
 
 ```text
 server_numeric_summary
+server_binfhe_outlier_flags
 server_policy_counts
 server_rule_score
 ```
@@ -29,3 +30,8 @@ First executable:
 - computes encrypted sums for prepared numeric columns
 - writes encrypted sum ciphertexts and a `summary_manifest.csv`
 
+BinFHE outlier executable:
+
+- `binfhe_outliers/server_binfhe_outlier_flags.cpp`
+- evaluates encrypted bounded integer threshold rules
+- returns encrypted 0/1 outlier flags

@@ -15,28 +15,54 @@ add_executable(server_numeric_summary
     code/server/numeric_summary/server_numeric_summary.cpp
 )
 
-target_compile_options(server_numeric_summary PRIVATE
-    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wpedantic>
-    ${OPENFHE_CXX_FLAGS_LIST}
+add_executable(client_binfhe_keygen
+    code/client/binfhe_outliers/client_binfhe_keygen.cpp
 )
 
-target_include_directories(server_numeric_summary SYSTEM PRIVATE
-    ${OPENMP_INCLUDES}
-    ${OpenFHE_INCLUDE}
-    ${OpenFHE_INCLUDE}/third-party/include
-    ${OpenFHE_INCLUDE}/core
-    ${OpenFHE_INCLUDE}/pke
-    ${OpenFHE_INCLUDE}/binfhe
+add_executable(client_binfhe_encrypt_outliers
+    code/client/binfhe_outliers/client_binfhe_encrypt_outliers.cpp
 )
 
-target_link_directories(server_numeric_summary PRIVATE
-    ${OpenFHE_LIBDIR}
-    ${OPENMP_LIBRARIES}
+add_executable(client_binfhe_decrypt_outliers
+    code/client/binfhe_outliers/client_binfhe_decrypt_outliers.cpp
 )
 
-if(UNIX AND NOT APPLE)
-    target_link_options(server_numeric_summary PRIVATE -Wl,--no-as-needed)
-endif()
+add_executable(server_binfhe_outlier_flags
+    code/server/binfhe_outliers/server_binfhe_outlier_flags.cpp
+)
 
-target_link_options(server_numeric_summary PRIVATE ${OPENFHE_EXE_LINKER_FLAGS_LIST})
-target_link_libraries(server_numeric_summary PRIVATE ${OpenFHE_SHARED_LIBRARIES})
+set(HE_UC_OPENFHE_TARGETS
+    server_numeric_summary
+    client_binfhe_keygen
+    client_binfhe_encrypt_outliers
+    client_binfhe_decrypt_outliers
+    server_binfhe_outlier_flags
+)
+
+foreach(target_name IN LISTS HE_UC_OPENFHE_TARGETS)
+    target_compile_options(${target_name} PRIVATE
+        $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wpedantic>
+        ${OPENFHE_CXX_FLAGS_LIST}
+    )
+
+    target_include_directories(${target_name} SYSTEM PRIVATE
+        ${OPENMP_INCLUDES}
+        ${OpenFHE_INCLUDE}
+        ${OpenFHE_INCLUDE}/third-party/include
+        ${OpenFHE_INCLUDE}/core
+        ${OpenFHE_INCLUDE}/pke
+        ${OpenFHE_INCLUDE}/binfhe
+    )
+
+    target_link_directories(${target_name} PRIVATE
+        ${OpenFHE_LIBDIR}
+        ${OPENMP_LIBRARIES}
+    )
+
+    if(UNIX AND NOT APPLE)
+        target_link_options(${target_name} PRIVATE -Wl,--no-as-needed)
+    endif()
+
+    target_link_options(${target_name} PRIVATE ${OPENFHE_EXE_LINKER_FLAGS_LIST})
+    target_link_libraries(${target_name} PRIVATE ${OpenFHE_SHARED_LIBRARIES})
+endforeach()
