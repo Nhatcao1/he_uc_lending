@@ -33,7 +33,14 @@ Local-only paths are ignored by git:
 From the repo root:
 
 ```bash
-cmake -S . -B build -DOpenFHE_DIR=/path/to/OpenFHEConfig.cmake-directory
+cmake -S . -B build -DOpenFHE_DIR=$HOME/openfhe-development/build
+cmake --build build
+```
+
+If OpenFHE was installed instead of built in-place, use:
+
+```bash
+cmake -S . -B build -DOpenFHE_DIR=$HOME/openfhe-install/lib/OpenFHE
 cmake --build build
 ```
 
@@ -41,4 +48,10 @@ The first tracked executable is:
 
 ```text
 server_numeric_summary
+```
+
+Run help:
+
+```bash
+./build/server_numeric_summary --help
 ```

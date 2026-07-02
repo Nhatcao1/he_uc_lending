@@ -46,6 +46,22 @@ payloads can describe padding explicitly.
 
 ## Command
 
+Build on server, assuming OpenFHE is under `~`:
+
+```bash
+cmake -S . -B build -DOpenFHE_DIR=$HOME/openfhe-development/build
+cmake --build build
+```
+
+Alternative if OpenFHE is installed:
+
+```bash
+cmake -S . -B build -DOpenFHE_DIR=$HOME/openfhe-install/lib/OpenFHE
+cmake --build build
+```
+
+Run:
+
 ```bash
 ./build/server_numeric_summary \
   --context encrypted_payloads/crypto_context.bin \
@@ -68,4 +84,3 @@ The client decrypts each encrypted sum and computes:
 ```text
 mean = sum / total_rows
 ```
-
