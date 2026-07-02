@@ -47,7 +47,11 @@ python3 code/client/prepare_binfhe_outlier_values.py \
   --input data/lending_club_loan_two.csv \
   --output encrypted_payloads/binfhe_outliers/outlier_values.csv \
   --rules encrypted_payloads/binfhe_outliers/outlier_rules.csv \
+  --packed-output encrypted_payloads/binfhe_outliers/outlier_packed_values.csv \
+  --packed-rules encrypted_payloads/binfhe_outliers/outlier_packed_rules.csv \
   --manifest encrypted_payloads/binfhe_outliers/outlier_prep_manifest.json
 ```
 
-Then use the C++ tools in `code/client/binfhe_outliers/`.
+Then use the C++ tools in `code/client/binfhe_outliers/`. The packed files are
+the default testing path because they cut six scalar rule ciphertexts per row to
+three packed ciphertexts per row.

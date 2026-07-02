@@ -9,7 +9,6 @@
 #include <map>
 #include <stdexcept>
 #include <string>
-#include <tuple>
 #include <vector>
 
 using namespace lbcrypto;
@@ -28,10 +27,14 @@ struct Options {
 struct InputRow {
     std::string rowId;
     std::string column;
+    std::string packId;
     std::filesystem::path ciphertextPath;
     uint64_t plaintextModulus = 0;
     uint64_t threshold = 0;
+    uint64_t bitsPerFeature = 0;
     std::string comparison;
+    std::vector<uint64_t> thresholdBuckets;
+    bool packed = false;
 };
 
 [[noreturn]] void usage(const std::string& error = "") {
@@ -126,6 +129,26 @@ std::map<std::string, size_t> headerIndex(const std::vector<std::string>& header
     return index;
 }
 
+std::vector<uint64_t> splitUIntList(const std::string& value) {
+    std::vector<uint64_t> out;
+    std::string current;
+    for (char ch : value) {
+        if (ch == ';') {
+            if (!current.empty()) {
+                out.push_back(std::stoull(current));
+                current.clear();
+            }
+        }
+        else {
+            current.push_back(ch);
+        }
+    }
+    if (!current.empty()) {
+        out.push_back(std::stoull(current));
+    }
+    return out;
+}
+
 std::vector<InputRow> readManifest(const std::filesystem::path& path) {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -136,9 +159,16 @@ std::vector<InputRow> readManifest(const std::filesystem::path& path) {
         throw std::runtime_error("manifest is empty: " + path.string());
     }
     const auto index = headerIndex(splitCsvLine(line));
-    for (const auto& required : {"row_id", "column", "ciphertext", "plaintext_modulus", "threshold", "comparison"}) {
+    const bool packedMode = index.count("pack_id") && index.count("bits_per_feature") &&
+                            index.count("threshold_buckets");
+    const std::vector<std::string> requiredColumns =
+        packedMode ? std::vector<std::string>{"row_id", "pack_id", "ciphertext", "plaintext_modulus",
+                                              "bits_per_feature", "threshold_buckets", "comparison"}
+                   : std::vector<std::string>{"row_id", "column", "ciphertext", "plaintext_modulus", "threshold",
+                                              "comparison"};
+    for (const auto& required : requiredColumns) {
         if (!index.count(required)) {
-            throw std::runtime_error("manifest missing column: " + std::string(required));
+            throw std::runtime_error("manifest missing column: " + required);
         }
     }
 
@@ -150,13 +180,25 @@ std::vector<InputRow> readManifest(const std::filesystem::path& path) {
         const auto fields = splitCsvLine(line);
         InputRow row;
         row.rowId = fields.at(index.at("row_id"));
-        row.column = fields.at(index.at("column"));
         row.ciphertextPath = fields.at(index.at("ciphertext"));
         row.plaintextModulus = std::stoull(fields.at(index.at("plaintext_modulus")));
-        row.threshold = std::stoull(fields.at(index.at("threshold")));
         row.comparison = fields.at(index.at("comparison"));
-        if (row.comparison != "gt") {
-            throw std::runtime_error("only comparison=gt is supported for now: " + row.column);
+        row.packed = packedMode;
+        if (packedMode) {
+            row.packId = fields.at(index.at("pack_id"));
+            row.column = row.packId;
+            row.bitsPerFeature = std::stoull(fields.at(index.at("bits_per_feature")));
+            row.thresholdBuckets = splitUIntList(fields.at(index.at("threshold_buckets")));
+            if (row.comparison != "any_gt_bucket") {
+                throw std::runtime_error("only comparison=any_gt_bucket is supported for packed mode: " + row.packId);
+            }
+        }
+        else {
+            row.column = fields.at(index.at("column"));
+            row.threshold = std::stoull(fields.at(index.at("threshold")));
+            if (row.comparison != "gt") {
+                throw std::runtime_error("only comparison=gt is supported for scalar mode: " + row.column);
+            }
         }
         rows.push_back(row);
     }
@@ -207,6 +249,47 @@ std::vector<NativeInteger> buildGreaterThanLut(const BinFHEContext& cc, uint64_t
     return lut;
 }
 
+std::vector<NativeInteger> buildPackedAnyGreaterThanBucketLut(const BinFHEContext& cc,
+                                                              uint64_t plaintextModulus,
+                                                              uint64_t bitsPerFeature,
+                                                              const std::vector<uint64_t>& thresholdBuckets) {
+    if ((plaintextModulus == 0) || ((plaintextModulus & (plaintextModulus - 1)) != 0)) {
+        throw std::runtime_error("plaintext_modulus must be a power of two");
+    }
+    if (bitsPerFeature == 0 || bitsPerFeature >= 64) {
+        throw std::runtime_error("bits_per_feature must be between 1 and 63");
+    }
+    if (thresholdBuckets.empty()) {
+        throw std::runtime_error("threshold_buckets cannot be empty");
+    }
+
+    const uint64_t bucketLimit = 1ULL << bitsPerFeature;
+    for (const auto threshold : thresholdBuckets) {
+        if (threshold >= bucketLimit) {
+            throw std::runtime_error("threshold bucket must fit inside bits_per_feature");
+        }
+    }
+
+    NativeInteger qNative{cc.GetParams()->GetLWEParams()->Getq()};
+    const uint64_t q = qNative.ConvertToInt();
+    const NativeInteger scale = qNative / NativeInteger(plaintextModulus);
+    const uint64_t mask = bucketLimit - 1;
+    std::vector<NativeInteger> lut(q, scale);
+    for (uint64_t i = 0; i < q; ++i) {
+        uint64_t message = (i * plaintextModulus) / q;
+        uint64_t flag = 0;
+        for (const auto threshold : thresholdBuckets) {
+            const uint64_t bucket = message & mask;
+            if (bucket > threshold) {
+                flag = 1;
+            }
+            message >>= bitsPerFeature;
+        }
+        lut[i] *= flag;
+    }
+    return lut;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -223,7 +306,7 @@ int main(int argc, char** argv) {
         deserializeFile(options.switchKeyPath, switchKey);
         cc.BTKeyLoad({refreshKey, switchKey});
 
-        std::map<std::tuple<uint64_t, uint64_t, std::string>, std::vector<NativeInteger>> lutCache;
+        std::map<std::string, std::vector<NativeInteger>> lutCache;
         std::ofstream manifest(options.outputDir / "outlier_flag_manifest.csv");
         manifest << "row_id,column,encrypted_flag_ciphertext,plaintext_modulus,threshold,comparison\n";
 
@@ -232,9 +315,18 @@ int main(int argc, char** argv) {
             LWECiphertext ciphertext;
             deserializeFile(options.inputDir / row.ciphertextPath, ciphertext);
 
-            const auto cacheKey = std::make_tuple(row.plaintextModulus, row.threshold, row.comparison);
+            const std::string cacheKey = row.packed ? row.comparison + ":" + std::to_string(row.plaintextModulus) +
+                                                          ":" + std::to_string(row.bitsPerFeature) + ":" +
+                                                          row.packId
+                                                    : row.comparison + ":" + std::to_string(row.plaintextModulus) +
+                                                          ":" + std::to_string(row.threshold);
             if (!lutCache.count(cacheKey)) {
-                lutCache[cacheKey] = buildGreaterThanLut(cc, row.plaintextModulus, row.threshold);
+                lutCache[cacheKey] =
+                    row.packed ? buildPackedAnyGreaterThanBucketLut(cc,
+                                                                     row.plaintextModulus,
+                                                                     row.bitsPerFeature,
+                                                                     row.thresholdBuckets)
+                               : buildGreaterThanLut(cc, row.plaintextModulus, row.threshold);
             }
             auto flag = cc.EvalFunc(ciphertext, lutCache.at(cacheKey));
 
@@ -242,7 +334,7 @@ int main(int argc, char** argv) {
                 "row_" + safeFileName(row.rowId) + "_" + safeFileName(row.column) + ".flag.bin";
             serializeFile(options.outputDir / "flags" / fileName, flag);
             manifest << row.rowId << ',' << row.column << ',' << fileName << ',' << row.plaintextModulus << ','
-                     << row.threshold << ',' << row.comparison << '\n';
+                     << (row.packed ? 0 : row.threshold) << ',' << row.comparison << '\n';
             ++flagCount;
         }
 

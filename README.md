@@ -17,11 +17,10 @@ Key planning notes:
 - `HOMOMORPHIC_ENCRYPTION_DESIGN.md`
 - `docs/SERVER_SIDE_EDA_PLAN.md`
 
-Tracked code is server-side only under `code/server/`.
+Tracked code lives under `code/client/` and `code/server/`.
 
 Local-only paths are ignored by git:
 
-- `code/client/`
 - `data/`
 - `keys/`
 - `ciphertexts/`
@@ -72,17 +71,21 @@ Run help:
 
 ## BinFHE Outlier Track
 
-Client prepares bounded integer values, not masks:
+Client prepares bounded integer values and a packed bucket variant. The packed
+variant stores two bucketed rule values per ciphertext, cutting the current six
+rules from six ciphertexts per row to three ciphertexts per row.
 
 ```bash
 python3 code/client/prepare_binfhe_outlier_values.py \
   --input data/lending_club_loan_two.csv \
   --output encrypted_payloads/binfhe_outliers/outlier_values.csv \
   --rules encrypted_payloads/binfhe_outliers/outlier_rules.csv \
+  --packed-output encrypted_payloads/binfhe_outliers/outlier_packed_values.csv \
+  --packed-rules encrypted_payloads/binfhe_outliers/outlier_packed_rules.csv \
   --manifest encrypted_payloads/binfhe_outliers/outlier_prep_manifest.json
 ```
 
-Client keygen and encryption:
+Client keygen and packed encryption:
 
 ```bash
 ./build/client_binfhe_keygen --out-dir keys/binfhe_outliers --log-q 12
@@ -90,11 +93,14 @@ Client keygen and encryption:
 ./build/client_binfhe_encrypt_outliers \
   --context keys/binfhe_outliers/binfhe_context.bin \
   --secret-key keys/binfhe_outliers/binfhe_secret_key.bin \
-  --values encrypted_payloads/binfhe_outliers/outlier_values.csv \
-  --rules encrypted_payloads/binfhe_outliers/outlier_rules.csv \
+  --values encrypted_payloads/binfhe_outliers/outlier_packed_values.csv \
+  --rules encrypted_payloads/binfhe_outliers/outlier_packed_rules.csv \
   --output-dir encrypted_payloads/binfhe_outliers/columns \
   --manifest encrypted_payloads/binfhe_outliers/outlier_ciphertexts.csv
 ```
+
+Use `outlier_values.csv` and `outlier_rules.csv` instead for the exact scalar
+path. Scalar mode uses one ciphertext per row per rule.
 
 Server threshold evaluation:
 

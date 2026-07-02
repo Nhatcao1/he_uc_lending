@@ -31,6 +31,15 @@ struct Rule {
     std::string comparison;
 };
 
+struct PackedRule {
+    std::string packId;
+    uint64_t plaintextModulus = 0;
+    uint64_t bitsPerFeature = 0;
+    std::string columns;
+    std::string thresholdBuckets;
+    std::string comparison;
+};
+
 [[noreturn]] void usage(const std::string& error = "") {
     if (!error.empty()) {
         std::cerr << "error: " << error << "\n\n";
@@ -154,6 +163,44 @@ std::vector<Rule> readRules(const std::filesystem::path& path) {
     return rules;
 }
 
+std::map<std::string, PackedRule> readPackedRules(const std::filesystem::path& path) {
+    std::ifstream input(path);
+    if (!input.is_open()) {
+        throw std::runtime_error("cannot open packed rules: " + path.string());
+    }
+    std::string line;
+    if (!std::getline(input, line)) {
+        throw std::runtime_error("packed rules CSV is empty: " + path.string());
+    }
+    const auto index = headerIndex(splitCsvLine(line));
+    for (const auto& required :
+         {"pack_id", "plaintext_modulus", "bits_per_feature", "columns", "threshold_buckets", "comparison"}) {
+        if (!index.count(required)) {
+            throw std::runtime_error("packed rules CSV missing column: " + std::string(required));
+        }
+    }
+
+    std::map<std::string, PackedRule> rules;
+    while (std::getline(input, line)) {
+        if (trim(line).empty()) {
+            continue;
+        }
+        const auto fields = splitCsvLine(line);
+        PackedRule rule;
+        rule.packId = fields.at(index.at("pack_id"));
+        rule.plaintextModulus = std::stoull(fields.at(index.at("plaintext_modulus")));
+        rule.bitsPerFeature = std::stoull(fields.at(index.at("bits_per_feature")));
+        rule.columns = fields.at(index.at("columns"));
+        rule.thresholdBuckets = fields.at(index.at("threshold_buckets"));
+        rule.comparison = fields.at(index.at("comparison"));
+        if (rule.comparison != "any_gt_bucket") {
+            throw std::runtime_error("only comparison=any_gt_bucket is supported for packed mode: " + rule.packId);
+        }
+        rules[rule.packId] = rule;
+    }
+    return rules;
+}
+
 std::string safeFileName(std::string value) {
     for (char& ch : value) {
         const bool ok = std::isalnum(static_cast<unsigned char>(ch)) || ch == '_' || ch == '-';
@@ -190,7 +237,6 @@ void createParentDirectory(const std::filesystem::path& path) {
 int main(int argc, char** argv) {
     try {
         const auto options = parseArgs(argc, argv);
-        const auto rules = readRules(options.rulesPath);
         std::filesystem::create_directories(options.outputDir);
         createParentDirectory(options.manifestPath);
 
@@ -212,6 +258,49 @@ int main(int argc, char** argv) {
         if (!index.count("row_id")) {
             throw std::runtime_error("values CSV missing row_id");
         }
+
+        const bool packedMode = index.count("pack_id") && index.count("packed_value");
+        if (packedMode) {
+            const auto packedRules = readPackedRules(options.rulesPath);
+            std::ofstream manifest(options.manifestPath);
+            manifest << "row_id,pack_id,ciphertext,plaintext_modulus,bits_per_feature,columns,threshold_buckets,"
+                        "comparison\n";
+
+            uint64_t encryptedCount = 0;
+            while (std::getline(values, line)) {
+                if (trim(line).empty()) {
+                    continue;
+                }
+                const auto fields = splitCsvLine(line);
+                const auto rowId = fields.at(index.at("row_id"));
+                const auto packId = fields.at(index.at("pack_id"));
+                const auto ruleIt = packedRules.find(packId);
+                if (ruleIt == packedRules.end()) {
+                    throw std::runtime_error("packed values CSV references unknown pack_id: " + packId);
+                }
+                const auto& rule = ruleIt->second;
+                const auto encoded = std::stoull(fields.at(index.at("packed_value")));
+                if (encoded >= rule.plaintextModulus) {
+                    throw std::runtime_error("packed value exceeds plaintext modulus for row " + rowId + ", pack " +
+                                             packId);
+                }
+                auto ciphertext = cc.Encrypt(sk, encoded, LARGE_DIM, rule.plaintextModulus);
+                const std::string fileName = "row_" + safeFileName(rowId) + "_" + safeFileName(packId) + ".bin";
+                serializeFile(options.outputDir / fileName, ciphertext);
+                manifest << rowId << ',' << packId << ',' << fileName << ',' << rule.plaintextModulus << ','
+                         << rule.bitsPerFeature << ',' << rule.columns << ',' << rule.thresholdBuckets << ','
+                         << rule.comparison << '\n';
+                ++encryptedCount;
+            }
+
+            std::cout << "client_binfhe_encrypt_outliers complete\n";
+            std::cout << "mode: packed_bucket_any\n";
+            std::cout << "ciphertexts: " << encryptedCount << "\n";
+            std::cout << "manifest: " << options.manifestPath << "\n";
+            return 0;
+        }
+
+        const auto rules = readRules(options.rulesPath);
         for (const auto& rule : rules) {
             if (!index.count(rule.column)) {
                 throw std::runtime_error("values CSV missing rule column: " + rule.column);

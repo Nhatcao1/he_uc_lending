@@ -3,11 +3,13 @@
 This server tool evaluates outlier thresholds using BinFHE/FHEW arbitrary
 function evaluation.
 
-The client sends encrypted bounded integer values. The server computes encrypted
+The client sends encrypted bounded integer values. The server supports both the
+exact scalar manifest and the packed bucket manifest. It computes encrypted
 outlier flags with LUTs:
 
 ```text
 Enc(value) -> EvalFunc(value > threshold) -> Enc(0/1 flag)
+Enc(packed bucket pair) -> EvalFunc(any bucket > threshold bucket) -> Enc(0/1 flag)
 ```
 
 The server does not receive raw values, prepared plaintext values, masks, or the
@@ -34,4 +36,3 @@ flags/*.flag.bin
 
 The client decrypts the returned flags and performs actual row elimination
 locally.
-
