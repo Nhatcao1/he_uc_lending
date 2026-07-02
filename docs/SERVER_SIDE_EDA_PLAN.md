@@ -76,10 +76,26 @@ is_null_revol_util
 
 Server computes encrypted sums.
 
+Important limitation:
+
+```text
+The server cannot infer CSV missingness from only encrypted raw values.
+Missingness must be encoded before encryption as is_missing/is_valid masks,
+or missing values must be dropped/filled before encryption.
+```
+
 Suggested scheme:
 
 ```text
 BFV/BGV for exact counts, or CKKS for approximate packed sums
+```
+
+Practical V1 decision:
+
+```text
+Do not start with server-side missing detection.
+Prepare clean values on the client first, then start server HE EDA with
+aggregate sums/means or rule-score summaries.
 ```
 
 ### 2. Policy Threshold Counts
@@ -246,11 +262,11 @@ decrypted intermediate values
 ## First Implementation Order
 
 ```text
-1. Define encrypted payload format.
-2. Implement local plaintext baseline for missing counts and policy counts.
-3. Implement OpenFHE encrypted mask sum.
+1. Prepare clean numeric payload on the client.
+2. Define encrypted payload format for prepared values.
+3. Implement OpenFHE encrypted sums/means or rule-score summary.
 4. Split commands into client encrypt, server eval, client decrypt.
-5. Add CKKS rule-score computation.
+5. Add encrypted missing/valid masks only if missing report is still needed.
 ```
 
 ## Tracked Vs Ignored
@@ -275,4 +291,3 @@ ciphertexts/
 encrypted_payloads/
 server_returns/
 ```
-
