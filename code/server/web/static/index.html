@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HE Credit Workbench</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --ink: #1f2933;
+      --muted: #667085;
+      --line: #d6dce6;
+      --soft: #eef2f7;
+      --accent: #0f766e;
+      --accent-dark: #115e59;
+      --blue: #1d4ed8;
+      --red: #b42318;
+      --green: #047857;
+      --amber: #b54708;
+      --violet: #6d28d9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .wrap {
+      width: min(1320px, calc(100vw - 32px));
+      margin: 0 auto;
+    }
+
+    header .wrap {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 760;
+    }
+
+    h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      font-weight: 760;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 740;
+    }
+
+    main {
+      padding: 18px 0 34px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .token {
+      width: 260px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 9px 10px;
+      font: inherit;
+    }
+
+    .health {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(300px, .92fr) minmax(380px, 1.16fr) minmax(340px, .92fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 14px;
+    }
+
+    .catalog {
+      display: grid;
+      gap: 10px;
+    }
+
+    .job-card {
+      width: 100%;
+      text-align: left;
+      border: 1px solid var(--line);
+      background: #fbfcfe;
+      border-radius: 8px;
+      padding: 12px;
+      cursor: pointer;
+      color: var(--ink);
+    }
+
+    .job-card.active {
+      border-color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--accent);
+      background: #f0fdfa;
+    }
+
+    .job-card.disabled {
+      cursor: not-allowed;
+      opacity: .7;
+    }
+
+    .job-card strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .card-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin: 7px 0;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #334155;
+      background: white;
+    }
+
+    .pill.scheme { color: #075985; border-color: #bae6fd; background: #f0f9ff; }
+    .pill.stage { color: #7c2d12; border-color: #fed7aa; background: #fff7ed; }
+    .pill.disabled { color: #6d28d9; border-color: #ddd6fe; background: #f5f3ff; }
+    .pill.ok { color: var(--green); border-color: #bbf7d0; background: #f0fdf4; }
+    .pill.bad { color: var(--red); border-color: #fecdd3; background: #fff1f2; }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      color: #344054;
+      font-size: 13px;
+      font-weight: 720;
+    }
+
+    select, textarea, input[type="text"], input[type="password"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 82px;
+      resize: vertical;
+    }
+
+    input[type="file"] {
+      width: 100%;
+      border: 1px dashed #9aa7ba;
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfe;
+      color: var(--ink);
+    }
+
+    .file-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .checks {
+      display: grid;
+      gap: 7px;
+      margin: 10px 0 0;
+    }
+
+    .check {
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 8px;
+      align-items: start;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fbfcfe;
+      font-size: 13px;
+    }
+
+    .check.pass { border-color: #bbf7d0; background: #f0fdf4; }
+    .check.fail { border-color: #fecdd3; background: #fff1f2; }
+
+    .mark {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 900;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      color: #64748b;
+    }
+
+    .check.pass .mark {
+      color: white;
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .check.fail .mark {
+      color: white;
+      background: var(--red);
+      border-color: var(--red);
+    }
+
+    .artifact-list {
+      margin: 8px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 6px;
+      list-style: none;
+    }
+
+    .artifact-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 7px 8px;
+      background: #fbfcfe;
+      font-size: 13px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 14px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 6px;
+      padding: 10px 13px;
+      font: inherit;
+      font-weight: 760;
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      color: #1f2937;
+      background: #e8edf4;
+    }
+
+    button.danger {
+      background: var(--red);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: .56;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 9px 8px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      background: #fbfcfe;
+      font-weight: 760;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 780;
+      color: #3730a3;
+      background: #eef2ff;
+    }
+
+    .status.done { color: var(--green); background: #ecfdf3; }
+    .status.failed { color: var(--red); background: #fff1f3; }
+    .status.running { color: var(--amber); background: #fff7ed; }
+
+    pre {
+      margin: 0;
+      min-height: 210px;
+      max-height: 360px;
+      overflow: auto;
+      border-radius: 8px;
+      padding: 12px;
+      background: #111827;
+      color: #e5e7eb;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .downloads {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .downloads a {
+      color: #075985;
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 9px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .notice {
+      border-left: 4px solid var(--accent);
+      background: #f0fdfa;
+      padding: 10px 11px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 1120px) {
+      .layout { grid-template-columns: 1fr 1fr; }
+      .results-column { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 760px) {
+      header .wrap { align-items: flex-start; flex-direction: column; padding: 12px 0; }
+      .layout, .file-grid { grid-template-columns: 1fr; }
+      .token { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>HE Credit Workbench</h1>
+    <div class="topbar">
+      <span class="health" id="health">Checking receiver</span>
+      <input class="token" id="token" type="password" autocomplete="off" placeholder="Bearer token">
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="layout">
+    <section>
+      <h2>Job Catalog</h2>
+      <div class="muted">Choose the encrypted workflow before uploading artifacts.</div>
+      <div class="catalog" id="catalog"></div>
+    </section>
+
+    <div class="stack">
+      <section>
+        <h2>Work Order</h2>
+        <label for="jobSelect">Selected workflow</label>
+        <select id="jobSelect"></select>
+        <div class="card-meta" id="selectedMeta"></div>
+        <div class="notice" id="selectedDescription"></div>
+
+        <h3 style="margin-top:16px;">Client Preparation Requirements</h3>
+        <div class="checks" id="requirements"></div>
+
+        <h3 style="margin-top:16px;">Upload Contract</h3>
+        <ul class="artifact-list" id="artifactList"></ul>
+      </section>
+
+      <section>
+        <h2>Upload Encrypted Bundle</h2>
+        <div class="file-grid">
+          <div>
+            <label for="fileInput">Top-level files</label>
+            <input id="fileInput" type="file" multiple>
+          </div>
+          <div>
+            <label for="dirInput">Encrypted directory</label>
+            <input id="dirInput" type="file" multiple webkitdirectory directory>
+          </div>
+        </div>
+
+        <label for="note">Client note</label>
+        <textarea id="note" placeholder="Dataset, row limit, scalar/packed, test name"></textarea>
+
+        <h3 style="margin-top:16px;">Artifact Validation</h3>
+        <div class="checks" id="uploadChecks"></div>
+
+        <div class="actions">
+          <button id="submitBtn" disabled>Submit Encrypted Job</button>
+          <button class="secondary" id="clearBtn" type="button">Clear Files</button>
+          <span class="muted" id="uploadHint"></span>
+        </div>
+      </section>
+    </div>
+
+    <div class="stack results-column">
+      <section>
+        <h2>Server Jobs</h2>
+        <div class="actions" style="margin-top:0;">
+          <button class="secondary" id="refreshBtn" type="button">Refresh</button>
+          <span class="muted">Queued, running, done, failed.</span>
+        </div>
+        <table style="margin-top:10px;">
+          <thead>
+            <tr><th>Job</th><th>Workflow</th><th>Status</th></tr>
+          </thead>
+          <tbody id="jobsBody"></tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Returned Values</h2>
+        <pre id="details">Submit a job or select one from the table.</pre>
+        <div class="downloads" id="downloads"></div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+const state = {
+  jobTypes: {},
+  selectedType: null,
+  selectedJob: null,
+};
+
+function $(id) {
+  return document.getElementById(id);
+}
+
+function authHeaders() {
+  const token = $('token').value.trim();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function api(path, options = {}) {
+  const headers = { ...(options.headers || {}), ...authHeaders() };
+  const res = await fetch(path, { ...options, headers });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return res;
+}
+
+function normalizePath(file) {
+  const raw = file.webkitRelativePath || file.name;
+  const parts = raw.split('/').filter(Boolean);
+  for (const anchor of ['columns', 'masks', 'target', 'features', 'sums', 'flags']) {
+    const idx = parts.indexOf(anchor);
+    if (idx >= 0) return parts.slice(idx).join('/');
+  }
+  return parts[parts.length - 1] || file.name;
+}
+
+function selectedFiles() {
+  return [...$('fileInput').files, ...$('dirInput').files];
+}
+
+function selectedPaths() {
+  return selectedFiles().map(normalizePath);
+}
+
+function requirementPresent(required, paths) {
+  if (required.endsWith('/')) {
+    return paths.some(path => path.startsWith(required));
+  }
+  return paths.some(path => path === required || path.endsWith(`/${required}`));
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || '');
+      resolve(value.includes(',') ? value.split(',', 2)[1] : value);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function activeType() {
+  return state.jobTypes[state.selectedType];
+}
+
+function renderCatalog() {
+  const catalog = $('catalog');
+  catalog.innerHTML = '';
+  Object.entries(state.jobTypes).forEach(([id, cfg]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `job-card ${id === state.selectedType ? 'active' : ''} ${cfg.disabled ? 'disabled' : ''}`;
+    button.innerHTML = `
+      <strong>${cfg.label}</strong>
+      <div class="card-meta">
+        <span class="pill">${cfg.family}</span>
+        <span class="pill scheme">${cfg.scheme}</span>
+        <span class="pill stage">${cfg.stage}</span>
+        ${cfg.disabled ? '<span class="pill disabled">planned</span>' : '<span class="pill ok">runnable</span>'}
+      </div>
+      <div class="muted">${cfg.description}</div>
+    `;
+    button.addEventListener('click', () => {
+      state.selectedType = id;
+      $('jobSelect').value = id;
+      renderAll();
+    });
+    catalog.appendChild(button);
+  });
+}
+
+function renderSelect() {
+  const select = $('jobSelect');
+  select.innerHTML = '';
+  Object.entries(state.jobTypes).forEach(([id, cfg]) => {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = `${cfg.family} / ${cfg.label}`;
+    select.appendChild(opt);
+  });
+  select.value = state.selectedType;
+}
+
+function renderWorkOrder() {
+  const cfg = activeType();
+  if (!cfg) return;
+  $('selectedMeta').innerHTML = `
+    <span class="pill">${cfg.family}</span>
+    <span class="pill scheme">${cfg.scheme}</span>
+    <span class="pill stage">${cfg.stage}</span>
+    ${cfg.disabled ? '<span class="pill disabled">planned</span>' : '<span class="pill ok">runnable</span>'}
+  `;
+  $('selectedDescription').textContent = cfg.description;
+
+  $('requirements').innerHTML = cfg.client_requirements.map(item => `
+    <div class="check"><span class="mark">i</span><span>${item}</span></div>
+  `).join('');
+
+  $('artifactList').innerHTML = cfg.client_artifacts.map(item => `
+    <li><code>${item}</code><span class="pill">client sends</span></li>
+  `).join('');
+}
+
+function renderUploadValidation() {
+  const cfg = activeType();
+  if (!cfg) return;
+  const paths = selectedPaths();
+  const rows = cfg.required.map(req => {
+    const ok = requirementPresent(req, paths);
+    return `
+      <div class="check ${ok ? 'pass' : 'fail'}">
+        <span class="mark">${ok ? '✓' : '!'}</span>
+        <span><strong>${req}</strong><br><span class="muted">${ok ? 'ready' : 'missing from selected files'}</span></span>
+      </div>
+    `;
+  });
+  const hasFiles = paths.length > 0;
+  const allRequired = cfg.required.every(req => requirementPresent(req, paths));
+  const runnable = !cfg.disabled;
+  rows.unshift(`
+    <div class="check ${runnable ? 'pass' : 'fail'}">
+      <span class="mark">${runnable ? '✓' : '!'}</span>
+      <span><strong>Workflow runnable</strong><br><span class="muted">${runnable ? 'server binary exists' : 'planned workflow, not enabled yet'}</span></span>
+    </div>
+  `);
+  rows.push(`
+    <div class="check ${hasFiles ? 'pass' : 'fail'}">
+      <span class="mark">${hasFiles ? '✓' : '!'}</span>
+      <span><strong>Selected files</strong><br><span class="muted">${paths.length} encrypted artifacts selected</span></span>
+    </div>
+  `);
+  $('uploadChecks').innerHTML = rows.join('');
+  $('submitBtn').disabled = !(runnable && hasFiles && allRequired);
+}
+
+function renderAll() {
+  renderCatalog();
+  renderSelect();
+  renderWorkOrder();
+  renderUploadValidation();
+}
+
+async function loadTypes() {
+  const res = await api('/api/job-types');
+  const data = await res.json();
+  state.jobTypes = data.job_types;
+  state.selectedType = state.selectedType || Object.keys(state.jobTypes)[0];
+  renderAll();
+}
+
+async function submitJob() {
+  const cfg = activeType();
+  if (!cfg || cfg.disabled) return;
+  $('submitBtn').disabled = true;
+  $('uploadHint').textContent = 'Encoding encrypted artifacts';
+  try {
+    const files = selectedFiles();
+    const payloadFiles = [];
+    for (const file of files) {
+      payloadFiles.push({
+        path: normalizePath(file),
+        size: file.size,
+        content_base64: await fileToBase64(file),
+      });
+    }
+    $('uploadHint').textContent = 'Uploading to receiver';
+    const res = await api('/api/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_type: state.selectedType,
+        note: $('note').value,
+        files: payloadFiles,
+      }),
+    });
+    const data = await res.json();
+    state.selectedJob = data.job_id;
+    $('uploadHint').textContent = `Queued ${data.job_id}`;
+    await refreshJobs();
+    await showJob(data.job_id);
+  } catch (err) {
+    $('uploadHint').textContent = String(err.message || err);
+  } finally {
+    renderUploadValidation();
+  }
+}
+
+async function refreshJobs() {
+  try {
+    const res = await api('/api/jobs');
+    const data = await res.json();
+    const body = $('jobsBody');
+    body.innerHTML = '';
+    if (!data.jobs.length) {
+      body.innerHTML = '<tr><td colspan="3" class="muted">No jobs yet.</td></tr>';
+      return;
+    }
+    data.jobs.forEach(job => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><button class="secondary" data-job="${job.job_id}">${job.job_id}</button></td>
+        <td>${job.label || job.job_type}</td>
+        <td><span class="status ${job.status}">${job.status}</span></td>
+      `;
+      tr.querySelector('button').addEventListener('click', () => showJob(job.job_id));
+      body.appendChild(tr);
+    });
+  } catch (err) {
+    $('jobsBody').innerHTML = `<tr><td colspan="3" class="muted">${String(err.message || err)}</td></tr>`;
+  }
+}
+
+async function showJob(jobId) {
+  state.selectedJob = jobId;
+  const res = await api(`/api/jobs/${jobId}`);
+  const data = await res.json();
+  $('details').textContent = JSON.stringify(data, null, 2);
+  const downloads = $('downloads');
+  downloads.innerHTML = '';
+  (data.output_files || []).forEach(item => {
+    const a = document.createElement('a');
+    a.href = `/api/jobs/${jobId}/download?path=${encodeURIComponent(item)}`;
+    a.textContent = item;
+    if ($('token').value.trim()) {
+      a.addEventListener('click', event => {
+        event.preventDefault();
+        downloadWithAuth(jobId, item);
+      });
+    }
+    downloads.appendChild(a);
+  });
+}
+
+async function downloadWithAuth(jobId, item) {
+  const res = await api(`/api/jobs/${jobId}/download?path=${encodeURIComponent(item)}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = item.split('/').pop();
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function health() {
+  try {
+    const res = await api('/api/health');
+    const data = await res.json();
+    $('health').textContent = `receiver online, workers ${data.max_workers}`;
+  } catch (err) {
+    $('health').textContent = String(err.message || err);
+  }
+}
+
+$('jobSelect').addEventListener('change', event => {
+  state.selectedType = event.target.value;
+  renderAll();
+});
+$('fileInput').addEventListener('change', renderUploadValidation);
+$('dirInput').addEventListener('change', renderUploadValidation);
+$('submitBtn').addEventListener('click', submitJob);
+$('refreshBtn').addEventListener('click', refreshJobs);
+$('clearBtn').addEventListener('click', () => {
+  $('fileInput').value = '';
+  $('dirInput').value = '';
+  $('uploadHint').textContent = '';
+  renderUploadValidation();
+});
+$('token').addEventListener('change', refreshJobs);
+
+loadTypes().then(refreshJobs).then(health);
+setInterval(refreshJobs, 5000);
+setInterval(() => { if (state.selectedJob) showJob(state.selectedJob); }, 6000);
+</script>
+</body>
+</html>

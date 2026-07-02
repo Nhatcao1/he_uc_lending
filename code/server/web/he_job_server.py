@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urlparse
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_JOBS_DIR = REPO_ROOT / "server_jobs" / "web"
 DEFAULT_BUILD_DIR = REPO_ROOT / "build"
+STATIC_INDEX = Path(__file__).resolve().parent / "static" / "index.html"
 MAX_UPLOAD_BYTES = int(os.environ.get("HE_WEB_MAX_UPLOAD_BYTES", str(512 * 1024 * 1024)))
 MAX_WORKERS = int(os.environ.get("HE_WEB_MAX_WORKERS", "1"))
 AUTH_TOKEN = os.environ.get("HE_RECEIVER_TOKEN", "")
@@ -36,10 +37,25 @@ WORKER_SEMAPHORE = threading.Semaphore(MAX_WORKERS)
 JOB_TYPES: dict[str, dict[str, Any]] = {
     "ckks_numeric_summary": {
         "label": "CKKS Numeric Summary",
+        "family": "Lending",
+        "stage": "EDA aggregate",
         "scheme": "CKKS",
         "binary": "server_numeric_summary",
         "description": "Packed numeric sums for prepared lending columns.",
         "required": ["crypto_context.bin", "eval_sum_keys.bin", "column_manifest.csv", "columns/"],
+        "client_requirements": [
+            "Rows with null or invalid selected numeric values removed or imputed before encryption.",
+            "Numeric columns normalized and packed into encrypted column chunks.",
+            "No raw CSV, plaintext prepared CSV, secret key, or decrypted report in the upload.",
+            "Manifest rows must point to ciphertext files under columns/.",
+        ],
+        "client_artifacts": [
+            "crypto_context.bin",
+            "eval_sum_keys.bin",
+            "column_manifest.csv",
+            "columns/*.bin",
+        ],
+        "server_returns": ["numeric_summary/summary_manifest.csv", "numeric_summary/sums/*.bin"],
         "command": [
             "--context",
             "crypto_context.bin",
@@ -55,6 +71,8 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
     },
     "binfhe_outlier_flags": {
         "label": "BinFHE Outlier Flags",
+        "family": "Lending",
+        "stage": "Rule/outlier cleaning",
         "scheme": "BinFHE/FHEW",
         "binary": "server_binfhe_outlier_flags",
         "description": "Encrypted threshold/LUT flags for scalar or packed outlier manifests.",
@@ -65,6 +83,20 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
             "outlier_ciphertexts.csv",
             "columns/",
         ],
+        "client_requirements": [
+            "Outlier source columns parsed as numbers with missing/invalid rows removed before encryption.",
+            "Use packed bucket files for normal tests or scalar files when exact per-rule flags are needed.",
+            "Upload BinFHE context plus refresh/switch keys only; never upload binfhe_secret_key.bin.",
+            "The server returns encrypted flags; the client decrypts and removes rows locally.",
+        ],
+        "client_artifacts": [
+            "binfhe_context.bin",
+            "binfhe_refresh_key.bin",
+            "binfhe_switch_key.bin",
+            "outlier_ciphertexts.csv",
+            "columns/*.bin",
+        ],
+        "server_returns": ["binfhe_outliers/outlier_flag_manifest.csv", "binfhe_outliers/flags/*.flag.bin"],
         "command": [
             "--context",
             "binfhe_context.bin",
@@ -80,12 +112,40 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
             "output/binfhe_outliers",
         ],
     },
+    "lending_rule_score": {
+        "label": "Rule-Based Risk Score",
+        "family": "Lending",
+        "stage": "Rule scoring planned",
+        "scheme": "CKKS planned",
+        "binary": "",
+        "description": "Planned weighted rule score over encrypted normalized lending features.",
+        "required": ["crypto_context.bin", "eval_mult_keys.bin", "score_manifest.csv", "features/"],
+        "client_requirements": [
+            "Client must prepare numeric feature vectors and public rule weights.",
+            "Categorical inputs must be encoded before encryption.",
+            "No plaintext labels, raw CSV, or secret key in the upload.",
+        ],
+        "client_artifacts": ["crypto_context.bin", "eval keys", "score_manifest.csv", "features/*.bin"],
+        "server_returns": ["risk_score_manifest.csv", "scores/*.bin"],
+        "command": [],
+        "disabled": True,
+    },
     "home_credit_category_eda": {
         "label": "Home Credit Category EDA",
+        "family": "Home Credit",
+        "stage": "Category-risk EDA planned",
         "scheme": "CKKS/BFV planned",
         "binary": "",
         "description": "Planned encrypted category-risk tables. UI placeholder only for now.",
         "required": ["category_manifest.csv", "masks/", "target/"],
+        "client_requirements": [
+            "Client must encode categories as one-hot encrypted masks.",
+            "Target/default labels must be encrypted as masks or omitted for non-target reports.",
+            "Null category values must be mapped to an explicit bucket before encryption.",
+            "No raw string categories, SK_ID-level plaintext joins, or secret keys in the upload.",
+        ],
+        "client_artifacts": ["category_manifest.csv", "masks/*.bin", "target/*.bin", "eval keys"],
+        "server_returns": ["category_summary_manifest.csv", "aggregates/*.bin"],
         "command": [],
         "disabled": True,
     },
@@ -613,13 +673,24 @@ def response_text(
     handler.wfile.write(data)
 
 
+def index_html() -> str:
+    if STATIC_INDEX.exists():
+        return STATIC_INDEX.read_text(encoding="utf-8")
+    return INDEX_HTML
+
+
 def clean_job_types() -> dict[str, Any]:
     return {
         key: {
             "label": value["label"],
+            "family": value.get("family", ""),
+            "stage": value.get("stage", ""),
             "scheme": value["scheme"],
             "description": value["description"],
             "required": value["required"],
+            "client_requirements": value.get("client_requirements", []),
+            "client_artifacts": value.get("client_artifacts", []),
+            "server_returns": value.get("server_returns", []),
             "disabled": bool(value.get("disabled")),
         }
         for key, value in JOB_TYPES.items()
@@ -832,7 +903,7 @@ class HEJobHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             if parsed.path == "/":
-                response_text(self, INDEX_HTML, content_type="text/html; charset=utf-8")
+                response_text(self, index_html(), content_type="text/html; charset=utf-8")
                 return
             if parsed.path == "/api/health":
                 response_json(

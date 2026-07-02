@@ -6,6 +6,13 @@ The receiver does not do HE math itself. It stores encrypted artifacts under
 `server_jobs/web/<job_id>/work`, invokes the existing C++ server executable, and
 shows status/output files.
 
+The page is organized as:
+
+- job catalog for Lending and Home Credit workflows
+- selected workflow requirements
+- encrypted artifact upload validation
+- server job status and encrypted result downloads
+
 ## Run
 
 ```bash
