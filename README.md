@@ -15,6 +15,9 @@ Key planning notes:
 
 - `HE_USE_CASES_AND_NOTEBOOK_CONTEXT.md`
 - `HOMOMORPHIC_ENCRYPTION_DESIGN.md`
+- `docs/HOME_CREDIT_BASIC_EDA_IMPLEMENTATION_MAP.md`
+- `docs/HOME_CREDIT_IMPLEMENTED_CLIENT_SERVER_FLOW.md`
+- `docs/diagrams/README.md`
 - `docs/SERVER_SIDE_EDA_PLAN.md`
 
 Tracked code lives under `code/client/` and `code/server/`.
@@ -57,10 +60,14 @@ cmake -S . -B build -DOpenFHE_DIR=$HOME/openfhe-install/lib/OpenFHE
 cmake --build build
 ```
 
-The first tracked executable is:
+Tracked executables are:
 
 ```text
 server_numeric_summary
+server_home_credit_aggregate
+server_linear_score
+encrypt_home_credit_payload
+decrypt_ckks_results
 ```
 
 Run help:

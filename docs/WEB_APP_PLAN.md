@@ -15,9 +15,19 @@ It should not implement HE math. It should:
 
 ```text
 home_credit_numeric_summary
-home_credit_category_eda       planned
-home_credit_bucket_eda         planned
-home_credit_domain_ratio_eda   planned
+home_credit_category_eda
+home_credit_bucket_eda
+home_credit_domain_ratio_eda
+home_credit_linear_score
+```
+
+The page also shows a read-only current result view per use case. It reports
+the latest job id, latest status, and output file count for each workflow.
+
+Workflow diagrams:
+
+```text
+docs/diagrams/README.md
 ```
 
 ## Runtime

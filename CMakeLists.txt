@@ -15,8 +15,28 @@ add_executable(server_numeric_summary
     code/server/numeric_summary/server_numeric_summary.cpp
 )
 
+add_executable(server_home_credit_aggregate
+    code/server/home_credit_aggregate/server_home_credit_aggregate.cpp
+)
+
+add_executable(server_linear_score
+    code/server/linear_score/server_linear_score.cpp
+)
+
+add_executable(encrypt_home_credit_payload
+    code/client/ckks_tools/encrypt_home_credit_payload.cpp
+)
+
+add_executable(decrypt_ckks_results
+    code/client/ckks_tools/decrypt_ckks_results.cpp
+)
+
 set(HE_UC_OPENFHE_TARGETS
     server_numeric_summary
+    server_home_credit_aggregate
+    server_linear_score
+    encrypt_home_credit_payload
+    decrypt_ckks_results
 )
 
 foreach(target_name IN LISTS HE_UC_OPENFHE_TARGETS)
@@ -31,6 +51,7 @@ foreach(target_name IN LISTS HE_UC_OPENFHE_TARGETS)
         ${OpenFHE_INCLUDE}/third-party/include
         ${OpenFHE_INCLUDE}/core
         ${OpenFHE_INCLUDE}/pke
+        ${OpenFHE_INCLUDE}/binfhe
     )
 
     target_link_directories(${target_name} PRIVATE

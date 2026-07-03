@@ -11,6 +11,7 @@ The page is organized as:
 - job catalog for Home Credit workflows
 - selected workflow requirements
 - encrypted artifact upload validation
+- read-only use-case result summary
 - server job status and encrypted result downloads
 
 ## Run
@@ -51,9 +52,10 @@ http://100.84.97.118:8080
 
 ```text
 home_credit_numeric_summary
-home_credit_category_eda       planned UI placeholder only
-home_credit_bucket_eda         planned UI placeholder only
-home_credit_domain_ratio_eda   planned UI placeholder only
+home_credit_category_eda
+home_credit_bucket_eda
+home_credit_domain_ratio_eda
+home_credit_linear_score
 ```
 
 ## Home Credit Numeric Summary Upload
@@ -76,6 +78,45 @@ The server runs:
   --manifest <work>/column_manifest.csv \
   --input-dir <work>/columns \
   --output-dir <work>/output/numeric_summary
+```
+
+## Aggregate EDA Upload
+
+Category, bucket, and ratio EDA use the same encrypted aggregate executable with
+a different analysis filter.
+
+Upload these files:
+
+```text
+crypto_context.bin
+eval_sum_keys.bin
+eval_mult_keys.bin
+aggregate_manifest.csv
+vectors/
+```
+
+The server runs `server_home_credit_aggregate` and returns:
+
+```text
+aggregate_summary_manifest.csv
+aggregates/*.bin
+```
+
+## Linear Score Upload
+
+Upload these files:
+
+```text
+crypto_context.bin
+score_manifest.csv
+score_features/
+```
+
+The server runs `server_linear_score` and returns:
+
+```text
+score_summary_manifest.csv
+scores/*.bin
 ```
 
 ## Security Boundaries

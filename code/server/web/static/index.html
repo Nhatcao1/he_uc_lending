@@ -468,6 +468,16 @@
 
     <div class="stack results-column">
       <section>
+        <h2>Use-Case Results</h2>
+        <table>
+          <thead>
+            <tr><th>Workflow</th><th>Latest</th><th>Outputs</th></tr>
+          </thead>
+          <tbody id="useCaseBody"></tbody>
+        </table>
+      </section>
+
+      <section>
         <h2>Server Jobs</h2>
         <div class="actions" style="margin-top:0;">
           <button class="secondary" id="refreshBtn" type="button">Refresh</button>
@@ -519,7 +529,7 @@ async function api(path, options = {}) {
 function normalizePath(file) {
   const raw = file.webkitRelativePath || file.name;
   const parts = raw.split('/').filter(Boolean);
-  for (const anchor of ['columns', 'masks', 'target', 'features', 'sums', 'flags']) {
+  for (const anchor of ['columns', 'vectors', 'score_features', 'masks', 'target', 'features', 'sums', 'flags']) {
     const idx = parts.indexOf(anchor);
     if (idx >= 0) return parts.slice(idx).join('/');
   }
@@ -724,6 +734,32 @@ async function refreshJobs() {
   }
 }
 
+async function refreshUseCases() {
+  try {
+    const res = await api('/api/use-case-results');
+    const data = await res.json();
+    const body = $('useCaseBody');
+    body.innerHTML = '';
+    data.use_cases.forEach(item => {
+      const outputs = (item.latest_output_files || []).length;
+      const latest = item.latest_job_id
+        ? `<button class="secondary" data-job="${item.latest_job_id}">${item.latest_job_id}</button><br><span class="status ${item.latest_status}">${item.latest_status}</span>`
+        : '<span class="muted">not started</span>';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${item.label}<br><span class="muted">${item.scheme}</span></td>
+        <td>${latest}</td>
+        <td>${outputs}</td>
+      `;
+      const button = tr.querySelector('button');
+      if (button) button.addEventListener('click', () => showJob(item.latest_job_id));
+      body.appendChild(tr);
+    });
+  } catch (err) {
+    $('useCaseBody').innerHTML = `<tr><td colspan="3" class="muted">${String(err.message || err)}</td></tr>`;
+  }
+}
+
 async function showJob(jobId) {
   state.selectedJob = jobId;
   const res = await api(`/api/jobs/${jobId}`);
@@ -782,8 +818,8 @@ $('clearBtn').addEventListener('click', () => {
 });
 $('token').addEventListener('change', refreshJobs);
 
-loadTypes().then(refreshJobs).then(health);
-setInterval(refreshJobs, 5000);
+loadTypes().then(refreshJobs).then(refreshUseCases).then(health);
+setInterval(() => { refreshJobs(); refreshUseCases(); }, 5000);
 setInterval(() => { if (state.selectedJob) showJob(state.selectedJob); }, 6000);
 </script>
 </body>

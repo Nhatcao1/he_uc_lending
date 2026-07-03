@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="700" viewBox="0 0 1280 700" role="img" aria-labelledby="title desc">
+  <title id="title">Home Credit Numeric Summary</title>
+  <desc id="desc">Numeric columns are encrypted by the client, summed on the server, and decrypted by the client into summary statistics.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#e0f2fe"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#0f172a" flood-opacity="0.13"/></filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#475569"/></marker>
+    <style>
+      .title{font:800 32px ui-sans-serif,system-ui;fill:#172033}.sub{font:400 15px ui-sans-serif,system-ui;fill:#64748b}
+      .label{font:800 12px ui-sans-serif,system-ui;letter-spacing:.12em;fill:#475569}.h{font:800 18px ui-sans-serif,system-ui;fill:#111827}.t{font:500 14px ui-sans-serif,system-ui;fill:#475569}
+      .line{stroke:#64748b;stroke-width:2.5;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1280" height="700" fill="url(#bg)"/>
+  <text class="title" x="60" y="64">Numeric Summary</text>
+  <text class="sub" x="60" y="92">Encrypted totals for Home Credit numeric columns, then client-side means.</text>
+
+  <rect x="56" y="132" width="520" height="444" rx="8" fill="#ffffff" opacity=".74"/>
+  <rect x="704" y="132" width="520" height="444" rx="8" fill="#ffffff" opacity=".74"/>
+  <text class="label" x="82" y="168">CLIENT</text>
+  <text class="label" x="730" y="168">SERVER</text>
+
+  <g filter="url(#shadow)">
+    <rect x="92" y="204" width="192" height="90" rx="8" fill="#ecfdf3" stroke="#86efac"/>
+    <text class="h" x="112" y="232">Select columns</text>
+    <text class="t" x="112" y="258">AMT_CREDIT</text>
+    <text class="t" x="112" y="278">AMT_INCOME_TOTAL</text>
+
+    <rect x="340" y="204" width="192" height="90" rx="8" fill="#ecfdf3" stroke="#86efac"/>
+    <text class="h" x="360" y="232">Encrypt chunks</text>
+    <text class="t" x="360" y="258">columns/*.bin</text>
+    <text class="t" x="360" y="278">column_manifest.csv</text>
+
+    <rect x="746" y="204" width="210" height="90" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="h" x="766" y="232">EvalSum chunks</text>
+    <text class="t" x="766" y="258">sum each ciphertext</text>
+    <text class="t" x="766" y="278">add chunk sums</text>
+
+    <rect x="992" y="204" width="190" height="90" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="h" x="1012" y="232">Return encrypted</text>
+    <text class="t" x="1012" y="258">summary_manifest.csv</text>
+    <text class="t" x="1012" y="278">*.sum.bin</text>
+  </g>
+
+  <path class="line" d="M284 249 H332"/>
+  <path class="line" d="M532 249 C618 249 642 249 738 249"/>
+  <path class="line" d="M956 249 H984"/>
+
+  <rect x="92" y="390" width="440" height="96" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text class="h" x="116" y="420">Client decrypts and reports</text>
+  <text class="t" x="116" y="448">sum = decrypted_sum</text>
+  <text class="t" x="116" y="470">mean = decrypted_sum / total_rows</text>
+
+  <rect x="746" y="390" width="436" height="96" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text class="h" x="770" y="420">Server does not see</text>
+  <text class="t" x="770" y="448">raw amounts, secret key, final plaintext mean</text>
+  <text class="t" x="770" y="470">only encrypted chunks and public metadata</text>
+</svg>

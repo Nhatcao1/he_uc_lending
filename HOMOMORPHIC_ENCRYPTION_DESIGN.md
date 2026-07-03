@@ -1,293 +1,350 @@
-# Homomorphic Encryption Design For Credit Rating
+# Homomorphic Encryption Design For Home Credit
 
 ## Objective
 
-Evaluate whether homomorphic encryption makes practical sense for the credit
-rating notebooks in this folder, then define a small proof of concept that can
-be coded without turning the whole ML workflow into an FHE research project.
+Evaluate whether homomorphic encryption makes practical sense for the Home
+Credit notebook workflow, then define a proof of concept that is useful without
+trying to move the whole Kaggle-style EDA and ML pipeline under FHE.
 
-The current notebooks are:
+Active notebook context:
 
-- `home-credit-complete-eda-feature-importance.ipynb`
-- `lending-club-loan-defaulters-prediction.ipynb`
+```text
+home_credit_start-here-a-gentle-introduction.ipynb
+```
 
-Both are Kaggle-style pipelines: load borrower/loan data, explore features,
-clean/encode data, train plaintext models, and evaluate default risk. That shape
-is important: FHE is a better fit for private inference than for the whole EDA
-or training process.
+Earlier LendingClub ideas are retired from the active implementation for now.
+The current build should focus on Home Credit `application_train.csv` and on
+server-side aggregate EDA over encrypted client-prepared artifacts.
 
 ## Recommended Use Case
 
-Use homomorphic encryption for privacy-preserving credit score inference.
+Use homomorphic encryption for privacy-preserving Home Credit aggregate EDA.
 
 ```text
-Borrower/client owns sensitive features
+Client owns raw Home Credit rows
         |
-        | encode + encrypt selected numeric features
+        | clean, normalize, bucket, one-hot encode, encrypt
         v
-Lender/scoring service evaluates a public or lender-owned model
+Server receives encrypted masks/numeric columns plus public/evaluation keys
         |
-        | encrypted linear/logistic score
+        | encrypted sums and masked sums
         v
-Borrower/client decrypts score/result
+Client decrypts aggregate counts, totals, and rates
 ```
 
-This protects raw borrower inputs from the scoring service during inference. It
-does not hide the model unless we add a separate model-protection design.
+This protects raw applicant rows from the server. It does not hide row count,
+schema, selected feature names, manifest metadata, request timing, or the final
+report from whoever holds the secret key.
 
-## What Makes Sense
+## What Makes Sense Now
 
-### 1. CKKS Linear Credit Score
+### 1. Encrypted Category Default-Rate Tables
 
-Best first version.
+This is the strongest Home Credit first use case.
+
+Client prepares:
 
 ```text
-score =
-    w0
-  + w1 * loan_amnt_scaled
-  + w2 * int_rate_scaled
-  + w3 * installment_scaled
-  + w4 * annual_inc_scaled
-  + w5 * dti_scaled
-  + w6 * revol_util_scaled
-  + ...
+TARGET default mask: 0/1
+NAME_INCOME_TYPE one-hot masks
+NAME_EDUCATION_TYPE one-hot masks
+OCCUPATION_TYPE one-hot masks
+ORGANIZATION_TYPE one-hot masks
+optional amount columns: AMT_CREDIT, AMT_INCOME_TOTAL, AMT_ANNUITY
+```
+
+Server computes encrypted aggregates:
+
+```text
+count(category)          = sum(category_mask)
+defaults(category)       = sum(category_mask * target_mask)
+credit_sum(category)     = sum(category_mask * AMT_CREDIT)
+income_sum(category)     = sum(category_mask * AMT_INCOME_TOTAL)
+annuity_sum(category)    = sum(category_mask * AMT_ANNUITY)
+```
+
+Client decrypts and reports:
+
+```text
+default_rate = defaults / count
+average_credit = credit_sum / count
+average_income = income_sum / count
+average_annuity = annuity_sum / count
 ```
 
 Why it fits:
 
-- CKKS supports approximate real-valued arithmetic.
-- Linear scoring uses ciphertext-plaintext multiplication plus addition.
-- Multiplicative depth is low, usually depth 1 for public model weights.
-- Existing `utility_bench` docs already cover linear score and dense layer
-  benchmark patterns.
+- The notebook already studies target distribution by categorical fields.
+- Client-side one-hot masks avoid encrypted string handling.
+- Server work is mostly multiply masks and sum, which is HE-friendly.
+- The result is a useful EDA report, not fake encrypted plotting.
 
-### 2. CKKS Tiny Neural/Dense Layer
+### 2. Encrypted Bucket Reports
 
-Reasonable second version if we want to reuse the notebook's neural-network
-theme, but only if the model is shallow.
+Client turns difficult values into simple bucket masks before encryption:
 
 ```text
-encrypted features -> dense layer -> encrypted logits
+age buckets from DAYS_BIRTH
+EXT_SOURCE_1 / EXT_SOURCE_2 / EXT_SOURCE_3 score buckets
+DAYS_EMPLOYED normal/anomaly buckets
+domain-ratio buckets
 ```
 
-Start with no activation or a low-degree polynomial activation. Standard
-sigmoid/ReLU are not native FHE operations.
-
-### 3. Encrypted Partner-Side Scoring
-
-Useful business story:
+Recommended domain ratios:
 
 ```text
-Partner or telco has customer features
-Bank has scoring model
-Partner encrypts features
-Bank computes encrypted risk score
-Partner decrypts result or sends result to authorized party
+CREDIT_INCOME_PERCENT = AMT_CREDIT / AMT_INCOME_TOTAL
+ANNUITY_INCOME_PERCENT = AMT_ANNUITY / AMT_INCOME_TOTAL
+CREDIT_TERM = AMT_ANNUITY / AMT_CREDIT
+DAYS_EMPLOYED_PERCENT = DAYS_EMPLOYED / DAYS_BIRTH
 ```
 
-This is a credible lending use case when raw customer data cannot be shared.
+Server computes encrypted count/default-count tables for each bucket. Client
+decrypts trend tables such as default rate by age group or by EXT_SOURCE range.
+
+### 3. Encrypted Numeric Summary
+
+The current tracked C++ executable, `server_numeric_summary`, supports the
+simple packed numeric aggregate path:
+
+```text
+encrypted numeric vectors -> encrypted column sums -> client decrypts totals
+```
+
+This is useful as the baseline HE plumbing test before masked category EDA.
+
+### 4. Later CKKS Linear Risk Score
+
+Linear scoring is still valid HE work, but it is not the first Home Credit EDA
+target.
+
+Possible later shape:
+
+```text
+risk_score =
+    w0
+  + w1 * AMT_CREDIT_scaled
+  + w2 * AMT_INCOME_TOTAL_scaled
+  + w3 * AMT_ANNUITY_scaled
+  + w4 * DAYS_BIRTH_scaled
+  + w5 * EXT_SOURCE_2_scaled
+  + w6 * CREDIT_INCOME_PERCENT_scaled
+  + ...
+```
+
+Why this fits later:
+
+- CKKS handles approximate real-valued weighted sums well.
+- Public model weights mean low multiplicative depth.
+- It can reuse the same client/server payload discipline.
+
+Do not treat this as notebook-derived truth. It needs either documented public
+policy weights or a separately trained plaintext model whose weights are then
+exported for encrypted inference.
 
 ## What Does Not Make Sense For V1
 
-### Full Encrypted EDA
+### Raw Encrypted EDA
 
-The notebooks use correlations, plots, missing-value analysis, group-by counts,
-and feature inspection. Doing all of that under FHE is expensive and often
-awkward. EDA should remain plaintext on approved training data.
+The server cannot magically inspect encrypted CSVs, strings, dates, nulls, or
+plots. The client must prepare the data into numeric vectors, binary masks, and
+manifest metadata before encryption.
+
+### Full Encrypted Home Credit Multi-Table Join
+
+Home Credit has multiple related tables in the full dataset. Joining by
+`SK_ID_CURR`, building historical aggregates, and engineering bureau/POS/card
+features should stay outside the first HE path. Start with
+`application_train.csv`.
 
 ### FHE Training
 
-Training RandomForest, XGBoost, or neural networks fully under FHE is not a good
-starting point. Training requires many iterations, comparisons, branching, and
-nonlinear functions. Use plaintext training, then export a small inference model.
+Training RandomForest, XGBoost, or neural networks fully under FHE is not a
+good starting point. Training needs many iterations, branching, comparisons,
+and nonlinear functions. Use plaintext training/export if scoring becomes the
+target later.
 
-### Tree-Based Model Inference First
+### Encrypted String/Date Handling
 
-RandomForest and XGBoost depend on comparisons:
+Names, occupation labels, organization names, and dates should be converted on
+the client into numeric codes, one-hot masks, date-derived numbers, or buckets.
+The server should not receive plaintext raw strings unless the privacy design
+explicitly allows that metadata.
 
-```text
-if dti <= threshold:
-    go left
-else:
-    go right
-```
-
-Encrypted comparisons are possible but much more expensive than linear CKKS
-arithmetic. Keep tree models as plaintext baselines, not the first FHE target.
-
-## Proposed V1 Architecture
+## Proposed Active Architecture
 
 ```text
 uc_credit_rating/
-  data/
-    sample_credit_features.csv          # small derived fixture, no raw Kaggle dependency
-  models/
-    linear_credit_model.json            # feature list, scaling params, weights, bias
-  src/
-    prepare_credit_features.py          # creates V1 fixture/model from notebook logic
-    plain_linear_score.py               # correctness baseline
-  he/
-    ckks_credit_score.cpp               # OpenFHE encrypted inference
-  results/
-    ckks_credit_score_results.csv       # timing + accuracy report
+  code/
+    client/
+      prepare_home_credit_*.py          # local raw-data preparation, encryption
+    server/
+      numeric_summary/                  # current encrypted numeric aggregate
+      home_credit_category_eda/         # planned masked aggregate job
+      web/                              # upload receiver and job UI
+  docs/
+    HOME_CREDIT_HE_PLAN.md
+    SERVER_SIDE_EDA_PLAN.md
+    HE_EDA_DATA_PREPARATION_LIMITS.md
+    WEB_APP_PLAN.md
+  data/                                 # local only, ignored
+  keys/                                 # local only, ignored
+  encrypted_payloads/                   # local only, ignored
+  server_jobs/                          # local only, ignored
+  server_returns/                       # local only, ignored
 ```
 
-For the first commit, the Python path can be built before the C++ HE path:
+## Client Responsibilities
+
+- Own raw `application_train.csv`.
+- Remove invalid rows or map missing values into explicit buckets.
+- Normalize numeric columns when required.
+- Convert categorical columns into one-hot masks.
+- Convert dates and special values into numeric buckets.
+- Encrypt prepared vectors and masks.
+- Send only encrypted payloads, public/evaluation keys, and manifest metadata.
+- Keep the secret key local.
+
+The client must not upload:
 
 ```text
-1. Select features
-2. Train/export a simple logistic-regression-style linear model
-3. Run plaintext scoring
-4. Match the same formula in OpenFHE CKKS
-5. Compare decrypted HE score against plaintext score
+raw CSV
+plaintext prepared CSV
+secret key
+decrypted report
+row-level plaintext applicant data
 ```
 
-## Feature Set For First POC
+## Server Responsibilities
 
-Use LendingClub first because the notebook already has a compact binary target:
-
-```text
-loan_status: Fully Paid = 1, Charged Off = 0
-```
-
-Recommended numeric features:
-
-```text
-loan_amnt
-int_rate
-installment
-annual_inc
-dti
-open_acc
-pub_rec
-revol_bal
-revol_util
-total_acc
-mort_acc
-pub_rec_bankruptcies
-```
-
-Categorical features can wait, or be represented with a few one-hot values after
-plaintext preprocessing.
+- Accept a job bundle over the web receiver.
+- Validate manifest, required files, job type, and payload shape.
+- Run the matching OpenFHE executable.
+- Compute encrypted aggregate results.
+- Return encrypted result files and run metadata.
+- Never require the client secret key.
 
 ## HE Scheme Choice
 
-Use CKKS for V1.
+Use CKKS first for packed approximate aggregates:
 
 ```text
 scheme: CKKS
 security: 128-bit
-operation: encrypted feature vector, plaintext model weights
-depth: 1 for linear score
-first_mod_size: 60
-scaling_mod_size: 50
-ring_dimension: let OpenFHE choose first
-batch_size: max slots / auto first
+operation: packed encrypted masks and numeric vectors
+typical work: additions, mask * target, mask * amount, rotations/sums
 ```
 
-Use BinFHE later only for small exact lookup or threshold experiments, such as:
+Use BFV/BGV later if exact integer counts become more important than approximate
+packed throughput.
 
-```text
-employment_length_bucket -> risk_code
-purpose_code -> risk_code
-encrypted score > threshold
-```
-
-Do not mix CKKS and BinFHE in V1.
+Use BinFHE/FHEW only for narrow boolean/comparison experiments. It is not the
+default for Home Credit aggregate EDA because the first useful reports can be
+made from client-prepared masks and CKKS/BFV-style sums.
 
 ## Privacy Boundary
 
-V1 protects:
+Protected from the server:
 
-- borrower numeric input features during inference
-- intermediate score contributions
-- final score until the client decrypts it
+- raw applicant rows
+- exact category membership per row
+- target/default per row
+- amount values per row
+- intermediate masked sums before decryption
 
-V1 does not protect:
+Visible or inferable to the server:
 
-- training data used to fit the model
-- model weights, if weights are plaintext
-- feature names and approximate schema
-- metadata such as request timing, row count, and model version
+- job type
+- row count or approximate row count
+- selected columns and category names from the manifest
+- number of buckets/categories
+- ciphertext count and payload size
+- timing and requester metadata
 
-If the model must also be hidden, evaluate encrypted weights in a later version.
-That changes performance and depth assumptions.
+The final readable report exists only after the client decrypts the encrypted
+server result.
 
 ## Evaluation Criteria
 
-Record both ML and HE quality.
-
-ML metrics:
-
-```text
-roc_auc
-accuracy
-precision
-recall
-confusion matrix
-```
-
-HE metrics:
+Record HE and workflow quality first:
 
 ```text
 rows
-feature_count
+selected_column_count
+category_count
+bucket_count
 ciphertext_count
 slots_per_ciphertext
 setup_time_ms
 encode_time_ms
 encrypt_time_ms
+upload_size_bytes
 he_eval_time_ms
+result_size_bytes
 decrypt_time_ms
-decode_time_ms
-total_he_time_ms
-plain_time_ms
-slowdown_vs_plain
-max_abs_error
-mean_abs_error
+max_abs_error_vs_plain_aggregate
+mean_abs_error_vs_plain_aggregate
+```
+
+For later scoring work, add:
+
+```text
+auc
+accuracy
+precision
+recall
+score_error
+threshold_decision_mismatch_rate
 ```
 
 ## Milestones
 
-### Milestone 1: Plain POC
+### Milestone 1: Numeric Summary Plumbing
 
-- Create a script that extracts/creates a small cleaned LendingClub fixture.
-- Train or hard-code a simple linear/logistic model.
-- Save `linear_credit_model.json`.
-- Produce plaintext score and probability outputs.
+- Build and run `server_numeric_summary`.
+- Send encrypted Home Credit numeric columns.
+- Return encrypted sums.
+- Decrypt client-side and compare against plaintext local sums.
 
-### Milestone 2: HE Formula Match
+### Milestone 2: Category Default-Rate EDA
 
-- Implement the same weighted-sum formula in OpenFHE CKKS.
-- Keep model weights plaintext.
-- Decrypt only final score vectors for accuracy comparison.
+- Implement Home Credit client prep for category masks and target mask.
+- Implement server masked-sum executable.
+- Produce decrypted category count/default-rate report.
 
-### Milestone 3: Benchmark
+### Milestone 3: Bucket EDA
 
-- Run small, medium, and larger row counts.
-- Compare CKKS score error against plaintext.
-- Decide whether latency is acceptable for batch scoring.
+- Add age, EXT_SOURCE, DAYS_EMPLOYED anomaly, and domain-ratio buckets.
+- Reuse the masked aggregate pattern.
+- Report default rate by bucket.
 
-### Milestone 4: Optional Extensions
+### Milestone 4: Web Job Flow
 
-- Add one-hot categorical features.
-- Add a tiny dense layer.
-- Add BinFHE threshold or small lookup as a separate experiment.
-- Investigate model privacy with encrypted weights.
+- Upload bundle through `code/server/web/he_job_server.py`.
+- Validate manifests and required encrypted files.
+- Store job state and encrypted results.
+- Keep service mode and manual run mode both usable.
+
+### Milestone 5: Optional Linear Scoring
+
+- Define public Home Credit scoring features and weights.
+- Implement plaintext score baseline.
+- Implement CKKS weighted-sum inference.
+- Compare decrypted scores and benchmark latency.
 
 ## Recommendation
 
-Homomorphic encryption does make sense for this use case if we frame it as
-private credit-risk inference, not as encrypted training or full encrypted EDA.
+Homomorphic encryption does make sense for this project if we frame it as
+privacy-preserving Home Credit aggregate EDA first.
 
-The strongest first build is:
+The strongest active build is:
 
 ```text
-LendingClub numeric features
-    -> plaintext logistic/linear baseline
-    -> OpenFHE CKKS encrypted weighted score
-    -> accuracy and timing report
+Home Credit application_train.csv on client
+    -> clean, bucket, one-hot, encrypt
+    -> server computes encrypted aggregate tables
+    -> client decrypts default-rate and numeric-summary reports
 ```
 
-This gives a real lending story, a technically feasible HE workload, and a
-clear benchmark that can decide whether to continue.
+Linear credit scoring remains a good later CKKS experiment, but the immediate
+Home Credit value is encrypted category and bucket EDA.

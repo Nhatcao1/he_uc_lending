@@ -19,11 +19,45 @@ the single-table encrypted aggregate path is working.
 | 4 | `EXT_SOURCE` bucket reports | Null handling plus score buckets for `EXT_SOURCE_1/2/3` | Encrypted count/default count per bucket | Default rate by external-source score bucket |
 | 5 | Domain ratio bucket reports | Compute `CREDIT_INCOME_PERCENT`, `ANNUITY_INCOME_PERCENT`, `CREDIT_TERM`, `DAYS_EMPLOYED_PERCENT`; bucket ratios | Encrypted count/default count per ratio bucket | Risk trend by financial ratio |
 
+Detailed mapping from original notebook EDA to the HE implementation choices:
+
+```text
+docs/HOME_CREDIT_BASIC_EDA_IMPLEMENTATION_MAP.md
+```
+
+Implemented client/server flow and run commands:
+
+```text
+docs/HOME_CREDIT_IMPLEMENTED_CLIENT_SERVER_FLOW.md
+```
+
+## Basic EDA First Slice
+
+The first category EDA implementation should be intentionally small:
+
+```text
+NAME_INCOME_TYPE
+NAME_EDUCATION_TYPE
+TARGET
+```
+
+This is mostly client-side work. The client selects categories, applies missing
+and rare-category policy, creates masks, encrypts them, and later decrypts the
+final report. The server only computes encrypted aggregate sums.
+
+Add larger category columns after the path works:
+
+```text
+OCCUPATION_TYPE      top-K + __OTHER__
+ORGANIZATION_TYPE   top-K + __OTHER__
+```
+
 ## Client Responsibilities
 
 - Load `data/home_credit/application_train.csv`.
 - Remove invalid rows or map nulls into explicit buckets.
 - Encode categorical values into one-hot masks.
+- Apply category selection policy such as all-values or top-K plus `__OTHER__`.
 - Encode `TARGET` as an encrypted 0/1 mask.
 - Pack numeric/mask vectors into ciphertext chunks.
 - Send only encrypted chunks, public/evaluation keys, and manifests.

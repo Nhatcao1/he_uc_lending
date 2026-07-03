@@ -68,12 +68,40 @@ DAYS_BIRTH
 
 ### 1. Category Default-Rate EDA
 
+Detailed notebook-to-implementation map:
+
+```text
+docs/HOME_CREDIT_BASIC_EDA_IMPLEMENTATION_MAP.md
+```
+
+Implemented command flow:
+
+```text
+docs/HOME_CREDIT_IMPLEMENTED_CLIENT_SERVER_FLOW.md
+```
+
 Questions:
 
 - What is the default rate by `NAME_INCOME_TYPE`?
 - What is the default rate by `OCCUPATION_TYPE`?
 - What is the default rate by `NAME_EDUCATION_TYPE`?
 - What is the default rate by `ORGANIZATION_TYPE`?
+
+First implementation subset:
+
+```text
+NAME_INCOME_TYPE
+NAME_EDUCATION_TYPE
+TARGET
+```
+
+Client-side category policy:
+
+```text
+small columns: keep all categories
+large/noisy columns: top-K categories plus __OTHER__
+missing values: __MISSING__
+```
 
 Server operations:
 
@@ -125,5 +153,5 @@ code/client/prepare_home_credit_category_eda.py
 Then build server aggregate support:
 
 ```text
-code/server/home_credit_category_eda/server_home_credit_category_eda.cpp
+code/server/home_credit_aggregate/server_home_credit_aggregate.cpp
 ```

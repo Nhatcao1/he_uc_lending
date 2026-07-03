@@ -73,11 +73,11 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
     "home_credit_category_eda": {
         "label": "Category Default-Rate EDA",
         "family": "Home Credit",
-        "stage": "Category-risk EDA planned",
-        "scheme": "CKKS/BFV planned",
-        "binary": "",
+        "stage": "Category-risk EDA",
+        "scheme": "CKKS",
+        "binary": "server_home_credit_aggregate",
         "description": "Encrypted applicant counts, default counts, and amount sums by one-hot Home Credit category buckets.",
-        "required": ["category_manifest.csv", "masks/", "target/", "amounts/"],
+        "required": ["crypto_context.bin", "eval_sum_keys.bin", "eval_mult_keys.bin", "aggregate_manifest.csv", "vectors/"],
         "client_requirements": [
             "Encode categories such as NAME_INCOME_TYPE, OCCUPATION_TYPE, NAME_EDUCATION_TYPE, and ORGANIZATION_TYPE as one-hot encrypted masks.",
             "Map null category values into an explicit NULL_OR_UNKNOWN bucket before encryption.",
@@ -85,48 +85,135 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
             "Encrypt numeric amount vectors such as AMT_CREDIT, AMT_INCOME_TOTAL, and AMT_ANNUITY for grouped sums.",
             "No raw strings, raw CSV, plaintext SK_ID joins, or secret keys in the upload.",
         ],
-        "client_artifacts": ["category_manifest.csv", "masks/*.bin", "target/*.bin", "amounts/*.bin", "eval keys"],
-        "server_returns": ["category_summary_manifest.csv", "aggregates/*.bin"],
-        "command": [],
-        "disabled": True,
+        "client_artifacts": [
+            "crypto_context.bin",
+            "eval_sum_keys.bin",
+            "eval_mult_keys.bin",
+            "aggregate_manifest.csv",
+            "vectors/*.bin",
+        ],
+        "server_returns": ["category_eda/aggregate_summary_manifest.csv", "category_eda/aggregates/*.bin"],
+        "command": [
+            "--context",
+            "crypto_context.bin",
+            "--eval-sum-keys",
+            "eval_sum_keys.bin",
+            "--eval-mult-keys",
+            "eval_mult_keys.bin",
+            "--manifest",
+            "aggregate_manifest.csv",
+            "--input-dir",
+            "vectors",
+            "--output-dir",
+            "output/category_eda",
+            "--analysis-filter",
+            "literal:category",
+        ],
     },
     "home_credit_bucket_eda": {
         "label": "Age / EXT_SOURCE Bucket EDA",
         "family": "Home Credit",
-        "stage": "Bucket-risk EDA planned",
-        "scheme": "CKKS/BFV planned",
-        "binary": "",
+        "stage": "Bucket-risk EDA",
+        "scheme": "CKKS",
+        "binary": "server_home_credit_aggregate",
         "description": "Encrypted default-rate tables for age bins, DAYS_EMPLOYED anomaly, and EXT_SOURCE score buckets.",
-        "required": ["bucket_manifest.csv", "bucket_masks/", "target/"],
+        "required": ["crypto_context.bin", "eval_sum_keys.bin", "eval_mult_keys.bin", "aggregate_manifest.csv", "vectors/"],
         "client_requirements": [
             "Convert DAYS_BIRTH to positive age years and bucket client-side.",
             "Encode DAYS_EMPLOYED == 365243 as an explicit anomaly mask before encryption.",
             "Bucket EXT_SOURCE_1/2/3 after null handling or explicit null bucket creation.",
             "Encrypt bucket masks and TARGET mask; server only aggregates encrypted masks.",
         ],
-        "client_artifacts": ["bucket_manifest.csv", "bucket_masks/*.bin", "target/*.bin", "eval keys"],
-        "server_returns": ["bucket_summary_manifest.csv", "aggregates/*.bin"],
-        "command": [],
-        "disabled": True,
+        "client_artifacts": [
+            "crypto_context.bin",
+            "eval_sum_keys.bin",
+            "eval_mult_keys.bin",
+            "aggregate_manifest.csv",
+            "vectors/*.bin",
+        ],
+        "server_returns": ["bucket_eda/aggregate_summary_manifest.csv", "bucket_eda/aggregates/*.bin"],
+        "command": [
+            "--context",
+            "crypto_context.bin",
+            "--eval-sum-keys",
+            "eval_sum_keys.bin",
+            "--eval-mult-keys",
+            "eval_mult_keys.bin",
+            "--manifest",
+            "aggregate_manifest.csv",
+            "--input-dir",
+            "vectors",
+            "--output-dir",
+            "output/bucket_eda",
+            "--analysis-filter",
+            "literal:bucket",
+        ],
     },
     "home_credit_domain_ratio_eda": {
         "label": "Domain Ratio EDA",
         "family": "Home Credit",
-        "stage": "Financial-ratio EDA planned",
-        "scheme": "CKKS planned",
-        "binary": "",
+        "stage": "Financial-ratio EDA",
+        "scheme": "CKKS",
+        "binary": "server_home_credit_aggregate",
         "description": "Encrypted aggregate tables for CREDIT_INCOME_PERCENT, ANNUITY_INCOME_PERCENT, CREDIT_TERM, and DAYS_EMPLOYED_PERCENT buckets.",
-        "required": ["ratio_manifest.csv", "ratio_buckets/", "target/"],
+        "required": ["crypto_context.bin", "eval_sum_keys.bin", "eval_mult_keys.bin", "aggregate_manifest.csv", "vectors/"],
         "client_requirements": [
             "Client computes domain ratios from application_train numeric columns before encryption.",
             "Handle division by zero/nulls client-side with explicit invalid/null buckets.",
             "Encrypt ratio bucket masks and TARGET mask for server-side aggregate counts.",
             "Raw financial values and secret keys stay on the client.",
         ],
-        "client_artifacts": ["ratio_manifest.csv", "ratio_buckets/*.bin", "target/*.bin", "eval keys"],
-        "server_returns": ["ratio_summary_manifest.csv", "aggregates/*.bin"],
-        "command": [],
-        "disabled": True,
+        "client_artifacts": [
+            "crypto_context.bin",
+            "eval_sum_keys.bin",
+            "eval_mult_keys.bin",
+            "aggregate_manifest.csv",
+            "vectors/*.bin",
+        ],
+        "server_returns": ["ratio_eda/aggregate_summary_manifest.csv", "ratio_eda/aggregates/*.bin"],
+        "command": [
+            "--context",
+            "crypto_context.bin",
+            "--eval-sum-keys",
+            "eval_sum_keys.bin",
+            "--eval-mult-keys",
+            "eval_mult_keys.bin",
+            "--manifest",
+            "aggregate_manifest.csv",
+            "--input-dir",
+            "vectors",
+            "--output-dir",
+            "output/ratio_eda",
+            "--analysis-filter",
+            "literal:ratio",
+        ],
+    },
+    "home_credit_linear_score": {
+        "label": "Linear ML Score",
+        "family": "Home Credit",
+        "stage": "Encrypted inference",
+        "scheme": "CKKS",
+        "binary": "server_linear_score",
+        "description": "Encrypted CKKS weighted-sum inference for a small exported Home Credit linear/logistic model.",
+        "required": ["crypto_context.bin", "score_manifest.csv", "score_features/"],
+        "client_requirements": [
+            "Train/export a small linear model in plaintext, or use the demo policy model for plumbing only.",
+            "Prepare scaled numeric feature vectors client-side.",
+            "Encrypt feature vectors; server receives only encrypted features and plaintext weights.",
+            "Server returns encrypted score chunks; client decrypts and optionally applies sigmoid.",
+        ],
+        "client_artifacts": ["crypto_context.bin", "score_manifest.csv", "score_features/*.bin"],
+        "server_returns": ["linear_score/score_summary_manifest.csv", "linear_score/scores/*.bin"],
+        "command": [
+            "--context",
+            "crypto_context.bin",
+            "--manifest",
+            "score_manifest.csv",
+            "--input-dir",
+            "score_features",
+            "--output-dir",
+            "output/linear_score",
+        ],
     },
 }
 
@@ -443,12 +530,10 @@ function authHeaders() {
 function normalizePath(file) {
   const raw = file.webkitRelativePath || file.name;
   const parts = raw.split('/').filter(Boolean);
-  const columnsIndex = parts.indexOf('columns');
-  if (columnsIndex >= 0) return parts.slice(columnsIndex).join('/');
-  const masksIndex = parts.indexOf('masks');
-  if (masksIndex >= 0) return parts.slice(masksIndex).join('/');
-  const targetIndex = parts.indexOf('target');
-  if (targetIndex >= 0) return parts.slice(targetIndex).join('/');
+  for (const anchor of ['columns', 'vectors', 'score_features', 'masks', 'target']) {
+    const idx = parts.indexOf(anchor);
+    if (idx >= 0) return parts.slice(idx).join('/');
+  }
   return parts[parts.length - 1] || file.name;
 }
 
@@ -731,6 +816,41 @@ def list_jobs(jobs_dir: Path) -> list[dict[str, Any]]:
     return jobs
 
 
+def use_case_results(jobs_dir: Path) -> list[dict[str, Any]]:
+    jobs = list_jobs(jobs_dir)
+    grouped: dict[str, dict[str, Any]] = {}
+    for job_type, cfg in JOB_TYPES.items():
+        grouped[job_type] = {
+            "job_type": job_type,
+            "label": cfg["label"],
+            "family": cfg.get("family", ""),
+            "scheme": cfg.get("scheme", ""),
+            "runnable": not bool(cfg.get("disabled")),
+            "latest_job_id": "",
+            "latest_status": "not_started",
+            "latest_updated_at": "",
+            "latest_output_files": [],
+            "counts": {},
+        }
+
+    for job in jobs:
+        job_type = str(job.get("job_type", ""))
+        if job_type not in grouped:
+            continue
+        item = grouped[job_type]
+        status = str(job.get("status", "unknown"))
+        counts = item["counts"]
+        counts[status] = counts.get(status, 0) + 1
+        updated = str(job.get("updated_at", ""))
+        if updated >= item["latest_updated_at"]:
+            item["latest_job_id"] = job.get("job_id", "")
+            item["latest_status"] = status
+            item["latest_updated_at"] = updated
+            item["latest_output_files"] = job.get("output_files", [])
+
+    return list(grouped.values())
+
+
 def list_output_files(job_dir: Path) -> list[str]:
     output = job_dir / "work" / "output"
     if not output.exists():
@@ -769,6 +889,8 @@ def build_command(build_dir: Path, work_dir: Path, job_type: str) -> list[str]:
     for arg in args:
         if arg.startswith("--"):
             command.append(arg)
+        elif arg.startswith("literal:"):
+            command.append(arg.split(":", 1)[1])
         else:
             command.append(str(work_dir / arg))
     return command
@@ -903,6 +1025,11 @@ class HEJobHandler(BaseHTTPRequestHandler):
                 if not self.require_auth():
                     return
                 response_json(self, {"jobs": list_jobs(self.jobs_dir)})
+                return
+            if parsed.path == "/api/use-case-results":
+                if not self.require_auth():
+                    return
+                response_json(self, {"use_cases": use_case_results(self.jobs_dir)})
                 return
             if parsed.path.startswith("/api/jobs/"):
                 if not self.require_auth():

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">Home Credit Domain Ratio EDA</title>
+  <desc id="desc">Client computes and buckets financial ratios before encryption, server counts encrypted buckets.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#fff7ed"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#0f172a" flood-opacity="0.13"/></filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#475569"/></marker>
+    <style>
+      .title{font:800 32px ui-sans-serif,system-ui;fill:#172033}.sub{font:400 15px ui-sans-serif,system-ui;fill:#64748b}
+      .h{font:800 18px ui-sans-serif,system-ui;fill:#111827}.t{font:500 14px ui-sans-serif,system-ui;fill:#475569}.code{font:700 13px ui-monospace,Menlo,monospace;fill:#9a3412}
+      .line{stroke:#64748b;stroke-width:2.5;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <text class="title" x="60" y="64">Domain Ratio EDA</text>
+  <text class="sub" x="60" y="92">Client computes ratios and invalid buckets; server only aggregates encrypted masks.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="74" y="156" width="250" height="128" rx="8" fill="#ecfdf3" stroke="#86efac"/>
+    <text class="h" x="98" y="188">Compute ratios</text>
+    <text class="code" x="98" y="218">credit / income</text>
+    <text class="code" x="98" y="242">annuity / income</text>
+    <text class="code" x="98" y="266">annuity / credit</text>
+
+    <rect x="386" y="156" width="250" height="128" rx="8" fill="#ecfdf3" stroke="#86efac"/>
+    <text class="h" x="410" y="188">Bucket locally</text>
+    <text class="t" x="410" y="218">0_0.1, 0.1_0.2</text>
+    <text class="t" x="410" y="242">0.2_0.4, gte_1.0</text>
+    <text class="t" x="410" y="266">invalid/null bucket</text>
+
+    <rect x="698" y="156" width="250" height="128" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="h" x="722" y="188">Server HE work</text>
+    <text class="code" x="722" y="218">sum(ratio_mask)</text>
+    <text class="code" x="722" y="242">sum(mask * target)</text>
+    <text class="t" x="722" y="266">filter: ratio</text>
+
+    <rect x="1010" y="156" width="196" height="128" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text class="h" x="1034" y="188">Client report</text>
+    <text class="t" x="1034" y="218">count</text>
+    <text class="t" x="1034" y="242">default_count</text>
+    <text class="t" x="1034" y="266">default_rate</text>
+  </g>
+  <path class="line" d="M324 220 H378"/>
+  <path class="line" d="M636 220 H690"/>
+  <path class="line" d="M948 220 H1002"/>
+
+  <rect x="96" y="372" width="1088" height="138" rx="8" fill="#ffffff" stroke="#d1d5db"/>
+  <text class="h" x="126" y="406">Implemented ratio sources</text>
+  <text class="code" x="126" y="438">CREDIT_INCOME_PERCENT = AMT_CREDIT / AMT_INCOME_TOTAL</text>
+  <text class="code" x="126" y="464">ANNUITY_INCOME_PERCENT = AMT_ANNUITY / AMT_INCOME_TOTAL</text>
+  <text class="code" x="126" y="490">CREDIT_TERM = AMT_ANNUITY / AMT_CREDIT, DAYS_EMPLOYED_PERCENT = DAYS_EMPLOYED / DAYS_BIRTH</text>
+
+  <rect x="246" y="580" width="788" height="64" rx="8" fill="#fff7ed" stroke="#fed7aa"/>
+  <text class="h" x="276" y="616">Design note</text>
+  <text class="t" x="418" y="616">Division happens on the client. The server receives only encrypted bucket masks.</text>
+</svg>
