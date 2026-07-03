@@ -41,6 +41,7 @@ These outputs are local artifacts and are ignored by git.
 ```text
 home_credit/prepare_home_credit_basic_eda.py
 home_credit/train_home_credit_linear_model.py
+home_credit/download_job_bundle.py
 ckks_tools/encrypt_home_credit_payload.cpp
 ckks_tools/decrypt_ckks_results.cpp
 ```

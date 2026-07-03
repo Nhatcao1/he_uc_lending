@@ -13,6 +13,7 @@ results/
 keys/
 ciphertexts/
 encrypted_payloads/
+prepared_payloads/
 server_returns/
 server_jobs/
 

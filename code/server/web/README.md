@@ -12,6 +12,7 @@ The page is organized as:
 - selected workflow requirements
 - encrypted artifact upload validation
 - read-only use-case result summary
+- one-click encrypted result bundle download
 - server job status and encrypted result downloads
 
 ## Run
@@ -117,6 +118,29 @@ The server runs `server_linear_score` and returns:
 ```text
 score_summary_manifest.csv
 scores/*.bin
+```
+
+## Result Bundle Download
+
+Each completed job exposes:
+
+```text
+/api/jobs/<job_id>/download-bundle
+```
+
+The zip contains:
+
+```text
+job_status.json
+server_log.txt
+<workflow output manifest>
+<workflow encrypted result ciphertexts>
+```
+
+The web UI shows this as:
+
+```text
+Download result bundle
 ```
 
 ## Security Boundaries

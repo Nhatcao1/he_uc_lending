@@ -16,6 +16,8 @@ import subprocess
 import threading
 import time
 import uuid
+import zipfile
+from io import BytesIO
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
@@ -862,6 +864,22 @@ def list_output_files(job_dir: Path) -> list[str]:
     return files
 
 
+def create_result_bundle(job_dir: Path) -> bytes:
+    status = read_status(job_dir)
+    output_root = job_dir / "work" / "output"
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        bundle.writestr("job_status.json", json.dumps(status, indent=2))
+        log_path = job_dir / "server_log.txt"
+        if log_path.exists():
+            bundle.write(log_path, "server_log.txt")
+        if output_root.exists():
+            for path in sorted(output_root.rglob("*")):
+                if path.is_file():
+                    bundle.write(path, path.relative_to(output_root).as_posix())
+    return buffer.getvalue()
+
+
 def validate_required_files(work_dir: Path, job_type: str) -> None:
     cfg = JOB_TYPES[job_type]
     missing: list[str] = []
@@ -1060,6 +1078,16 @@ class HEJobHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Type", "application/octet-stream")
                     self.send_header("Content-Length", str(len(data)))
                     self.send_header("Content-Disposition", f'attachment; filename="{html.escape(target.name)}"')
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                if len(parts) == 4 and parts[3] == "download-bundle":
+                    data = create_result_bundle(job_dir)
+                    filename = f"he_result_{job_id}.zip"
+                    self.send_response(HTTPStatus.OK)
+                    self.send_header("Content-Type", "application/zip")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.send_header("Content-Disposition", f'attachment; filename="{html.escape(filename)}"')
                     self.end_headers()
                     self.wfile.write(data)
                     return

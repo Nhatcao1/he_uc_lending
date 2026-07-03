@@ -9,6 +9,7 @@ It should not implement HE math. It should:
 - validate required encrypted artifacts before submit
 - store each upload under `server_jobs/web/<job_id>/work`
 - invoke the matching C++ server executable
+- expose a one-click encrypted result bundle zip
 - expose job status and encrypted result downloads
 
 ## Active Workflows

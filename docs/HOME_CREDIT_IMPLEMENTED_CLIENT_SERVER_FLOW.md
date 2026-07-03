@@ -162,6 +162,34 @@ Client-only secret:
 keys/home_credit_basic/secret_key.bin
 ```
 
+## Client Download Helper
+
+After a web job finishes, download all encrypted result files in one command:
+
+```bash
+python3 code/client/home_credit/download_job_bundle.py \
+  --server http://100.84.97.118:8080 \
+  --job-id <job_id> \
+  --output-dir server_returns
+```
+
+If the web receiver uses `HE_RECEIVER_TOKEN`, add:
+
+```bash
+--token <token>
+```
+
+The helper saves:
+
+```text
+server_returns/<job_id>/he_result_<job_id>.zip
+server_returns/<job_id>/job_status.json
+server_returns/<job_id>/server_log.txt
+server_returns/<job_id>/<workflow output files>
+```
+
+It also prints the matching `decrypt_ckks_results` command.
+
 ## Server Jobs
 
 Numeric summary:
@@ -306,3 +334,9 @@ python3 code/server/web/he_job_server.py \
 
 Upload the encrypted files from `encrypted_payloads/home_credit_basic/`, not the
 plaintext prepared files.
+
+Completed jobs can be downloaded as one zip from:
+
+```text
+/api/jobs/<job_id>/download-bundle
+```
