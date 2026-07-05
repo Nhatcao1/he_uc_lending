@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
+  <title id="title">Async Web Job Architecture</title>
+  <desc id="desc">FastAPI receives encrypted Home Credit HE jobs, Redis Queue schedules them, an RQ worker runs C++ OpenFHE binaries, and the browser monitors results.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f8fafc"/>
+      <stop offset="100%" stop-color="#eef2ff"/>
+    </linearGradient>
+    <linearGradient id="ui" x1="0" x2="1">
+      <stop offset="0%" stop-color="#ecfeff"/>
+      <stop offset="100%" stop-color="#cffafe"/>
+    </linearGradient>
+    <linearGradient id="web" x1="0" x2="1">
+      <stop offset="0%" stop-color="#eff6ff"/>
+      <stop offset="100%" stop-color="#dbeafe"/>
+    </linearGradient>
+    <linearGradient id="queue" x1="0" x2="1">
+      <stop offset="0%" stop-color="#f0fdf4"/>
+      <stop offset="100%" stop-color="#dcfce7"/>
+    </linearGradient>
+    <linearGradient id="compute" x1="0" x2="1">
+      <stop offset="0%" stop-color="#fff7ed"/>
+      <stop offset="100%" stop-color="#ffedd5"/>
+    </linearGradient>
+    <linearGradient id="store" x1="0" x2="1">
+      <stop offset="0%" stop-color="#fdf2f8"/>
+      <stop offset="100%" stop-color="#fce7f3"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#475569"/>
+    </marker>
+    <style>
+      .title{font:700 34px ui-sans-serif,system-ui;fill:#172033}
+      .sub{font:400 16px ui-sans-serif,system-ui;fill:#64748b}
+      .lane{font:800 13px ui-sans-serif,system-ui;letter-spacing:.12em;fill:#334155}
+      .box-title{font:800 18px ui-sans-serif,system-ui;fill:#111827}
+      .box-text{font:500 14px ui-sans-serif,system-ui;fill:#475569}
+      .small{font:700 12px ui-sans-serif,system-ui;fill:#64748b}
+      .line{stroke:#64748b;stroke-width:2.5;fill:none;marker-end:url(#arrow)}
+      .soft{stroke:#94a3b8;stroke-width:2;fill:none;stroke-dasharray:8 8;marker-end:url(#arrow)}
+      .rail{stroke:#cbd5e1;stroke-width:2;fill:none;stroke-dasharray:8 8}
+    </style>
+  </defs>
+  <rect width="1400" height="820" fill="url(#bg)"/>
+  <text class="title" x="70" y="68">Async Web Job Architecture</text>
+  <text class="sub" x="70" y="96">Submit encrypted bundles quickly, run slow C++ OpenFHE jobs in workers, download encrypted results later.</text>
+
+  <rect x="52" y="132" width="1296" height="118" rx="8" fill="#ffffff" opacity="0.78"/>
+  <text class="lane" x="72" y="164">ENTRYPOINT</text>
+  <rect x="52" y="286" width="1296" height="190" rx="8" fill="#ffffff" opacity="0.78"/>
+  <text class="lane" x="72" y="318">WEB + QUEUE CONTROL</text>
+  <rect x="52" y="512" width="1296" height="186" rx="8" fill="#ffffff" opacity="0.78"/>
+  <text class="lane" x="72" y="544">HE WORKER + ARTIFACTS</text>
+
+  <g filter="url(#shadow)">
+    <rect x="92" y="176" width="214" height="56" rx="8" fill="url(#ui)" stroke="#67e8f9"/>
+    <text class="box-title" x="112" y="209">Browser</text>
+    <text class="small" x="206" y="209">submit / monitor / download</text>
+
+    <rect x="406" y="176" width="214" height="56" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text class="box-title" x="426" y="209">Nginx</text>
+    <text class="small" x="504" y="209">optional proxy</text>
+
+    <rect x="720" y="176" width="238" height="56" rx="8" fill="url(#web)" stroke="#93c5fd"/>
+    <text class="box-title" x="740" y="209">FastAPI web/API</text>
+    <text class="small" x="886" y="209">port 8000</text>
+  </g>
+
+  <path class="line" d="M306 204 H398"/>
+  <path class="line" d="M620 204 H712"/>
+  <path class="soft" d="M199 232 C260 270, 612 270, 742 232"/>
+
+  <g filter="url(#shadow)">
+    <rect x="146" y="354" width="260" height="76" rx="8" fill="url(#web)" stroke="#93c5fd"/>
+    <text class="box-title" x="166" y="384">Job metadata</text>
+    <text class="box-text" x="166" y="410">SQLite: status, paths, timing</text>
+
+    <rect x="520" y="354" width="260" height="76" rx="8" fill="url(#queue)" stroke="#86efac"/>
+    <text class="box-title" x="540" y="384">Redis + RQ</text>
+    <text class="box-text" x="540" y="410">durable pending job queue</text>
+
+    <rect x="894" y="354" width="260" height="76" rx="8" fill="url(#store)" stroke="#f9a8d4"/>
+    <text class="box-title" x="914" y="384">server_jobs volume</text>
+    <text class="box-text" x="914" y="410">encrypted inputs, outputs, logs</text>
+  </g>
+
+  <path class="line" d="M808 232 C700 278, 402 298, 300 346"/>
+  <path class="line" d="M839 232 V346"/>
+  <path class="line" d="M868 232 C960 278, 986 302, 1002 346"/>
+
+  <g filter="url(#shadow)">
+    <rect x="210" y="586" width="278" height="76" rx="8" fill="url(#compute)" stroke="#fdba74"/>
+    <text class="box-title" x="230" y="616">RQ worker</text>
+    <text class="box-text" x="230" y="642">one HE job at a time first</text>
+
+    <rect x="604" y="586" width="278" height="76" rx="8" fill="url(#compute)" stroke="#fdba74"/>
+    <text class="box-title" x="624" y="616">C++ OpenFHE binaries</text>
+    <text class="box-text" x="624" y="642">numeric, aggregate, score</text>
+
+    <rect x="998" y="586" width="242" height="76" rx="8" fill="url(#store)" stroke="#f9a8d4"/>
+    <text class="box-title" x="1018" y="616">Result bundle</text>
+    <text class="box-text" x="1018" y="642">encrypted zip for client</text>
+  </g>
+
+  <path class="line" d="M650 430 C600 500, 468 520, 390 578"/>
+  <path class="line" d="M488 624 H596"/>
+  <path class="line" d="M882 624 H990"/>
+  <path class="soft" d="M1024 430 C1060 500, 1092 522, 1116 578"/>
+  <path class="soft" d="M350 586 C300 530, 272 492, 276 438"/>
+
+  <rect x="172" y="734" width="1056" height="50" rx="8" fill="#fff1f2" stroke="#fecdd3"/>
+  <text class="box-title" x="196" y="766">Privacy rule:</text>
+  <text class="box-text" x="318" y="766">no raw CSV, plaintext prepared vectors, secret key, or decrypted report on the server.</text>
+
+  <path class="rail" d="M52 716 H1348"/>
+  <text class="small" x="70" y="722">server trust boundary</text>
+</svg>

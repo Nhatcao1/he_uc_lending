@@ -1,0 +1,80 @@
+name: he-uc-credit
+
+x-server-env: &server-env
+  HE_REDIS_URL: redis://redis:6379/0
+  HE_ASYNC_QUEUE: he-jobs
+  HE_ASYNC_JOBS_DIR: /app/server_jobs/async
+  HE_ASYNC_BUILD_DIR: /app/build
+  HE_ASYNC_DB_PATH: /app/server_jobs/async/jobs.db
+  HE_RECEIVER_TOKEN: ${HE_RECEIVER_TOKEN:-}
+  HE_WEB_MAX_UPLOAD_BYTES: ${HE_WEB_MAX_UPLOAD_BYTES:-536870912}
+  HE_ASYNC_JOB_TIMEOUT_SECONDS: ${HE_ASYNC_JOB_TIMEOUT_SECONDS:-21600}
+  HE_BUILD_ON_START: ${HE_BUILD_ON_START:-1}
+  OpenFHE_DIR: ${OpenFHE_DIR:-/opt/openfhe/build}
+  LD_LIBRARY_PATH: /opt/openfhe/build/lib:/opt/openfhe/lib:/usr/local/lib
+
+x-server-volumes: &server-volumes
+  - ../../server_jobs:/app/server_jobs
+  - ../../build:/app/build
+  - ${OPENFHE_HOST_DIR:-/root/openfhe-development}:/opt/openfhe:ro
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
+  builder:
+    image: he-uc-credit-server:local
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.server
+    environment: *server-env
+    volumes: *server-volumes
+    restart: "no"
+    command: ["sh", "-c", "echo C++ HE server binaries are ready"]
+
+  web:
+    image: he-uc-credit-server:local
+    restart: unless-stopped
+    environment:
+      <<: *server-env
+      HE_BUILD_ON_START: "0"
+    volumes: *server-volumes
+    depends_on:
+      redis:
+        condition: service_started
+      builder:
+        condition: service_completed_successfully
+    expose:
+      - "8000"
+    command: ["uvicorn", "he_async_web.app:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  worker:
+    image: he-uc-credit-server:local
+    restart: unless-stopped
+    environment:
+      <<: *server-env
+      HE_BUILD_ON_START: "0"
+    volumes: *server-volumes
+    depends_on:
+      redis:
+        condition: service_started
+      builder:
+        condition: service_completed_successfully
+    command: ["python", "-m", "he_async_web.worker"]
+
+  nginx:
+    image: nginx:1.30-alpine
+    restart: unless-stopped
+    ports:
+      - "${HE_PUBLIC_PORT:-8080}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - web
+
+volumes:
+  redis-data:

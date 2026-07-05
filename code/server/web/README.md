@@ -2,6 +2,13 @@
 
 Tiny no-dependency web interface for submitting encrypted HE jobs to the server.
 
+This is the proof-of-concept receiver. The async FastAPI/RQ server for slow HE
+jobs lives here:
+
+```text
+code/server/web_async/README.md
+```
+
 The receiver does not do HE math itself. It stores encrypted artifacts under
 `server_jobs/web/<job_id>/work`, invokes the existing C++ server executable, and
 shows status/output files.

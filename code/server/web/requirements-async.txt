@@ -1,0 +1,11 @@
+# Server-only async web/job stack for Home Credit HE.
+# Core HE remains compiled C++ OpenFHE binaries; these packages only handle
+# upload, queueing, metadata, status pages, and result downloads.
+fastapi==0.139.0
+uvicorn[standard]==0.50.0
+rq==2.10.0
+redis[hiredis]==8.0.1
+Jinja2==3.1.6
+python-multipart==0.0.32
+pydantic-settings==2.14.2
+SQLAlchemy==2.0.51

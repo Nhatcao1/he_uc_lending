@@ -15,6 +15,7 @@ Diagram set for the implemented Home Credit HE prototype. Each use case has:
 | Age / EXT_SOURCE bucket EDA | [04 Bucket EDA](04_bucket_eda.md) | [SVG](04_bucket_eda.svg) |
 | Domain ratio EDA | [05 Domain Ratio EDA](05_domain_ratio_eda.md) | [SVG](05_domain_ratio_eda.svg) |
 | Linear ML score | [06 Linear Score](06_linear_score.md) | [SVG](06_linear_score.svg) |
+| Async web job architecture | [07 Async Web Job Architecture](07_async_web_job_architecture.md) | [SVG](07_async_web_job_architecture.svg) |
 
 Core boundary:
 
