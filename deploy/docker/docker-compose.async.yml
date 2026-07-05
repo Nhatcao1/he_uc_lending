@@ -4,7 +4,7 @@ x-server-env: &server-env
   HE_REDIS_URL: redis://redis:6379/0
   HE_ASYNC_QUEUE: he-jobs
   HE_ASYNC_JOBS_DIR: /app/server_jobs/async
-  HE_ASYNC_BUILD_DIR: /app/build
+  HE_ASYNC_BUILD_DIR: /app/build_docker
   HE_ASYNC_DB_PATH: /app/server_jobs/async/jobs.db
   HE_RECEIVER_TOKEN: ${HE_RECEIVER_TOKEN:-}
   HE_WEB_MAX_UPLOAD_BYTES: ${HE_WEB_MAX_UPLOAD_BYTES:-536870912}
@@ -15,7 +15,7 @@ x-server-env: &server-env
 
 x-server-volumes: &server-volumes
   - ../../server_jobs:/app/server_jobs
-  - ../../build:/app/build
+  - ../../build_docker:/app/build_docker
   - ${OPENFHE_HOST_DIR:-/root/openfhe-development}:/opt/openfhe:ro
 
 services:

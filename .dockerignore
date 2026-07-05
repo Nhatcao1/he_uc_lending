@@ -17,6 +17,7 @@ server_jobs/
 results/
 
 build/
+build_docker/
 dist/
 *.egg-info/
 

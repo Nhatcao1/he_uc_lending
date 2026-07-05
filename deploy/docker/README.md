@@ -49,7 +49,9 @@ server_home_credit_aggregate
 server_linear_score
 ```
 
-Then `web` and `worker` reuse the mounted `build/` directory.
+Then `web` and `worker` reuse the mounted `build_docker/` directory. Docker
+uses a separate build directory so it does not conflict with a normal host
+`cmake -B build` cache.
 
 Open:
 
@@ -74,7 +76,7 @@ docker compose -f deploy/docker/docker-compose.async.yml down
 
 ## Skip C++ Build On Container Start
 
-If the mounted `/app/build` already contains valid server binaries:
+If the mounted `/app/build_docker` already contains valid server binaries:
 
 ```bash
 export HE_BUILD_ON_START=0
@@ -89,6 +91,12 @@ Uploaded jobs and SQLite metadata are stored under:
 
 ```text
 server_jobs/async
+```
+
+Docker-built C++ binaries are stored under:
+
+```text
+build_docker/
 ```
 
 The server must still never receive:
