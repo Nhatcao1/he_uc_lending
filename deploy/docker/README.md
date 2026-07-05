@@ -16,11 +16,16 @@ Set the host OpenFHE directory before starting:
 
 ```bash
 export OPENFHE_HOST_DIR="$HOME/openfhe-development"
-export OpenFHE_DIR="/opt/openfhe/build"
 ```
 
-If your OpenFHE install is different, point `OPENFHE_HOST_DIR` at the host
-directory and `OpenFHE_DIR` at the matching path inside the container that
+The container mounts that host directory to:
+
+```text
+/opt/openfhe
+```
+
+The entrypoint searches the mounted tree for `OpenFHEConfig.cmake`. If you want
+to set it manually, `OpenFHE_DIR` must be the container-side directory that
 contains `OpenFHEConfig.cmake`.
 
 Examples:
@@ -30,6 +35,12 @@ export OPENFHE_HOST_DIR="$HOME/openfhe-install"
 export OpenFHE_DIR="/opt/openfhe/lib/OpenFHE"
 ```
 
+Debug the host path with:
+
+```bash
+find "$HOME" -name OpenFHEConfig.cmake 2>/dev/null
+```
+
 ## Start
 
 From the repo root:
@@ -37,7 +48,6 @@ From the repo root:
 ```bash
 export HE_RECEIVER_TOKEN="long-random-token"
 export OPENFHE_HOST_DIR="$HOME/openfhe-development"
-export OpenFHE_DIR="/opt/openfhe/build"
 docker compose -f deploy/docker/docker-compose.async.yml up --build
 ```
 
