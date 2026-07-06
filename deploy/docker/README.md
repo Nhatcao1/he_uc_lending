@@ -2,7 +2,6 @@
 
 This stack is server-only. It runs:
 
-- one-shot C++ builder service
 - FastAPI web/API server
 - RQ worker that invokes the C++ OpenFHE binaries
 - Redis queue
@@ -48,23 +47,29 @@ find "$HOME" -name OpenFHEConfig.cmake 2>/dev/null
 
 From the repo root:
 
+Before starting Docker, build the C++ OpenFHE server binaries on the host:
+
+```bash
+cmake -S . -B build -DOpenFHE_DIR=$HOME/openfhe-development/build
+cmake --build build --target server_numeric_summary server_home_credit_aggregate server_linear_score
+```
+
+Then start the Docker web stack:
+
 ```bash
 export HE_RECEIVER_TOKEN="long-random-token"
 export OPENFHE_HOST_DIR="$HOME/openfhe-development"
 docker compose -f deploy/docker/docker-compose.async.yml up --build
 ```
 
-On start, the `builder` service compiles:
+Docker mounts the host `build/` directory read-only at:
 
 ```text
-server_numeric_summary
-server_home_credit_aggregate
-server_linear_score
+/app/build
 ```
 
-Then `web` and `worker` reuse the mounted `build_docker/` directory. Docker
-uses a separate build directory so it does not conflict with a normal host
-`cmake -B build` cache.
+The worker uses those host-built binaries. Docker does not compile OpenFHE code
+in the default path.
 
 Open:
 
@@ -89,14 +94,14 @@ docker compose -f deploy/docker/docker-compose.async.yml down
 
 ## Skip C++ Build On Container Start
 
-If the mounted `/app/build_docker` already contains valid server binaries:
+The default Docker stack already skips C++ compilation:
 
-```bash
-export HE_BUILD_ON_START=0
-docker compose -f deploy/docker/docker-compose.async.yml up -d
+```text
+HE_BUILD_ON_START=0
 ```
 
-With `HE_BUILD_ON_START=0`, the `builder` service exits without rebuilding.
+Keep building C++ on the host until the OpenFHE container build path is worth
+debugging again.
 
 ## Important
 
@@ -106,10 +111,10 @@ Uploaded jobs and SQLite metadata are stored under:
 server_jobs/async
 ```
 
-Docker-built C++ binaries are stored under:
+Host-built C++ binaries are mounted from:
 
 ```text
-build_docker/
+build/
 ```
 
 The server must still never receive:
