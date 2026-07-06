@@ -10,13 +10,15 @@ x-server-env: &server-env
   HE_WEB_MAX_UPLOAD_BYTES: ${HE_WEB_MAX_UPLOAD_BYTES:-536870912}
   HE_ASYNC_JOB_TIMEOUT_SECONDS: ${HE_ASYNC_JOB_TIMEOUT_SECONDS:-21600}
   HE_BUILD_ON_START: ${HE_BUILD_ON_START:-1}
+  OPENFHE_HOST_DIR: ${OPENFHE_HOST_DIR:-/root/openfhe-development}
   OpenFHE_DIR: ${OpenFHE_DIR:-/opt/openfhe/build}
-  LD_LIBRARY_PATH: /opt/openfhe/build/lib:/opt/openfhe/lib:/usr/local/lib
+  LD_LIBRARY_PATH: ${OPENFHE_HOST_DIR:-/root/openfhe-development}/build/lib:${OPENFHE_HOST_DIR:-/root/openfhe-development}/lib:/opt/openfhe/build/lib:/opt/openfhe/lib:/usr/local/lib
 
 x-server-volumes: &server-volumes
   - ../../server_jobs:/app/server_jobs
   - ../../build_docker:/app/build_docker
   - ${OPENFHE_HOST_DIR:-/root/openfhe-development}:/opt/openfhe:ro
+  - ${OPENFHE_HOST_DIR:-/root/openfhe-development}:${OPENFHE_HOST_DIR:-/root/openfhe-development}:ro
 
 services:
   redis:

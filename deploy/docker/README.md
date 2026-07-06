@@ -18,15 +18,18 @@ Set the host OpenFHE directory before starting:
 export OPENFHE_HOST_DIR="$HOME/openfhe-development"
 ```
 
-The container mounts that host directory to:
+The container mounts that host directory to both:
 
 ```text
 /opt/openfhe
+the same absolute host path, for example /root/openfhe-development
 ```
 
-The entrypoint searches the mounted tree for `OpenFHEConfig.cmake`. If you want
-to set it manually, `OpenFHE_DIR` must be the container-side directory that
-contains `OpenFHEConfig.cmake`.
+OpenFHE's generated CMake config can contain absolute host paths. Mounting the
+tree at the same absolute path keeps those include/library paths valid inside
+Docker. The entrypoint also searches the mounted tree for `OpenFHEConfig.cmake`.
+If you want to set it manually, `OpenFHE_DIR` must be the container-side
+directory that contains `OpenFHEConfig.cmake`.
 
 Examples:
 

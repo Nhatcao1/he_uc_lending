@@ -3,10 +3,13 @@ set -eu
 
 cd /app
 
-export LD_LIBRARY_PATH="/opt/openfhe/build/lib:/opt/openfhe/lib:/usr/local/lib:${LD_LIBRARY_PATH:-}"
+OPENFHE_HOST_DIR="${OPENFHE_HOST_DIR:-/root/openfhe-development}"
+export LD_LIBRARY_PATH="$OPENFHE_HOST_DIR/build/lib:$OPENFHE_HOST_DIR/lib:/opt/openfhe/build/lib:/opt/openfhe/lib:/usr/local/lib:${LD_LIBRARY_PATH:-}"
 
 find_openfhe_dir() {
   for candidate in \
+    "$OPENFHE_HOST_DIR/build" \
+    "$OPENFHE_HOST_DIR/lib/OpenFHE" \
     /opt/openfhe/build \
     /opt/openfhe/lib/OpenFHE \
     /opt/openfhe-install/lib/OpenFHE \
@@ -18,7 +21,7 @@ find_openfhe_dir() {
     fi
   done
 
-  found="$(find /opt/openfhe /opt/openfhe-install /usr/local -name OpenFHEConfig.cmake -type f 2>/dev/null | head -n 1 || true)"
+  found="$(find "$OPENFHE_HOST_DIR" /opt/openfhe /opt/openfhe-install /usr/local -name OpenFHEConfig.cmake -type f 2>/dev/null | head -n 1 || true)"
   if [ -n "$found" ]; then
     dirname "$found"
     return 0
