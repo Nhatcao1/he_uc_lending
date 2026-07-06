@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import io
 import json
 import shutil
@@ -97,7 +98,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--secret-output-dir",
         type=Path,
-        help="Directory for the copied client-only secret. Defaults to <upload-dir>/../client_private.",
+        help="Root directory for copied client-only key material. Defaults to <upload-dir>/../client_private.",
     )
     parser.add_argument(
         "--no-copy-secret",
@@ -116,6 +117,14 @@ def is_blocked(path: Path) -> bool:
 def require_file(path: Path) -> None:
     if not path.is_file():
         raise FileNotFoundError(f"missing required encrypted artifact: {path}")
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as input_file:
+        for chunk in iter(lambda: input_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def read_csv_rows(path: Path) -> tuple[list[str], list[dict[str, str]]]:
@@ -283,7 +292,33 @@ def secret_output_dir_for(args: argparse.Namespace, upload_dir: Path) -> Path:
     return upload_dir.parent / "client_private"
 
 
-def write_zip(encrypted_dir: Path, output_path: Path, workload: str, files: list[Path], generated: dict[str, str]) -> None:
+def client_material_metadata(encrypted_dir: Path, args: argparse.Namespace) -> dict[str, str]:
+    context_path = encrypted_dir / "crypto_context.bin"
+    require_file(context_path)
+    metadata = {
+        "crypto_context_sha256": file_sha256(context_path),
+    }
+    public_key_path = encrypted_dir / "public_key.bin"
+    if public_key_path.is_file():
+        metadata["public_key_sha256"] = file_sha256(public_key_path)
+        material_basis = metadata["public_key_sha256"]
+    elif args.client_key_dir and (args.client_key_dir / "secret_key.bin").is_file():
+        metadata["secret_key_sha256"] = file_sha256(args.client_key_dir / "secret_key.bin")
+        material_basis = metadata["secret_key_sha256"]
+    else:
+        material_basis = metadata["crypto_context_sha256"]
+    metadata["client_material_id"] = material_basis[:16]
+    return metadata
+
+
+def write_zip(
+    encrypted_dir: Path,
+    output_path: Path,
+    workload: str,
+    files: list[Path],
+    generated: dict[str, str],
+    material_metadata: dict[str, str],
+) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         for path in files:
@@ -297,17 +332,24 @@ def write_zip(encrypted_dir: Path, output_path: Path, workload: str, files: list
             "file_count": len(files) + len(generated),
             "files": [path.relative_to(encrypted_dir).as_posix() for path in files],
             "generated_files": sorted(generated),
+            **material_metadata,
             "blocked": sorted(BLOCKED_PARTS | RAW_DATA_NAMES),
         }
         bundle.writestr("upload_bag_manifest.json", json.dumps(manifest, indent=2))
 
 
-def copy_client_secret(args: argparse.Namespace, upload_dir: Path) -> Path | None:
+def copy_client_material(
+    args: argparse.Namespace,
+    encrypted_dir: Path,
+    upload_dir: Path,
+    material_metadata: dict[str, str],
+) -> Path | None:
     if args.no_copy_secret or not args.client_key_dir:
         return None
     source = args.client_key_dir / "secret_key.bin"
     require_file(source)
-    secret_dir = secret_output_dir_for(args, upload_dir)
+    material_id = material_metadata["client_material_id"]
+    secret_dir = secret_output_dir_for(args, upload_dir) / material_id
     upload_dir_resolved = upload_dir.resolve()
     secret_dir_resolved = secret_dir.resolve()
     if secret_dir_resolved == upload_dir_resolved or upload_dir_resolved in secret_dir_resolved.parents:
@@ -315,12 +357,24 @@ def copy_client_secret(args: argparse.Namespace, upload_dir: Path) -> Path | Non
     secret_dir.mkdir(parents=True, exist_ok=True)
     destination = secret_dir / "secret_key.bin"
     shutil.copy2(source, destination)
+    context_destination = secret_dir / "crypto_context.bin"
+    shutil.copy2(encrypted_dir / "crypto_context.bin", context_destination)
+    material_manifest = {
+        "artifact_type": "home_credit_client_material",
+        **material_metadata,
+        "secret_key": "secret_key.bin",
+        "crypto_context": "crypto_context.bin",
+    }
+    (secret_dir / "client_material_manifest.json").write_text(
+        json.dumps(material_manifest, indent=2) + "\n",
+        encoding="utf-8",
+    )
     readme = secret_dir / "README_DO_NOT_UPLOAD.txt"
     readme.write_text(
         "Client-only Home Credit HE secret key.\n"
         "\n"
         "Do not upload this directory to the HE server.\n"
-        "Use this key only on the trusted client side to decrypt returned result bundles.\n",
+        "Use this key material only on the trusted client side to decrypt matching result bundles.\n",
         encoding="utf-8",
     )
     return destination
@@ -333,11 +387,13 @@ def main() -> None:
         raise NotADirectoryError(f"encrypted-dir is not a directory: {encrypted_dir}")
     files, generated = collect_files(encrypted_dir, args.workload, args.include_public_key)
     output_path = output_path_for(args, encrypted_dir)
-    write_zip(encrypted_dir, output_path, args.workload, files, generated)
-    copied_secret = copy_client_secret(args, output_path.parent)
+    material_metadata = client_material_metadata(encrypted_dir, args)
+    write_zip(encrypted_dir, output_path, args.workload, files, generated, material_metadata)
+    copied_secret = copy_client_material(args, encrypted_dir, output_path.parent, material_metadata)
     print(f"upload bag: {output_path}")
     print(f"upload dir: {output_path.parent}")
     print(f"workload: {args.workload}")
+    print(f"client material id: {material_metadata['client_material_id']}")
     print(f"files: {len(files) + len(generated)}")
     print("secret key included: no")
     if copied_secret:

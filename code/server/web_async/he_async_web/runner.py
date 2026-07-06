@@ -68,6 +68,9 @@ def create_result_bundle(settings: Settings, job_id: str) -> Path:
         job_log = log_path(settings, job_id)
         if job_log.exists():
             bundle.write(job_log, "server_log.txt")
+        upload_manifest = work_dir(settings, job_id) / "upload_bag_manifest.json"
+        if upload_manifest.exists():
+            bundle.write(upload_manifest, "upload_bag_manifest.json")
         if out_root.exists():
             for path in sorted(out_root.rglob("*")):
                 if path.is_file():
@@ -146,4 +149,3 @@ def read_log_tail(settings: Settings, job_id: str) -> str:
         if size > settings.log_tail_bytes:
             handle.seek(size - settings.log_tail_bytes)
         return handle.read().decode("utf-8", errors="replace")
-

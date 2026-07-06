@@ -57,8 +57,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--job-id", required=True, help="Job id to download, or 'latest' for newest succeeded job.")
     parser.add_argument("--output-dir", default="client_runs/home_credit_basic/server_returns")
     parser.add_argument("--token", default="", help="Bearer token when HE_RECEIVER_TOKEN is set.")
-    parser.add_argument("--context", default="encrypted_payloads/home_credit_basic/crypto_context.bin")
-    parser.add_argument("--secret-key", default="client_runs/home_credit_basic/client_private/secret_key.bin")
+    parser.add_argument("--client-private-root", default="client_runs/home_credit_basic/client_private")
+    parser.add_argument("--context", default="", help="Override crypto_context.bin path. Normally inferred from job manifest.")
+    parser.add_argument("--secret-key", default="", help="Override secret_key.bin path. Normally inferred from job manifest.")
     parser.add_argument("--decrypt-bin", default="./build/decrypt_ckks_results")
     return parser.parse_args()
 
@@ -113,6 +114,31 @@ def safe_extract(zip_path: Path, output_dir: Path) -> None:
         bundle.extractall(output_dir)
 
 
+def load_json_if_exists(path: Path) -> dict[str, object]:
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def infer_client_material(args: argparse.Namespace, job_dir: Path) -> tuple[Path, Path, str]:
+    context_override = Path(args.context) if args.context else None
+    secret_override = Path(args.secret_key) if args.secret_key else None
+    if context_override and secret_override:
+        return context_override, secret_override, "manual override"
+
+    upload_manifest = load_json_if_exists(job_dir / "upload_bag_manifest.json")
+    material_id = str(upload_manifest.get("client_material_id") or "").strip()
+    if material_id:
+        material_dir = Path(args.client_private_root) / material_id
+        context = context_override or (material_dir / "crypto_context.bin")
+        secret = secret_override or (material_dir / "secret_key.bin")
+        return context, secret, f"client_material_id={material_id}"
+
+    fallback_context = context_override or Path("encrypted_payloads/home_credit_basic/crypto_context.bin")
+    fallback_secret = secret_override or Path("client_runs/home_credit_basic/client_private/secret_key.bin")
+    return fallback_context, fallback_secret, "legacy fallback; result bundle has no upload_bag_manifest.json"
+
+
 def print_decrypt_command(args: argparse.Namespace, job_dir: Path) -> None:
     status_path = job_dir / "job_status.json"
     if not status_path.exists():
@@ -129,11 +155,13 @@ def print_decrypt_command(args: argparse.Namespace, job_dir: Path) -> None:
     manifest = job_dir / cfg["manifest"]
     input_dir = job_dir / cfg["input_dir"]
     output_csv = job_dir / cfg["output_csv"]
+    context, secret_key, material_source = infer_client_material(args, job_dir)
     print("\nDecrypt command:")
+    print(f"# key material: {material_source}")
     print(
         f"{args.decrypt_bin} \\\n"
-        f"  --context {args.context} \\\n"
-        f"  --secret-key {args.secret_key} \\\n"
+        f"  --context {context} \\\n"
+        f"  --secret-key {secret_key} \\\n"
         f"  --manifest {manifest} \\\n"
         f"  --input-dir {input_dir} \\\n"
         f"  --output-csv {output_csv} \\\n"

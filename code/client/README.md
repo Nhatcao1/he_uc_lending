@@ -92,5 +92,10 @@ Clean local layout after packaging:
 
 ```text
 client_runs/home_credit_basic/server_uploads/*.upload.zip  # upload this
-client_runs/home_credit_basic/client_private/secret_key.bin # never upload
+client_runs/home_credit_basic/client_private/<client_material_id>/secret_key.bin # never upload
+client_runs/home_credit_basic/client_private/<client_material_id>/crypto_context.bin
 ```
+
+Each upload bag records its `client_material_id`. Returned result bundles include
+that id, so `download_job_bundle.py` can print a decrypt command using the
+matching key material instead of a stale key from a later encryption run.

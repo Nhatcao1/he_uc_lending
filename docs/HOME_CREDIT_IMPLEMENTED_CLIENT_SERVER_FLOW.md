@@ -178,9 +178,15 @@ This writes:
 
 ```text
 client_runs/home_credit_basic/server_uploads/home_credit_numeric_summary.upload.zip
-client_runs/home_credit_basic/client_private/secret_key.bin
-client_runs/home_credit_basic/client_private/README_DO_NOT_UPLOAD.txt
+client_runs/home_credit_basic/client_private/<client_material_id>/secret_key.bin
+client_runs/home_credit_basic/client_private/<client_material_id>/crypto_context.bin
+client_runs/home_credit_basic/client_private/<client_material_id>/README_DO_NOT_UPLOAD.txt
 ```
+
+The upload zip contains `upload_bag_manifest.json` with `client_material_id`,
+`crypto_context_sha256`, and `public_key_sha256` when available. The server
+copies that manifest into the returned result bundle, allowing the client
+download helper to choose the matching local key material for decrypt.
 
 Other workload values:
 
