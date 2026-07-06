@@ -79,6 +79,38 @@ deploy/docker/README.md
 /results
 ```
 
+## Upload UX
+
+The submit page accepts one encrypted artifact bundle.
+
+Recommended browser flow:
+
+```text
+select workload = Auto-detect from artifact
+choose the encrypted payload folder
+queue job
+```
+
+The server normalizes bundle paths, so a folder shaped like this is enough:
+
+```text
+encrypted_payloads/home_credit_basic/
+  crypto_context.bin
+  eval_sum_keys.bin
+  eval_mult_keys.bin
+  column_manifest.csv
+  aggregate_manifest.csv
+  score_manifest.csv
+  columns/
+  vectors/
+  score_features/
+```
+
+The API also accepts a zip of that folder. The server extracts the zip, blocks
+raw/secret-looking paths, and auto-detects the workload when possible. If a
+bundle contains artifacts for multiple workloads, choose the exact workload in
+the dropdown.
+
 ## API
 
 ```text

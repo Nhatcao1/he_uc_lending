@@ -6,6 +6,8 @@ import base64
 import html
 import json
 import uuid
+import zipfile
+from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import quote
@@ -326,6 +328,45 @@ def job_table(jobs: list[dict[str, Any]]) -> str:
     )
 
 
+def required_files_present(root: Path, job_type: str) -> bool:
+    for item in JOB_TYPES[job_type]["required"]:
+        if item.endswith("/"):
+            if not (root / item.rstrip("/")).is_dir():
+                return False
+        elif not (root / item).is_file():
+            return False
+    return True
+
+
+def detect_job_type(root: Path) -> str:
+    if required_files_present(root, "home_credit_numeric_summary"):
+        return "home_credit_numeric_summary"
+    if required_files_present(root, "home_credit_linear_score"):
+        return "home_credit_linear_score"
+    if required_files_present(root, "home_credit_category_eda"):
+        manifest = root / "aggregate_manifest.csv"
+        try:
+            lines = manifest.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            lines = []
+        for line in lines[1:50]:
+            first = line.split(",", 1)[0].strip().lower()
+            if first == "bucket":
+                return "home_credit_bucket_eda"
+            if first == "ratio":
+                return "home_credit_domain_ratio_eda"
+            if first == "category":
+                return "home_credit_category_eda"
+        return "home_credit_category_eda"
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "could not auto-detect workload from artifact; upload an encrypted bundle "
+            "with numeric, aggregate, or score manifests, or choose the workload explicitly"
+        ),
+    )
+
+
 @app.on_event("startup")
 def startup() -> None:
     init_db(settings())
@@ -339,7 +380,7 @@ def root() -> RedirectResponse:
 @app.get("/jobs/new", response_class=HTMLResponse)
 def submit_page() -> HTMLResponse:
     cards = []
-    options = []
+    options = ['<option value="auto" selected>Auto-detect from artifact</option>']
     for job_type, cfg in JOB_TYPES.items():
         options.append(f'<option value="{esc(job_type)}">{esc(cfg["label"])}</option>')
         requirements = "".join(f"<li><code>{esc(item)}</code></li>" for item in cfg["required"])
@@ -365,12 +406,9 @@ def submit_page() -> HTMLResponse:
       <label for="access_token">Web token</label>
       <input id="access_token" name="access_token" type="password" autocomplete="off" placeholder="Only needed when HE_RECEIVER_TOKEN is set">
 
-      <label>Encrypted artifacts</label>
-      <div class="file-grid">
-        <input type="file" name="files" multiple>
-        <input type="file" name="files" multiple webkitdirectory directory>
-      </div>
-      <p class="muted">Upload encrypted bundle files only. Directory paths are normalized around <code>columns/</code>, <code>vectors/</code>, or <code>score_features/</code>.</p>
+      <label for="artifact">Encrypted artifact bundle</label>
+      <input id="artifact" type="file" name="files" multiple webkitdirectory directory accept=".zip,.bin,.csv,.json">
+      <p class="muted">Pick the encrypted payload folder, a zip of that folder, or the files inside it. The server normalizes the bundle layout and keeps only encrypted artifacts/manifests.</p>
 
       <label for="note">Client note</label>
       <textarea id="note" name="note" placeholder="Dataset, row limit, scalar/packed, test name"></textarea>
@@ -539,7 +577,7 @@ def results_page() -> HTMLResponse:
 
 
 async def create_job_from_form(request: Request, cfg: Settings, form: Any) -> dict[str, Any]:
-    job_type = str(form.get("job_type") or "")
+    job_type = str(form.get("job_type") or "auto")
     note = str(form.get("note") or "")
     uploads = [
         value
@@ -558,9 +596,10 @@ async def save_and_enqueue(
     uploads: list[UploadFile] | None,
     json_files: list[dict[str, Any]] | None,
 ) -> dict[str, Any]:
-    if job_type not in JOB_TYPES:
+    explicit_auto = job_type in {"", "auto", "detect"}
+    if not explicit_auto and job_type not in JOB_TYPES:
         raise HTTPException(status_code=400, detail=f"unknown job_type: {job_type}")
-    if JOB_TYPES[job_type].get("disabled"):
+    if not explicit_auto and JOB_TYPES[job_type].get("disabled"):
         raise HTTPException(status_code=400, detail=f"job_type is disabled: {job_type}")
 
     job_id = make_job_id()
@@ -570,50 +609,61 @@ async def save_and_enqueue(
     total_bytes = 0
     seen: set[str] = set()
 
+    def save_payload_file(raw_path: str, data: bytes) -> None:
+        nonlocal total_bytes
+        rel = normalize_upload_path(raw_path)
+        rel_posix = rel.as_posix()
+        if rel_posix in seen:
+            raise HTTPException(status_code=400, detail=f"duplicate upload path: {rel_posix}")
+        seen.add(rel_posix)
+        total_bytes += len(data)
+        if total_bytes > cfg.max_upload_bytes:
+            raise HTTPException(status_code=413, detail=f"upload exceeds {cfg.max_upload_bytes} bytes")
+        dest = root / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+        saved.append(rel_posix)
+
+    def save_zip_payload(raw_path: str, data: bytes) -> None:
+        try:
+            archive = zipfile.ZipFile(BytesIO(data))
+        except zipfile.BadZipFile as exc:
+            raise HTTPException(status_code=400, detail=f"invalid zip artifact: {raw_path}") from exc
+        for member in archive.infolist():
+            if member.is_dir():
+                continue
+            with archive.open(member) as handle:
+                save_payload_file(member.filename, handle.read())
+
     if uploads is not None:
         for upload in uploads:
-            rel = normalize_upload_path(upload.filename or "")
-            rel_posix = rel.as_posix()
-            if rel_posix in seen:
-                raise HTTPException(status_code=400, detail=f"duplicate upload path: {rel_posix}")
-            seen.add(rel_posix)
-            dest = root / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            with dest.open("wb") as output:
-                while True:
-                    chunk = await upload.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    total_bytes += len(chunk)
-                    if total_bytes > cfg.max_upload_bytes:
-                        raise HTTPException(status_code=413, detail=f"upload exceeds {cfg.max_upload_bytes} bytes")
-                    output.write(chunk)
-            saved.append(rel_posix)
+            data = await upload.read()
+            filename = upload.filename or ""
+            if filename.lower().endswith(".zip"):
+                save_zip_payload(filename, data)
+            else:
+                save_payload_file(filename, data)
 
     if json_files is not None:
         for item in json_files:
-            rel = normalize_upload_path(str(item.get("path", "")))
-            rel_posix = rel.as_posix()
-            if rel_posix in seen:
-                raise HTTPException(status_code=400, detail=f"duplicate upload path: {rel_posix}")
-            seen.add(rel_posix)
             encoded = item.get("content_base64")
             if not isinstance(encoded, str):
-                raise HTTPException(status_code=400, detail=f"missing content_base64 for {rel_posix}")
+                raise HTTPException(status_code=400, detail="missing content_base64 for JSON upload file")
             try:
                 data = base64.b64decode(encoded, validate=True)
             except ValueError as exc:
-                raise HTTPException(status_code=400, detail=f"invalid base64 for {rel_posix}") from exc
-            total_bytes += len(data)
-            if total_bytes > cfg.max_upload_bytes:
-                raise HTTPException(status_code=413, detail=f"upload exceeds {cfg.max_upload_bytes} bytes")
-            dest = root / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(data)
-            saved.append(rel_posix)
+                raise HTTPException(status_code=400, detail="invalid base64 for JSON upload file") from exc
+            raw_path = str(item.get("path", ""))
+            if raw_path.lower().endswith(".zip"):
+                save_zip_payload(raw_path, data)
+            else:
+                save_payload_file(raw_path, data)
 
     if not saved:
         raise HTTPException(status_code=400, detail="no files uploaded")
+
+    if explicit_auto:
+        job_type = detect_job_type(root)
 
     init_db(cfg)
     job = create_job_record(cfg, job_id=job_id, job_type=job_type, note=note, input_files=saved, input_bytes=total_bytes)

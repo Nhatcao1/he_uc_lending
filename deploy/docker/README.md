@@ -79,6 +79,10 @@ http://100.84.97.118:8080
 
 or whatever host/port Docker exposes.
 
+For upload, select the encrypted payload folder or upload a zip through the API.
+The server normalizes the bundle layout and can auto-detect the workload from
+the manifests.
+
 ## Run Detached
 
 ```bash
