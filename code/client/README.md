@@ -41,6 +41,7 @@ These outputs are local artifacts and are ignored by git.
 ```text
 home_credit/prepare_home_credit_basic_eda.py
 home_credit/train_home_credit_linear_model.py
+home_credit/package_home_credit_upload_bag.py
 home_credit/download_job_bundle.py
 ckks_tools/encrypt_home_credit_payload.cpp
 ckks_tools/decrypt_ckks_results.cpp
@@ -51,3 +52,23 @@ Full client/server command flow:
 ```text
 docs/HOME_CREDIT_IMPLEMENTED_CLIENT_SERVER_FLOW.md
 ```
+
+## One Upload Bag
+
+After preparing and encrypting the payload, create one zip for the web submit
+page:
+
+```bash
+python3 code/client/home_credit/package_home_credit_upload_bag.py \
+  --encrypted-dir encrypted_payloads/home_credit_basic \
+  --output encrypted_payloads/home_credit_basic.upload.zip
+```
+
+Upload this zip at:
+
+```text
+/jobs/new
+```
+
+The zip contains server-safe encrypted artifacts and manifests only. It blocks
+raw Home Credit CSV names and secret/private key-looking paths.

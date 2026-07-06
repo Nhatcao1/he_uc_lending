@@ -87,11 +87,19 @@ Recommended browser flow:
 
 ```text
 select workload = Auto-detect from artifact
-choose the encrypted payload folder
+choose the encrypted upload bag zip
 queue job
 ```
 
-The server normalizes bundle paths, so a folder shaped like this is enough:
+Create that zip on the client:
+
+```bash
+python3 code/client/home_credit/package_home_credit_upload_bag.py \
+  --encrypted-dir encrypted_payloads/home_credit_basic \
+  --output encrypted_payloads/home_credit_basic.upload.zip
+```
+
+The server normalizes bundle paths, so a zip containing this layout is enough:
 
 ```text
 encrypted_payloads/home_credit_basic/
@@ -106,10 +114,9 @@ encrypted_payloads/home_credit_basic/
   score_features/
 ```
 
-The API also accepts a zip of that folder. The server extracts the zip, blocks
-raw/secret-looking paths, and auto-detects the workload when possible. If a
-bundle contains artifacts for multiple workloads, choose the exact workload in
-the dropdown.
+The server extracts the zip, blocks raw/secret-looking paths, and auto-detects
+the workload when possible. If a bundle contains artifacts for multiple
+workloads, choose the exact workload in the dropdown.
 
 ## API
 

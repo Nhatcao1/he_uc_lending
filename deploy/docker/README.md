@@ -79,9 +79,16 @@ http://100.84.97.118:8080
 
 or whatever host/port Docker exposes.
 
-For upload, select the encrypted payload folder or upload a zip through the API.
-The server normalizes the bundle layout and can auto-detect the workload from
-the manifests.
+For upload, select the encrypted upload bag zip produced by:
+
+```bash
+python3 code/client/home_credit/package_home_credit_upload_bag.py \
+  --encrypted-dir encrypted_payloads/home_credit_basic \
+  --output encrypted_payloads/home_credit_basic.upload.zip
+```
+
+The server extracts the zip, normalizes the bundle layout, and can auto-detect
+the workload from the manifests.
 
 ## Run Detached
 
