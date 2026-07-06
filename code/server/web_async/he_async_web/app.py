@@ -602,7 +602,7 @@ setInterval(refreshDetail, 3000);
 
 
 @app.get("/results", response_class=HTMLResponse)
-def results_page() -> HTMLResponse:
+def results_page(request: Request) -> HTMLResponse:
     cfg = settings()
     init_db(cfg)
     completed = list_completed_jobs(cfg, limit=200)
@@ -633,6 +633,10 @@ def results_page() -> HTMLResponse:
 <section>
   <h2>Result Index</h2>
   <p class="muted">Completed encrypted bundles only. The server still does not decrypt.</p>
+  <p><strong>Client pull latest</strong></p>
+  <pre>python3 code/client/home_credit/download_job_bundle.py \\
+  --server {esc(str(request.base_url).rstrip('/'))} \\
+  --job-id latest</pre>
   <table><thead><tr><th>Job</th><th>Workload</th><th>Finished</th><th>Output bytes</th><th>Bundle</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
 </section>
 <section>

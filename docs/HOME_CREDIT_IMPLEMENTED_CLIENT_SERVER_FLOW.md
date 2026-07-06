@@ -212,8 +212,7 @@ After a web job finishes, download all encrypted result files in one command:
 ```bash
 python3 code/client/home_credit/download_job_bundle.py \
   --server http://100.84.97.118:8080 \
-  --job-id <job_id> \
-  --output-dir server_returns
+  --job-id latest
 ```
 
 If the web receiver uses `HE_RECEIVER_TOKEN`, add:
@@ -225,10 +224,10 @@ If the web receiver uses `HE_RECEIVER_TOKEN`, add:
 The helper saves:
 
 ```text
-server_returns/<job_id>/he_result_<job_id>.zip
-server_returns/<job_id>/job_status.json
-server_returns/<job_id>/server_log.txt
-server_returns/<job_id>/<workflow output files>
+client_runs/home_credit_basic/server_returns/<job_id>/he_result_<job_id>.zip
+client_runs/home_credit_basic/server_returns/<job_id>/job_status.json
+client_runs/home_credit_basic/server_returns/<job_id>/server_log.txt
+client_runs/home_credit_basic/server_returns/<job_id>/<workflow output files>
 ```
 
 It also prints the matching `decrypt_ckks_results` command.

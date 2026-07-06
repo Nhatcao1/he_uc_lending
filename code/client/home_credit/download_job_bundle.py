@@ -54,11 +54,11 @@ DECRYPT_CONFIG = {
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Download a HE web job result bundle.")
     parser.add_argument("--server", required=True, help="Web receiver URL, e.g. http://100.84.97.118:8080")
-    parser.add_argument("--job-id", required=True)
-    parser.add_argument("--output-dir", default="server_returns")
+    parser.add_argument("--job-id", required=True, help="Job id to download, or 'latest' for newest succeeded job.")
+    parser.add_argument("--output-dir", default="client_runs/home_credit_basic/server_returns")
     parser.add_argument("--token", default="", help="Bearer token when HE_RECEIVER_TOKEN is set.")
     parser.add_argument("--context", default="encrypted_payloads/home_credit_basic/crypto_context.bin")
-    parser.add_argument("--secret-key", default="keys/home_credit_basic/secret_key.bin")
+    parser.add_argument("--secret-key", default="client_runs/home_credit_basic/client_private/secret_key.bin")
     parser.add_argument("--decrypt-bin", default="./build/decrypt_ckks_results")
     return parser.parse_args()
 
@@ -80,6 +80,27 @@ def download(url: str, token: str) -> bytes:
     except HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         raise SystemExit(f"download failed: {exc.code} {exc.reason}: {body}") from exc
+
+
+def download_json(url: str, token: str) -> dict[str, object]:
+    payload = download(url, token)
+    return json.loads(payload.decode("utf-8"))
+
+
+def resolve_job_id(args: argparse.Namespace) -> str:
+    requested = args.job_id.strip()
+    if requested.lower() != "latest":
+        return safe_job_id(requested)
+
+    base = args.server.rstrip("/")
+    data = download_json(f"{base}/api/results?limit=1", args.token)
+    results = data.get("results")
+    if not isinstance(results, list) or not results:
+        raise SystemExit("no succeeded jobs found on server")
+    latest = results[0]
+    if not isinstance(latest, dict) or not latest.get("job_id"):
+        raise SystemExit("server returned an invalid latest result payload")
+    return safe_job_id(str(latest["job_id"]))
 
 
 def safe_extract(zip_path: Path, output_dir: Path) -> None:
@@ -122,7 +143,7 @@ def print_decrypt_command(args: argparse.Namespace, job_dir: Path) -> None:
 
 def main() -> None:
     args = parse_args()
-    job_id = safe_job_id(args.job_id)
+    job_id = resolve_job_id(args)
     base = args.server.rstrip("/")
     output_root = Path(args.output_dir)
     job_dir = output_root / job_id
@@ -136,6 +157,7 @@ def main() -> None:
 
     print(f"downloaded: {zip_path}")
     print(f"extracted: {job_dir}")
+    print(f"job id: {job_id}")
     print_decrypt_command(args, job_dir)
 
 
