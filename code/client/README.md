@@ -53,15 +53,18 @@ Full client/server command flow:
 docs/HOME_CREDIT_IMPLEMENTED_CLIENT_SERVER_FLOW.md
 ```
 
-## One Upload Bag
+## Small Upload Bags
 
-After preparing and encrypting the payload, create one zip for the web submit
-page:
+After preparing and encrypting the payload, create one zip per workload for the
+web submit page. The packager reads the encrypted output folder and copies only
+the ciphertexts/manifests needed by that workload.
 
 ```bash
 python3 code/client/home_credit/package_home_credit_upload_bag.py \
   --encrypted-dir encrypted_payloads/home_credit_basic \
-  --output encrypted_payloads/home_credit_basic.upload.zip
+  --workload numeric_summary \
+  --output-dir client_runs/home_credit_basic/server_uploads \
+  --client-key-dir keys/home_credit_basic
 ```
 
 Upload this zip at:
@@ -70,5 +73,24 @@ Upload this zip at:
 /jobs/new
 ```
 
+Useful workload names:
+
+```text
+numeric_summary
+category_eda
+bucket_eda
+domain_ratio_eda
+linear_score
+all
+```
+
 The zip contains server-safe encrypted artifacts and manifests only. It blocks
-raw Home Credit CSV names and secret/private key-looking paths.
+raw Home Credit CSV names and secret/private key-looking paths. Use `all` only
+when you deliberately want the bigger bundle for every workload.
+
+Clean local layout after packaging:
+
+```text
+client_runs/home_credit_basic/server_uploads/*.upload.zip  # upload this
+client_runs/home_credit_basic/client_private/secret_key.bin # never upload
+```

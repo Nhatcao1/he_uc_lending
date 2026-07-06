@@ -420,7 +420,7 @@ def submit_page() -> HTMLResponse:
 
       <label for="artifact">Encrypted upload bag</label>
       <input id="artifact" type="file" name="files" accept=".zip">
-      <p class="muted">Upload the zip produced by <code>package_home_credit_upload_bag.py</code>. The server extracts it, normalizes the bundle layout, and keeps only encrypted artifacts/manifests.</p>
+      <p class="muted">Upload a workload zip produced by <code>package_home_credit_upload_bag.py --workload ...</code>. The server extracts it, normalizes the bundle layout, and keeps only encrypted artifacts/manifests.</p>
 
       <label for="note">Client note</label>
       <textarea id="note" name="note" placeholder="Dataset, row limit, scalar/packed, test name"></textarea>

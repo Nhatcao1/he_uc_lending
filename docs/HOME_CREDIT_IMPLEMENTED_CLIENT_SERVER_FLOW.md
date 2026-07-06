@@ -162,6 +162,49 @@ Client-only secret:
 keys/home_credit_basic/secret_key.bin
 ```
 
+## Client Upload Packaging
+
+Create a small upload zip for one workload from the encrypted output folder:
+
+```bash
+python3 code/client/home_credit/package_home_credit_upload_bag.py \
+  --encrypted-dir encrypted_payloads/home_credit_basic \
+  --workload numeric_summary \
+  --output-dir client_runs/home_credit_basic/server_uploads \
+  --client-key-dir keys/home_credit_basic
+```
+
+This writes:
+
+```text
+client_runs/home_credit_basic/server_uploads/home_credit_numeric_summary.upload.zip
+client_runs/home_credit_basic/client_private/secret_key.bin
+client_runs/home_credit_basic/client_private/README_DO_NOT_UPLOAD.txt
+```
+
+Other workload values:
+
+```text
+category_eda
+bucket_eda
+domain_ratio_eda
+linear_score
+all
+```
+
+The specific workload zips include only the required encrypted artifacts:
+
+```text
+numeric_summary: crypto_context.bin, eval_sum_keys.bin, column_manifest.csv, columns/*.bin referenced by the manifest
+category_eda: crypto_context.bin, eval_sum_keys.bin, eval_mult_keys.bin, filtered aggregate_manifest.csv, referenced vectors/*.bin
+bucket_eda: crypto_context.bin, eval_sum_keys.bin, eval_mult_keys.bin, filtered aggregate_manifest.csv, referenced vectors/*.bin
+domain_ratio_eda: crypto_context.bin, eval_sum_keys.bin, eval_mult_keys.bin, filtered aggregate_manifest.csv, referenced vectors/*.bin
+linear_score: crypto_context.bin, score_manifest.csv, referenced score_features/*.bin
+```
+
+Use `all` only when you want the larger compatibility bundle for every current
+workload.
+
 ## Client Download Helper
 
 After a web job finishes, download all encrypted result files in one command:
@@ -332,8 +375,8 @@ python3 code/server/web/he_job_server.py \
   --build-dir build
 ```
 
-Upload the encrypted files from `encrypted_payloads/home_credit_basic/`, not the
-plaintext prepared files.
+Upload a workload zip from `client_runs/home_credit_basic/server_uploads/`, not
+the plaintext prepared files or `client_private/`.
 
 Completed jobs can be downloaded as one zip from:
 

@@ -16,6 +16,7 @@ encrypted_payloads/
 prepared_payloads/
 server_returns/
 server_jobs/
+client_runs/
 
 build/
 build_docker/

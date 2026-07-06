@@ -79,16 +79,21 @@ http://100.84.97.118:8080
 
 or whatever host/port Docker exposes.
 
-For upload, select the encrypted upload bag zip produced by:
+For upload, select a small encrypted workload zip produced by:
 
 ```bash
 python3 code/client/home_credit/package_home_credit_upload_bag.py \
   --encrypted-dir encrypted_payloads/home_credit_basic \
-  --output encrypted_payloads/home_credit_basic.upload.zip
+  --workload numeric_summary \
+  --output-dir client_runs/home_credit_basic/server_uploads \
+  --client-key-dir keys/home_credit_basic
 ```
 
 The server extracts the zip, normalizes the bundle layout, and can auto-detect
-the workload from the manifests.
+the workload from the manifests. Use `--workload category_eda`, `bucket_eda`,
+`domain_ratio_eda`, or `linear_score` for the other smaller upload artifacts.
+Only upload files from `server_uploads/`; `client_private/` is the local decrypt
+key area.
 
 ## Run Detached
 
