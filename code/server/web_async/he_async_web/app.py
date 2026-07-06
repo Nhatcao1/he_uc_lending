@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import logging
 import uuid
 import zipfile
 from io import BytesIO
@@ -43,6 +44,8 @@ from .storage import (
 
 app = FastAPI(title="HE UC Credit Async Job Server", version="0.1.0")
 templates = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html", "xml"]))
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logger = logging.getLogger("he_async_web")
 
 
 def settings() -> Settings:
@@ -369,7 +372,16 @@ def detect_job_type(root: Path) -> str:
 
 @app.on_event("startup")
 def startup() -> None:
-    init_db(settings())
+    cfg = settings()
+    init_db(cfg)
+    logger.info(
+        "async web startup jobs_dir=%s build_dir=%s db_path=%s redis_url=%s queue=%s",
+        cfg.jobs_dir,
+        cfg.build_dir,
+        cfg.db_path,
+        cfg.redis_url,
+        cfg.queue_name,
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -399,7 +411,7 @@ def submit_page() -> HTMLResponse:
 <div class="grid">
   <section>
     <h2>Submit Encrypted HE Job</h2>
-    <form method="post" action="/jobs/new" enctype="multipart/form-data">
+    <form id="submitJobForm" method="post" action="/jobs/new" enctype="multipart/form-data">
       <label for="job_type">Workload</label>
       <select id="job_type" name="job_type">{"".join(options)}</select>
 
@@ -414,9 +426,10 @@ def submit_page() -> HTMLResponse:
       <textarea id="note" name="note" placeholder="Dataset, row limit, scalar/packed, test name"></textarea>
 
       <div class="actions">
-        <button class="primary" type="submit">Queue Job</button>
+        <button id="queueButton" class="primary" type="submit">Queue Job</button>
         <a class="button" href="/jobs">View Jobs</a>
       </div>
+      <p id="uploadStatus" class="muted">Ready.</p>
     </form>
   </section>
   <section>
@@ -435,21 +448,75 @@ def submit_page() -> HTMLResponse:
   <h2>Available Workloads</h2>
   <div class="cards">{"".join(cards)}</div>
 </section>
+<script>
+const form = document.getElementById('submitJobForm');
+const button = document.getElementById('queueButton');
+const statusLine = document.getElementById('uploadStatus');
+
+form.addEventListener('submit', (event) => {{
+  event.preventDefault();
+  const artifact = document.getElementById('artifact');
+  if (!artifact.files.length) {{
+    statusLine.textContent = 'Choose an encrypted upload bag zip first.';
+    return;
+  }}
+  button.disabled = true;
+  statusLine.textContent = 'Starting upload...';
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', form.action);
+  xhr.upload.addEventListener('progress', (progress) => {{
+    if (progress.lengthComputable) {{
+      const percent = Math.round((progress.loaded / progress.total) * 100);
+      statusLine.textContent = `Uploading encrypted bag... ${{percent}}%`;
+    }} else {{
+      statusLine.textContent = 'Uploading encrypted bag...';
+    }}
+  }});
+  xhr.addEventListener('load', () => {{
+    if (xhr.status >= 200 && xhr.status < 400) {{
+      statusLine.textContent = 'Upload accepted. Opening job page...';
+      window.location.href = xhr.responseURL || '/jobs';
+    }} else {{
+      statusLine.textContent = `Submit failed: ${{xhr.status}} ${{xhr.statusText}} ${{xhr.responseText.slice(0, 240)}}`;
+      button.disabled = false;
+    }}
+  }});
+  xhr.addEventListener('error', () => {{
+    statusLine.textContent = 'Upload failed before reaching the server.';
+    button.disabled = false;
+  }});
+  xhr.send(new FormData(form));
+}});
+</script>
 """
     return render_page("Submit HE Job", "new", body)
 
 
 @app.post("/jobs/new")
 async def submit_form(request: Request) -> RedirectResponse:
-    form = await request.form()
     cfg = settings()
-    access_token = str(form.get("access_token") or "")
-    require_auth(request, cfg, access_token)
-    job = await create_job_from_form(request, cfg, form)
-    response = RedirectResponse(f"/jobs/{job['job_id']}", status_code=303)
-    if access_token:
-        response.set_cookie("he_receiver_token", access_token, httponly=True, samesite="lax")
-    return response
+    content_length = request.headers.get("content-length", "unknown")
+    logger.info("submit request received client=%s content_length=%s", request.client, content_length)
+    try:
+        form = await request.form()
+        logger.info("submit form parsed client=%s field_count=%s", request.client, len(form))
+        access_token = str(form.get("access_token") or "")
+        require_auth(request, cfg, access_token)
+        job = await create_job_from_form(request, cfg, form)
+        logger.info(
+            "submit queued job_id=%s job_type=%s files=%s bytes=%s",
+            job["job_id"],
+            job["job_type"],
+            job["input_file_count"],
+            job["input_bytes"],
+        )
+        response = RedirectResponse(f"/jobs/{job['job_id']}", status_code=303)
+        if access_token:
+            response.set_cookie("he_receiver_token", access_token, httponly=True, samesite="lax")
+        return response
+    except Exception:
+        logger.exception("submit request failed client=%s content_length=%s", request.client, content_length)
+        raise
 
 
 @app.get("/jobs", response_class=HTMLResponse)
@@ -608,6 +675,7 @@ async def save_and_enqueue(
     saved: list[str] = []
     total_bytes = 0
     seen: set[str] = set()
+    logger.info("job %s upload save begin requested_job_type=%s", job_id, job_type)
 
     def save_payload_file(raw_path: str, data: bytes) -> None:
         nonlocal total_bytes
@@ -625,15 +693,20 @@ async def save_and_enqueue(
         saved.append(rel_posix)
 
     def save_zip_payload(raw_path: str, data: bytes) -> None:
+        logger.info("job %s zip received name=%s bytes=%s", job_id, raw_path, len(data))
         try:
             archive = zipfile.ZipFile(BytesIO(data))
         except zipfile.BadZipFile as exc:
             raise HTTPException(status_code=400, detail=f"invalid zip artifact: {raw_path}") from exc
-        for member in archive.infolist():
+        members = archive.infolist()
+        logger.info("job %s zip opened entries=%s", job_id, len(members))
+        before_count = len(saved)
+        for member in members:
             if member.is_dir():
                 continue
             with archive.open(member) as handle:
                 save_payload_file(member.filename, handle.read())
+        logger.info("job %s zip extracted files=%s", job_id, len(saved) - before_count)
 
     if uploads is not None:
         for upload in uploads:
@@ -664,9 +737,13 @@ async def save_and_enqueue(
 
     if explicit_auto:
         job_type = detect_job_type(root)
+        logger.info("job %s auto-detected job_type=%s", job_id, job_type)
+    else:
+        logger.info("job %s explicit job_type=%s", job_id, job_type)
 
     init_db(cfg)
     job = create_job_record(cfg, job_id=job_id, job_type=job_type, note=note, input_files=saved, input_bytes=total_bytes)
+    logger.info("job %s record created files=%s bytes=%s", job_id, len(saved), total_bytes)
     try:
         queue_job = queue_connection(cfg).enqueue(
             "he_async_web.worker.run_he_job",
@@ -676,7 +753,9 @@ async def save_and_enqueue(
         )
     except Exception as exc:  # noqa: BLE001 - return useful server state to the UI
         update_job(cfg, job_id, status="failed", error=f"failed to enqueue RQ job: {exc}")
+        logger.exception("job %s enqueue failed", job_id)
         raise HTTPException(status_code=503, detail=f"failed to enqueue RQ job: {exc}") from exc
+    logger.info("job %s enqueued rq_job_id=%s", job_id, queue_job.id)
     return update_job(cfg, job_id, status="queued", rq_job_id=queue_job.id)
 
 
