@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import html
 import json
+import subprocess
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -127,6 +129,86 @@ def decrypt_command_for(args: argparse.Namespace, job_dir: Path) -> str:
     )
 
 
+def decrypt_job(args: argparse.Namespace, job_dir: Path) -> tuple[Path, str, list[str], list[list[str]]]:
+    status_path = job_dir / "job_status.json"
+    if not status_path.exists():
+        raise ValueError("No job_status.json found; cannot infer decrypt inputs.")
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    job_type = str(status.get("job_type") or "")
+    cfg = DECRYPT_CONFIG.get(job_type)
+    if cfg is None:
+        raise ValueError(f"No decrypt template for job_type={job_type!r}")
+
+    helper_args = SimpleNamespace(
+        context="",
+        secret_key="",
+        client_private_root=args.client_private_root,
+    )
+    context, secret_key, material_source = infer_client_material(helper_args, job_dir)
+    manifest = job_dir / cfg["manifest"]
+    input_dir = job_dir / cfg["input_dir"]
+    output_csv = job_dir / cfg["output_csv"]
+
+    command = [
+        args.decrypt_bin,
+        "--context",
+        str(context),
+        "--secret-key",
+        str(secret_key),
+        "--manifest",
+        str(manifest),
+        "--input-dir",
+        str(input_dir),
+        "--output-csv",
+        str(output_csv),
+        "--manifest-type",
+        str(cfg["manifest_type"]),
+    ]
+    completed = subprocess.run(command, check=True, text=True, capture_output=True)  # noqa: S603 - local configured binary
+    headers, rows = read_csv_preview(output_csv)
+    log = "\n".join(part for part in (completed.stdout.strip(), completed.stderr.strip()) if part)
+    if not log:
+        log = f"Decrypted with {material_source}"
+    return output_csv, log, headers, rows
+
+
+def read_csv_preview(path: Path, limit: int = 200) -> tuple[list[str], list[list[str]]]:
+    if not path.is_file():
+        raise FileNotFoundError(f"decrypted CSV was not created: {path}")
+    with path.open("r", encoding="utf-8-sig", newline="") as input_file:
+        reader = csv.reader(input_file)
+        try:
+            headers = next(reader)
+        except StopIteration:
+            return [], []
+        rows = []
+        for index, row in enumerate(reader):
+            if index >= limit:
+                break
+            rows.append(row)
+    return headers, rows
+
+
+def render_csv_table(headers: list[str], rows: list[list[str]]) -> str:
+    if not headers:
+        return '<p class="muted">Decrypted CSV is empty.</p>'
+    header_html = "".join(f"<th>{esc(item)}</th>" for item in headers)
+    body_rows = []
+    for row in rows:
+        padded = row + [""] * max(0, len(headers) - len(row))
+        body_rows.append("<tr>" + "".join(f"<td>{esc(item)}</td>" for item in padded[: len(headers)]) + "</tr>")
+    if not body_rows:
+        body_rows.append(f'<tr><td colspan="{len(headers)}" class="muted">No data rows.</td></tr>')
+    return f"""
+<div class="table-wrap">
+  <table>
+    <thead><tr>{header_html}</tr></thead>
+    <tbody>{"".join(body_rows)}</tbody>
+  </table>
+</div>
+"""
+
+
 def download_job(args: argparse.Namespace, job_id: str) -> tuple[Path, Path, str]:
     job_id = safe_job_id(job_id)
     output_root = Path(args.output_dir)
@@ -204,6 +286,8 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
     table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
     th, td {{ border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }}
     th {{ color: var(--muted); background: #fbfcfe; }}
+    .table-wrap {{ width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }}
+    .table-wrap table {{ min-width: 720px; }}
     code, pre {{
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 13px;
@@ -257,6 +341,9 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
         if parsed.path == "/download":
             self.handle_download(parsed)
             return
+        if parsed.path == "/result":
+            self.handle_result(parsed)
+            return
         if parsed.path == "/download-all":
             self.handle_download_all()
             return
@@ -291,6 +378,46 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
             self.send_html(self.page(body))
         except Exception as exc:  # noqa: BLE001 - visible local test UI
             self.send_html(self.page(f"<section><h2>Download failed</h2><pre>{esc(exc)}</pre><a class=\"button\" href=\"/\">Back</a></section>"), HTTPStatus.BAD_GATEWAY)
+
+    def handle_result(self, parsed: object) -> None:
+        query = parse_qs(parsed.query)
+        job_id = (query.get("job_id") or [""])[0]
+        if not job_id:
+            self.send_html(self.page("<section><h2>Missing job_id</h2></section>"), HTTPStatus.BAD_REQUEST)
+            return
+        try:
+            zip_path, job_dir, _command = download_job(self.args, job_id)
+            output_csv, decrypt_log, headers, rows = decrypt_job(self.args, job_dir)
+            status = json.loads((job_dir / "job_status.json").read_text(encoding="utf-8"))
+            label = JOB_LABELS.get(str(status.get("job_type") or ""), str(status.get("label") or "HE result"))
+            body = f"""
+<section>
+  <div class="actions" style="justify-content: space-between;">
+    <div>
+      <h2>{esc(label)}</h2>
+      <p><span class="pill">{esc(job_id)}</span></p>
+    </div>
+    <a class="button" href="/">Back to results</a>
+  </div>
+  <p>Bundle: <code>{esc(zip_path)}</code></p>
+  <p>Decrypted CSV: <code>{esc(output_csv)}</code></p>
+  <p class="muted">Showing up to first 200 rows.</p>
+  {render_csv_table(headers, rows)}
+</section>
+<section>
+  <h2>Decrypt Log</h2>
+  <pre>{esc(decrypt_log)}</pre>
+</section>
+"""
+            self.send_html(self.page(body))
+        except subprocess.CalledProcessError as exc:
+            detail = "\n".join(part for part in (exc.stdout, exc.stderr) if part)
+            self.send_html(
+                self.page(f"<section><h2>Decrypt failed</h2><pre>{esc(detail or exc)}</pre><a class=\"button\" href=\"/\">Back</a></section>"),
+                HTTPStatus.BAD_GATEWAY,
+            )
+        except Exception as exc:  # noqa: BLE001 - visible local test UI
+            self.send_html(self.page(f"<section><h2>Result failed</h2><pre>{esc(exc)}</pre><a class=\"button\" href=\"/\">Back</a></section>"), HTTPStatus.BAD_GATEWAY)
 
     def handle_download_all(self) -> None:
         try:
@@ -340,7 +467,8 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
                 f"<td><span class=\"pill\">{esc(job_id)}</span><br><span class=\"muted\">{esc(finished)}</span></td>"
                 f"<td>{esc(runtime)}</td>"
                 f"<td>{esc(output_bytes)}</td>"
-                f"<td><a class=\"button primary\" href=\"/download?{urlencode({'job_id': job_id})}\">Pull bundle</a></td>"
+                f"<td><a class=\"button primary\" href=\"/result?{urlencode({'job_id': job_id})}\">View result</a> "
+                f"<a class=\"button\" href=\"/download?{urlencode({'job_id': job_id})}\">Pull bundle</a></td>"
                 "</tr>"
             )
         return f"""

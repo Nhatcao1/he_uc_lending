@@ -163,9 +163,13 @@ Open:
 http://127.0.0.1:8090
 ```
 
-The page reads only the server result index, shows the newest completed job for
-each EDA criterion, and can pull one criterion or all latest encrypted result bundles
-into:
+The page reads only the server result index and shows the newest completed job
+for each EDA criterion. `View result` downloads the encrypted bundle, decrypts
+it locally with the matching client key material, and renders the decrypted CSV
+table in the browser. `Pull bundle` is still available when you only want the
+encrypted bundle and command-line decrypt command.
+
+Local outputs go into:
 
 ```text
 client_runs/home_credit_basic/server_returns/<job_id>/
