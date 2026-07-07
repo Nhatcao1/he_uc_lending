@@ -255,6 +255,34 @@ def render_page(title: str, active: str, body: str) -> HTMLResponse:
       padding: 13px;
       background: #fbfcfe;
     }
+    .upload-list {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+      margin-top: 10px;
+      padding: 10px;
+    }
+    .upload-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .upload-row:last-child {
+      border-bottom: 0;
+    }
+    .upload-name {
+      min-width: 0;
+      word-break: break-word;
+      font-weight: 720;
+    }
+    .upload-size {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
     .muted {
       color: var(--muted);
       font-size: 13px;
@@ -481,8 +509,16 @@ def submit_page() -> HTMLResponse:
       <input id="access_token" name="access_token" type="password" autocomplete="off" placeholder="Only needed when HE_RECEIVER_TOKEN is set">
 
       <label for="artifact">Encrypted upload bag</label>
-      <input id="artifact" type="file" name="files" accept=".zip">
-      <p class="muted">Upload one criterion zip produced by <code>package_home_credit_upload_bag.py --workload ...</code>. The server extracts it, normalizes the bundle layout, and keeps only encrypted artifacts/manifests.</p>
+      <input id="artifact" type="file" accept=".zip" multiple>
+      <p class="muted">Add one criterion zip produced by <code>package_home_credit_upload_bag.py --workload ...</code>. You can keep choosing files; the checklist below is what will be sent when you queue the job.</p>
+      <div class="upload-list">
+        <div class="actions" style="justify-content: space-between; margin-top: 0;">
+          <strong>Selected upload files</strong>
+          <button id="clearFilesButton" type="button">Clear</button>
+        </div>
+        <div id="selectedFilesList" class="muted" style="margin-top: 8px;">No files selected yet.</div>
+      </div>
+      <p class="muted">Normal path: keep one <code>.upload.zip</code> in the list for one HE job. Manual multi-file uploads are supported when paths do not collide.</p>
 
       <label for="note">Client note</label>
       <textarea id="note" name="note" placeholder="Dataset, row limit, criterion, test name"></textarea>
@@ -519,6 +555,9 @@ const form = document.getElementById('submitJobForm');
 const button = document.getElementById('queueButton');
 const statusLine = document.getElementById('uploadStatus');
 const jobTypeSelect = document.getElementById('job_type');
+const artifactInput = document.getElementById('artifact');
+const selectedFilesList = document.getElementById('selectedFilesList');
+const clearFilesButton = document.getElementById('clearFilesButton');
 const jobCatalog = JSON.parse(document.getElementById('jobCatalog').textContent);
 const guidanceTitle = document.getElementById('guidanceTitle');
 const guidanceDescription = document.getElementById('guidanceDescription');
@@ -526,6 +565,7 @@ const guidanceMeta = document.getElementById('guidanceMeta');
 const guidanceClient = document.getElementById('guidanceClient');
 const guidanceRequired = document.getElementById('guidanceRequired');
 const guidanceReturns = document.getElementById('guidanceReturns');
+const selectedFiles = [];
 
 function escHtml(value) {{
   return String(value).replace(/[&<>"']/g, (char) => ({{
@@ -546,6 +586,66 @@ function listHtml(items, codeItems = false, fallback = 'None') {{
     return `<li>${{content}}</li>`;
   }}).join('');
 }}
+
+function formatBytes(bytes) {{
+  if (!Number.isFinite(bytes) || bytes <= 0) {{
+    return '0 B';
+  }}
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {{
+    value /= 1024;
+    unitIndex += 1;
+  }}
+  return `${{value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)}} ${{units[unitIndex]}}`;
+}}
+
+function fileKey(file) {{
+  return `${{file.name}}::${{file.size}}::${{file.lastModified}}`;
+}}
+
+function renderSelectedFiles() {{
+  if (!selectedFiles.length) {{
+    selectedFilesList.className = 'muted';
+    selectedFilesList.textContent = 'No files selected yet.';
+    clearFilesButton.disabled = true;
+    return;
+  }}
+  clearFilesButton.disabled = false;
+  selectedFilesList.className = '';
+  selectedFilesList.innerHTML = selectedFiles.map((file, index) => `
+    <div class="upload-row">
+      <div class="upload-name">${{escHtml(file.name)}}</div>
+      <div class="upload-size">${{formatBytes(file.size)}}</div>
+      <button type="button" data-remove-file="${{index}}">Remove</button>
+    </div>
+  `).join('');
+  selectedFilesList.querySelectorAll('[data-remove-file]').forEach((removeButton) => {{
+    removeButton.addEventListener('click', () => {{
+      selectedFiles.splice(Number(removeButton.dataset.removeFile), 1);
+      renderSelectedFiles();
+    }});
+  }});
+}}
+
+artifactInput.addEventListener('change', () => {{
+  const known = new Set(selectedFiles.map(fileKey));
+  for (const file of artifactInput.files) {{
+    const key = fileKey(file);
+    if (!known.has(key)) {{
+      selectedFiles.push(file);
+      known.add(key);
+    }}
+  }}
+  artifactInput.value = '';
+  renderSelectedFiles();
+}});
+
+clearFilesButton.addEventListener('click', () => {{
+  selectedFiles.splice(0, selectedFiles.length);
+  renderSelectedFiles();
+}});
 
 function updateGuidance() {{
   const selected = jobTypeSelect.value;
@@ -573,12 +673,12 @@ function updateGuidance() {{
 
 jobTypeSelect.addEventListener('change', updateGuidance);
 updateGuidance();
+renderSelectedFiles();
 
 form.addEventListener('submit', (event) => {{
   event.preventDefault();
-  const artifact = document.getElementById('artifact');
-  if (!artifact.files.length) {{
-    statusLine.textContent = 'Choose an encrypted upload bag zip first.';
+  if (!selectedFiles.length) {{
+    statusLine.textContent = 'Add at least one encrypted upload bag first.';
     return;
   }}
   button.disabled = true;
@@ -606,7 +706,12 @@ form.addEventListener('submit', (event) => {{
     statusLine.textContent = 'Upload failed before reaching the server.';
     button.disabled = false;
   }});
-  xhr.send(new FormData(form));
+  const payload = new FormData();
+  payload.append('job_type', jobTypeSelect.value);
+  payload.append('access_token', document.getElementById('access_token').value);
+  payload.append('note', document.getElementById('note').value);
+  selectedFiles.forEach((file) => payload.append('files', file, file.name));
+  xhr.send(payload);
 }});
 </script>
 """
