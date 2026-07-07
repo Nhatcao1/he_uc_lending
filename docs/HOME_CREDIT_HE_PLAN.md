@@ -4,6 +4,7 @@ Active notebook context:
 
 ```text
 home_credit_start-here-a-gentle-introduction.ipynb
+home-credit-complete-eda-feature-importance.ipynb
 ```
 
 Use `application_train.csv` first. Avoid the full multi-table join problem until
@@ -22,6 +23,7 @@ the single-table encrypted aggregate path is working.
 Detailed mapping from original notebook EDA to the HE implementation choices:
 
 ```text
+docs/HOME_CREDIT_COMPLETE_EDA_HE_MAPPING.md
 docs/HOME_CREDIT_BASIC_EDA_IMPLEMENTATION_MAP.md
 ```
 

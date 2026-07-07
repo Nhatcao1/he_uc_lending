@@ -15,6 +15,7 @@ Key planning notes:
 
 - `HE_USE_CASES_AND_NOTEBOOK_CONTEXT.md`
 - `HOMOMORPHIC_ENCRYPTION_DESIGN.md`
+- `docs/HOME_CREDIT_COMPLETE_EDA_HE_MAPPING.md`
 - `docs/HOME_CREDIT_BASIC_EDA_IMPLEMENTATION_MAP.md`
 - `docs/HOME_CREDIT_IMPLEMENTED_CLIENT_SERVER_FLOW.md`
 - `docs/diagrams/README.md`
@@ -78,8 +79,12 @@ Run help:
 
 ## Home Credit HE Direction
 
-The active HE target is encrypted aggregate EDA from
-`home_credit_start-here-a-gentle-introduction.ipynb`:
+The active HE target is encrypted aggregate EDA from the Home Credit notebooks,
+with the complete EDA notebook mapped in:
+
+```text
+docs/HOME_CREDIT_COMPLETE_EDA_HE_MAPPING.md
+```
 
 - category default-rate tables
 - age / `EXT_SOURCE_*` bucket default-rate tables

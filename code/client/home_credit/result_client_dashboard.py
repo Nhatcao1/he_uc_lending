@@ -293,16 +293,18 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
             job = grouped.get(job_type)
             if not job:
                 rows.append(
-                    f"<tr><td>{esc(label)}</td><td class=\"muted\">No completed result</td><td></td><td></td></tr>"
+                    f"<tr><td>{esc(label)}</td><td class=\"muted\">No completed result</td><td></td><td></td><td></td></tr>"
                 )
                 continue
             job_id = str(job.get("job_id") or "")
             finished = str(job.get("finished_at") or "")
+            runtime = str(job.get("runtime_duration") or "")
             output_bytes = str(job.get("output_bytes") or "")
             rows.append(
                 "<tr>"
                 f"<td><strong>{esc(label)}</strong><br><code>{esc(job_type)}</code></td>"
                 f"<td><span class=\"pill\">{esc(job_id)}</span><br><span class=\"muted\">{esc(finished)}</span></td>"
+                f"<td>{esc(runtime)}</td>"
                 f"<td>{esc(output_bytes)}</td>"
                 f"<td><a class=\"button primary\" href=\"/download?{urlencode({'job_id': job_id})}\">Pull bundle</a></td>"
                 "</tr>"
@@ -314,7 +316,7 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
   <p>Local output: <code>{esc(self.args.output_dir)}</code></p>
   <p><a class="button primary" href="/download-all">Pull all latest bundles</a></p>
   <table>
-    <thead><tr><th>Use case</th><th>Latest completed job</th><th>Output bytes</th><th>Action</th></tr></thead>
+    <thead><tr><th>Use case</th><th>Latest completed job</th><th>HE runtime</th><th>Output bytes</th><th>Action</th></tr></thead>
     <tbody>{"".join(rows)}</tbody>
   </table>
 </section>

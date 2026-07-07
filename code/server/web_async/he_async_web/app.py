@@ -8,6 +8,7 @@ import json
 import logging
 import uuid
 import zipfile
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -308,9 +309,61 @@ def esc(value: object) -> str:
     return html.escape(str(value), quote=True)
 
 
+def parse_utc_timestamp(value: object) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(str(value), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def duration_seconds(start: datetime | None, end: datetime | None) -> int | None:
+    if not start or not end:
+        return None
+    return max(0, int((end - start).total_seconds()))
+
+
+def format_duration(seconds: int | None) -> str:
+    if seconds is None:
+        return ""
+    minutes, sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m {sec}s"
+    if minutes:
+        return f"{minutes}m {sec}s"
+    return f"{sec}s"
+
+
+def add_timing(job: dict[str, Any]) -> dict[str, Any]:
+    item = dict(job)
+    now = datetime.now(timezone.utc)
+    created = parse_utc_timestamp(item.get("created_at"))
+    started = parse_utc_timestamp(item.get("started_at"))
+    finished = parse_utc_timestamp(item.get("finished_at"))
+    end = finished or now
+
+    queued_seconds = duration_seconds(created, started)
+    runtime_seconds = duration_seconds(started, end)
+    total_seconds = duration_seconds(created, end)
+
+    item["queued_seconds"] = queued_seconds
+    item["runtime_seconds"] = runtime_seconds
+    item["total_elapsed_seconds"] = total_seconds
+    item["queued_duration"] = format_duration(queued_seconds)
+    item["runtime_duration"] = format_duration(runtime_seconds)
+    item["total_elapsed_duration"] = format_duration(total_seconds)
+    return item
+
+
+def add_timing_all(jobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [add_timing(job) for job in jobs]
+
+
 def job_table(jobs: list[dict[str, Any]]) -> str:
     rows = []
-    for job in jobs:
+    for job in add_timing_all(jobs):
         rows.append(
             f"""<tr>
   <td><a href="/jobs/{esc(job['job_id'])}"><code>{esc(job['job_id'])}</code></a></td>
@@ -318,14 +371,16 @@ def job_table(jobs: list[dict[str, Any]]) -> str:
   <td><span class="status {esc(job['status'])}">{esc(job['status'])}</span></td>
   <td>{esc(job.get('created_at') or '')}</td>
   <td>{esc(job.get('finished_at') or '')}</td>
+  <td>{esc(job.get('runtime_duration') or '')}</td>
+  <td>{esc(job.get('total_elapsed_duration') or '')}</td>
   <td>{len(job.get('output_files') or [])}</td>
 </tr>"""
         )
     if not rows:
-        rows.append('<tr><td colspan="6" class="muted">No jobs yet.</td></tr>')
+        rows.append('<tr><td colspan="8" class="muted">No jobs yet.</td></tr>')
     return (
         "<table><thead><tr><th>Job</th><th>Workload</th><th>Status</th>"
-        "<th>Created</th><th>Finished</th><th>Outputs</th></tr></thead><tbody>"
+        "<th>Created</th><th>Finished</th><th>HE runtime</th><th>Total elapsed</th><th>Outputs</th></tr></thead><tbody>"
         + "\n".join(rows)
         + "</tbody></table>"
     )
@@ -543,7 +598,7 @@ def job_detail_page(job_id: str, request: Request) -> HTMLResponse:
     cfg = settings()
     init_db(cfg)
     try:
-        job = get_job(cfg, job_id)
+        job = add_timing(get_job(cfg, job_id))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     output_links = []
@@ -562,6 +617,7 @@ def job_detail_page(job_id: str, request: Request) -> HTMLResponse:
     <a class="button" href="/jobs">Back to Jobs</a>
   </div>
   <p><span class="status {esc(job['status'])}">{esc(job['status'])}</span> {esc(job['label'])}</p>
+  <p class="muted">HE runtime: {esc(job.get('runtime_duration') or 'not started')} | Total elapsed: {esc(job.get('total_elapsed_duration') or '')}</p>
   <div class="actions">
     {bundle}
     <a class="button" href="/api/jobs/{esc(job_id)}">JSON status</a>
@@ -605,7 +661,7 @@ setInterval(refreshDetail, 3000);
 def results_page(request: Request) -> HTMLResponse:
     cfg = settings()
     init_db(cfg)
-    completed = list_completed_jobs(cfg, limit=200)
+    completed = add_timing_all(list_completed_jobs(cfg, limit=200))
     rows = []
     for job in completed:
         rows.append(
@@ -613,12 +669,13 @@ def results_page(request: Request) -> HTMLResponse:
   <td><a href="/jobs/{esc(job['job_id'])}"><code>{esc(job['job_id'])}</code></a></td>
   <td>{esc(job['label'])}</td>
   <td>{esc(job.get('finished_at') or '')}</td>
+  <td>{esc(job.get('runtime_duration') or '')}</td>
   <td>{job.get('output_bytes') or 0}</td>
   <td><a class="button primary" href="/api/jobs/{esc(job['job_id'])}/download-bundle">Download</a></td>
 </tr>"""
         )
     if not rows:
-        rows.append('<tr><td colspan="5" class="muted">No completed encrypted result bundles yet.</td></tr>')
+        rows.append('<tr><td colspan="6" class="muted">No completed encrypted result bundles yet.</td></tr>')
     use_cases = use_case_results(cfg)
     cards = []
     for item in use_cases:
@@ -637,7 +694,7 @@ def results_page(request: Request) -> HTMLResponse:
   <pre>python3 code/client/home_credit/download_job_bundle.py \\
   --server {esc(str(request.base_url).rstrip('/'))} \\
   --job-id latest</pre>
-  <table><thead><tr><th>Job</th><th>Workload</th><th>Finished</th><th>Output bytes</th><th>Bundle</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
+  <table><thead><tr><th>Job</th><th>Workload</th><th>Finished</th><th>HE runtime</th><th>Output bytes</th><th>Bundle</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
 </section>
 <section>
   <h2>Use Case Status</h2>
@@ -798,7 +855,7 @@ def api_jobs(request: Request, status: str | None = None, limit: int = 100) -> d
     cfg = settings()
     require_auth(request, cfg)
     init_db(cfg)
-    return {"jobs": list_jobs(cfg, status=status, limit=limit)}
+    return {"jobs": add_timing_all(list_jobs(cfg, status=status, limit=limit))}
 
 
 @app.post("/api/jobs")
@@ -828,7 +885,7 @@ def api_job(job_id: str, request: Request) -> dict[str, Any]:
     require_auth(request, cfg)
     init_db(cfg)
     try:
-        return get_job(cfg, job_id)
+        return add_timing(get_job(cfg, job_id))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -883,7 +940,7 @@ def api_results(request: Request, limit: int = 100) -> dict[str, Any]:
     cfg = settings()
     require_auth(request, cfg)
     init_db(cfg)
-    return {"results": list_completed_jobs(cfg, limit=limit), "use_cases": use_case_results(cfg)}
+    return {"results": add_timing_all(list_completed_jobs(cfg, limit=limit)), "use_cases": use_case_results(cfg)}
 
 
 @app.post("/api/jobs/{job_id}/cancel")
