@@ -43,6 +43,7 @@ home_credit/prepare_home_credit_basic_eda.py
 home_credit/train_home_credit_linear_model.py
 home_credit/package_home_credit_upload_bag.py
 home_credit/download_job_bundle.py
+home_credit/result_client_dashboard.py
 ckks_tools/encrypt_home_credit_payload.cpp
 ckks_tools/decrypt_ckks_results.cpp
 ```
@@ -99,3 +100,27 @@ client_runs/home_credit_basic/client_private/<client_material_id>/crypto_context
 Each upload bag records its `client_material_id`. Returned result bundles include
 that id, so `download_job_bundle.py` can print a decrypt command using the
 matching key material instead of a stale key from a later encryption run.
+
+## Local Result Dashboard
+
+Run a local client-only result dashboard:
+
+```bash
+python3 code/client/home_credit/result_client_dashboard.py \
+  --server http://100.84.97.118:8080 \
+  --port 8090
+```
+
+Open:
+
+```text
+http://127.0.0.1:8090
+```
+
+The page reads only the server result index, shows the newest completed job for
+each use case, and can pull one workload or all latest encrypted result bundles
+into:
+
+```text
+client_runs/home_credit_basic/server_returns/<job_id>/
+```
