@@ -22,6 +22,7 @@ Implemented server executables:
 ```text
 server_numeric_summary
 server_home_credit_aggregate
+server_home_credit_token_join_aggregate
 server_linear_score
 ```
 
@@ -37,6 +38,13 @@ Aggregate executable:
 - computes encrypted `sum(mask)`, `sum(mask * target)`, and
   `sum(mask * amount)`
 - supports `--analysis-filter category`, `bucket`, or `ratio`
+
+Token join aggregate executable:
+
+- `home_credit_aggregate/server_home_credit_token_join_aggregate.cpp`
+- applies HMAC/PSI matched-token selection masks to encrypted
+  previous_application vectors
+- supports merge-aware Home Credit manual feature engineering timing jobs
 
 Linear score executable:
 

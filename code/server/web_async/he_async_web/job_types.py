@@ -89,6 +89,59 @@ def aggregate_returns(output_dir: str) -> list[str]:
     return [f"{output_dir}/aggregate_summary_manifest.csv", f"{output_dir}/aggregates/*.bin"]
 
 
+def token_join_job(
+    *,
+    label: str,
+    stage: str,
+    description: str,
+    analysis: str,
+    output_dir: str,
+    token_dir: str,
+    client_requirements: list[str],
+) -> dict[str, Any]:
+    return {
+        "label": label,
+        "family": "Home Credit Manual Feature Engineering",
+        "stage": stage,
+        "scheme": "CKKS + protected join tokens",
+        "binary": "server_home_credit_token_join_aggregate",
+        "description": description,
+        "notebook_cells": "manual feature engineering notebooks: groupby/merge pattern",
+        "he_operation": "plaintext token match mask * encrypted category mask, then EvalSum",
+        "required": [
+            "crypto_context.bin",
+            "eval_sum_keys.bin",
+            "eval_mult_keys.bin",
+            "aggregate_manifest.csv",
+            "vectors/",
+            f"{token_dir}/left_tokens.csv",
+            f"{token_dir}/right_tokens.csv",
+        ],
+        "client_requirements": client_requirements,
+        "server_returns": aggregate_returns(output_dir),
+        "command": [
+            "--context",
+            "crypto_context.bin",
+            "--eval-sum-keys",
+            "eval_sum_keys.bin",
+            "--eval-mult-keys",
+            "eval_mult_keys.bin",
+            "--manifest",
+            "aggregate_manifest.csv",
+            "--input-dir",
+            "vectors",
+            "--left-tokens",
+            f"{token_dir}/left_tokens.csv",
+            "--right-tokens",
+            f"{token_dir}/right_tokens.csv",
+            "--output-dir",
+            f"output/{output_dir}",
+            "--analysis-filter",
+            f"literal:{analysis}",
+        ],
+    }
+
+
 COMMON_CATEGORY_CLIENT_REQS = [
     "Client normalizes strings, applies __MISSING__, and uses top-K plus __OTHER__ where needed.",
     "Client one-hot encodes category labels into encrypted 0/1 masks.",
@@ -214,6 +267,32 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
             "output/linear_score_demo",
         ],
     },
+    "home_credit_join_hmac_prev_contract_status": token_join_job(
+        label="Manual FE: HMAC Token Join Previous Status",
+        stage="Manual FE join proof",
+        description="Server joins previous_application rows to the sampled application_train clients using HMAC SK_ID_CURR tokens, then sums encrypted NAME_CONTRACT_STATUS masks.",
+        analysis="previous_application_token_join_hmac",
+        output_dir="join_hmac_prev_contract_status",
+        token_dir="join/hmac",
+        client_requirements=[
+            "Client creates HMAC-SHA256 join tokens for SK_ID_CURR and keeps the join secret local.",
+            "Client encrypts previous_application NAME_CONTRACT_STATUS one-hot masks.",
+            "Server sees only deterministic tokens and encrypted masks, then applies a token-match selection mask.",
+        ],
+    ),
+    "home_credit_join_psi_prev_contract_status": token_join_job(
+        label="Manual FE: PSI-Ready Join Previous Status",
+        stage="Manual FE PSI join proof",
+        description="Same encrypted join aggregate as the HMAC path, but the matched token set is supplied from a PSI output file when available.",
+        analysis="previous_application_token_join_psi",
+        output_dir="join_psi_prev_contract_status",
+        token_dir="join/psi",
+        client_requirements=[
+            "Client or trusted matching service runs PSI and writes matched HMAC tokens to the prepare step.",
+            "Until PSI output is supplied, the prepare script creates a same-size local fixture for workflow testing.",
+            "Server runs the same encrypted aggregate as the HMAC path so job timings are comparable.",
+        ],
+    ),
 }
 
 
@@ -481,6 +560,8 @@ NOTEBOOK_JOB_ORDER = [
     "home_credit_prev_insured_on_approval",
     "home_credit_app_selected_correlation_stats",
     "home_credit_linear_score_demo",
+    "home_credit_join_hmac_prev_contract_status",
+    "home_credit_join_psi_prev_contract_status",
 ]
 JOB_TYPES = {
     **{job_type: JOB_TYPES[job_type] for job_type in NOTEBOOK_JOB_ORDER if job_type in JOB_TYPES},

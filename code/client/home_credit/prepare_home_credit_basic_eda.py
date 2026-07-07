@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import hmac
 import json
 import math
 import re
@@ -110,6 +112,10 @@ DEFAULT_MODEL_FEATURES = [
     {"name": "DAYS_EMPLOYED_PERCENT_scaled", "source": "DAYS_EMPLOYED_PERCENT", "weight": -0.05},
 ]
 
+JOIN_STATUS_COLUMN = "NAME_CONTRACT_STATUS"
+JOIN_HMAC_ANALYSIS = "previous_application_token_join_hmac"
+JOIN_PSI_ANALYSIS = "previous_application_token_join_psi"
+
 
 @dataclass
 class RunningStats:
@@ -164,6 +170,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--category-config", help="Optional JSON category policy file.")
     parser.add_argument("--previous-category-config", help="Optional JSON previous_application category policy file.")
     parser.add_argument("--model-json", help="Optional trained/exported linear model JSON.")
+    parser.add_argument(
+        "--join-secret",
+        default="home-credit-local-token-join-demo",
+        help="Secret used to HMAC SK_ID_CURR for tokenized join demo artifacts. Override outside demos.",
+    )
+    parser.add_argument(
+        "--psi-matched-token-file",
+        default="",
+        help=(
+            "Optional newline/CSV file of HMAC tokens produced after a PSI run. "
+            "When omitted, the PSI-ready workload uses the local application token set as a same-size fixture."
+        ),
+    )
     parser.add_argument(
         "--amount-columns",
         default=",".join(DEFAULT_AMOUNT_COLUMNS),
@@ -235,6 +254,30 @@ def parse_correlation_pairs(value: str) -> list[tuple[str, str]]:
             raise ValueError(f"correlation pair must be left:right, got: {cleaned}")
         pairs.append((left, right))
     return pairs
+
+
+def join_token(secret: str, raw_id: str | None) -> str:
+    cleaned = (raw_id or "").strip()
+    if not cleaned:
+        return ""
+    return hmac.new(secret.encode("utf-8"), cleaned.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def read_token_file(path: str) -> set[str]:
+    tokens: set[str] = set()
+    if not path:
+        return tokens
+    input_path = Path(path)
+    with input_path.open("r", encoding="utf-8-sig", newline="") as input_file:
+        reader = csv.reader(input_file)
+        for row in reader:
+            if not row:
+                continue
+            token = row[0].strip()
+            if not token or token.lower() in {"token", "join_token", "hmac_token"}:
+                continue
+            tokens.add(token)
+    return tokens
 
 
 def iter_rows(path: Path, row_limit: int) -> Iterable[dict[str, str]]:
@@ -390,6 +433,25 @@ def collect_first_pass(
         for source, stat in stats.items():
             stat.add(value_from_source(row, source))
     return rows, category_counts, stats, target_by_curr
+
+
+def collect_application_tokens(input_path: Path, row_limit: int, join_secret: str) -> tuple[list[str], set[str]]:
+    ordered_tokens: list[str] = []
+    unique_tokens: set[str] = set()
+    for row in iter_rows(input_path, row_limit):
+        token = join_token(join_secret, row.get("SK_ID_CURR"))
+        if not token:
+            continue
+        ordered_tokens.append(token)
+        unique_tokens.add(token)
+    return ordered_tokens, unique_tokens
+
+
+def collect_previous_tokens(input_path: Path, row_limit: int, join_secret: str) -> list[str]:
+    tokens: list[str] = []
+    for row in iter_rows(input_path, row_limit):
+        tokens.append(join_token(join_secret, row.get("SK_ID_CURR")))
+    return tokens
 
 
 def collect_category_counts(
@@ -694,6 +756,9 @@ def build_vector_defs(
                 )
             )
             add_count_op(aggregate_ops, "previous_application_category_counts", column, label, base_vector)
+            if column == JOIN_STATUS_COLUMN:
+                add_count_op(aggregate_ops, JOIN_HMAC_ANALYSIS, column, label, base_vector)
+                add_count_op(aggregate_ops, JOIN_PSI_ANALYSIS, column, label, base_vector)
             add_mask_ops(
                 aggregate_ops,
                 "previous_application_target_rates",
@@ -888,6 +953,61 @@ def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, object]]) 
         writer.writerows(rows)
 
 
+def write_token_file(path: Path, tokens: Iterable[str]) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    count = 0
+    with path.open("w", encoding="utf-8", newline="") as output:
+        writer = csv.writer(output)
+        writer.writerow(["token"])
+        for token in tokens:
+            if not token:
+                continue
+            writer.writerow([token])
+            count += 1
+    return count
+
+
+def write_join_token_artifacts(
+    output_dir: Path,
+    application_tokens: list[str],
+    application_token_set: set[str],
+    previous_tokens: list[str],
+    psi_matched_tokens: set[str],
+) -> dict[str, object]:
+    hmac_dir = output_dir / "join" / "hmac"
+    psi_dir = output_dir / "join" / "psi"
+
+    hmac_left_count = write_token_file(hmac_dir / "left_tokens.csv", sorted(application_token_set))
+    hmac_right_count = write_token_file(hmac_dir / "right_tokens.csv", previous_tokens)
+
+    psi_tokens = psi_matched_tokens if psi_matched_tokens else application_token_set
+    psi_left_count = write_token_file(psi_dir / "left_tokens.csv", sorted(psi_tokens))
+    psi_right_count = write_token_file(psi_dir / "right_tokens.csv", previous_tokens)
+
+    metadata = {
+        "hmac": {
+            "left_tokens": "join/hmac/left_tokens.csv",
+            "right_tokens": "join/hmac/right_tokens.csv",
+            "left_token_count": hmac_left_count,
+            "right_token_count": hmac_right_count,
+            "match_source": "local_hmac_token_set",
+        },
+        "psi": {
+            "left_tokens": "join/psi/left_tokens.csv",
+            "right_tokens": "join/psi/right_tokens.csv",
+            "left_token_count": psi_left_count,
+            "right_token_count": psi_right_count,
+            "match_source": "psi_matched_token_file" if psi_matched_tokens else "local_fixture_until_psi_output_is_supplied",
+        },
+        "token_type": "HMAC-SHA256(SK_ID_CURR)",
+        "raw_ids_included": False,
+        "application_token_rows_before_dedup": len(application_tokens),
+        "previous_token_rows": len(previous_tokens),
+    }
+    (output_dir / "join" / "join_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    return metadata
+
+
 def write_vectors(
     table_inputs: dict[str, tuple[Path, int]],
     output_dir: Path,
@@ -972,6 +1092,21 @@ def main() -> None:
         table_inputs["previous_application"] = (previous_path, args.previous_row_limit)
     rows_by_vector = write_vectors(table_inputs, output_dir, vectors)
 
+    application_tokens, application_token_set = collect_application_tokens(input_path, args.row_limit, args.join_secret)
+    previous_tokens: list[str] = []
+    psi_tokens: set[str] = set()
+    join_metadata: dict[str, object] = {}
+    if previous_path:
+        previous_tokens = collect_previous_tokens(previous_path, args.previous_row_limit, args.join_secret)
+        psi_tokens = read_token_file(args.psi_matched_token_file)
+        join_metadata = write_join_token_artifacts(
+            output_dir,
+            application_tokens,
+            application_token_set,
+            previous_tokens,
+            psi_tokens,
+        )
+
     vector_manifest_rows = [
         {
             "table": vector.table,
@@ -1019,6 +1154,8 @@ def main() -> None:
         "histogram_columns": histogram_columns,
         "correlation_pairs": correlation_pairs,
         "target_lookup_count": len(target_by_curr),
+        "join_token_count": len(application_token_set),
+        "join_token_artifacts": join_metadata,
         "vector_count": len(vectors),
         "aggregate_operation_count": len(aggregate_ops),
         "implemented_criteria": [

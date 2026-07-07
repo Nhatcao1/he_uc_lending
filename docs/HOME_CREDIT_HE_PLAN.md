@@ -3,12 +3,25 @@
 Active notebook context:
 
 ```text
-home_credit_start-here-a-gentle-introduction.ipynb
-home-credit-complete-eda-feature-importance.ipynb
+notebooks/home_credit_start-here-a-gentle-introduction.ipynb
+notebooks/home-credit-complete-eda-feature-importance.ipynb
+notebooks/introduction-to-manual-feature-engineering.ipynb
+notebooks/introduction-to-manual-feature-engineering-p2.ipynb
 ```
 
-Use `application_train.csv` first. Avoid the full multi-table join problem until
-the single-table encrypted aggregate path is working.
+Keep the current notebook-facing EDA jobs as the first demo path. Add a limited
+merge-aware path next, based on the manual feature engineering notebooks. The
+goal is not encrypted SQL in CKKS; the goal is to reproduce the notebook's
+practical pattern:
+
+```text
+child Home Credit table -> groupby loan/client id -> aggregate features
+-> merge aggregated client features into application_train rows -> score/report
+```
+
+For the HE prototype, joins should be introduced only where they support this
+feature-engineering pattern and where the server can do useful encrypted
+aggregate math.
 
 ## Implemented HE Criteria
 
@@ -25,6 +38,54 @@ separate bucket/domain use-case names.
 | 6 | `prev_contract_type`, `prev_contract_status`, etc. | One-hot previous_application categories | Sum previous masks | Previous category count tables |
 | 7 | `app_selected_correlation_stats` | Select small numeric pairs and valid masks | Sum x, y, xy, x2, y2 support values | Client computes selected correlations |
 | 8 | `linear_score_demo` | Optional scaled numeric feature vectors | CKKS weighted sum | Encrypted inference smoke test |
+| 9 | `join_hmac_prev_contract_status` | HMAC-tokenized `SK_ID_CURR`, encrypted previous status masks | Token-match plaintext mask times encrypted mask, then sum | Joined previous-status count table |
+| 10 | `join_psi_prev_contract_status` | PSI-matched token set when available, encrypted previous status masks | Same CKKS join aggregate as HMAC path | PSI-ready joined status count table |
+
+## Merge-Aware Extension Plan
+
+The two manual feature engineering notebooks give the strongest boss-facing
+reason to include joins. They do not join raw tables for EDA decoration; they
+aggregate child tables into per-client features and merge those features into
+the main application table for ML.
+
+Notebook patterns to mirror:
+
+| Notebook source | Raw relation | Notebook operation | HE-friendly target |
+| --- | --- | --- | --- |
+| `introduction-to-manual-feature-engineering.ipynb` | `bureau.SK_ID_CURR -> application_train.SK_ID_CURR` | `bureau.groupby(SK_ID_CURR)` then merge | Previous external-credit count/sum/mean per applicant |
+| `introduction-to-manual-feature-engineering.ipynb` | `bureau_balance.SK_ID_BUREAU -> bureau.SK_ID_BUREAU -> SK_ID_CURR` | group by loan, merge client id, group by client | Bureau monthly-status counts per applicant |
+| `introduction-to-manual-feature-engineering-p2.ipynb` | `previous_application.SK_ID_CURR -> application_train.SK_ID_CURR` | aggregate previous applications by client and merge | Previous Home Credit approval/refusal/count features |
+| `introduction-to-manual-feature-engineering-p2.ipynb` | `POS_CASH_balance`, `credit_card_balance`, `installments_payments` via `SK_ID_PREV`, `SK_ID_CURR` | aggregate by previous loan, attach client id, aggregate by client | Payment/count/balance summaries per applicant |
+
+Recommended implementation order:
+
+1. Keep current EDA upload jobs unchanged for presentation stability.
+2. Add one merge-aware proof of concept over current available prep:
+   `join_hmac_prev_contract_status` and `join_psi_prev_contract_status`.
+3. Add one bureau proof of concept:
+   `bureau_previous_loan_counts_by_applicant`.
+4. Add one two-hop proof of concept:
+   `bureau_balance_status_by_applicant`, using `SK_ID_BUREAU -> SK_ID_CURR`.
+5. Add one broader Home Credit previous-loan proof of concept:
+   `previous_application_status_by_applicant`.
+6. Feed selected merged aggregate features into the existing
+   `linear_score_demo` or a new `joined_feature_score_demo`.
+
+Privacy/HE design:
+
+- Best practical design: client/trusted side creates deterministic join tokens
+  such as `HMAC(join_secret, SK_ID_CURR)` and `HMAC(join_secret, SK_ID_PREV)`.
+- Server may group or join on tokens, but never sees raw IDs.
+- Sensitive numeric values and 0/1 masks remain CKKS encrypted.
+- Server computes encrypted sums and masked sums per joined/grouped token set.
+- Client decrypts the final per-client aggregate feature table or final score.
+
+What we should not promise yet:
+
+- Fully encrypted SQL joins on encrypted IDs.
+- Encrypted sorting/top-K over arbitrary IDs.
+- RandomForest/LightGBM training under HE.
+- End-to-end private feature engineering over all 2.68 GB of Kaggle data.
 
 Detailed mapping from original notebook EDA to the HE implementation choices:
 

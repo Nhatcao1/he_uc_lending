@@ -455,6 +455,17 @@ void writeBundleManifest(const Options& options, const std::unordered_map<std::s
     output << "}\n";
 }
 
+void copyJoinArtifacts(const Options& options) {
+    const auto source = options.preparedDir / "join";
+    if (!std::filesystem::exists(source)) {
+        return;
+    }
+    const auto destination = options.serverOutputDir / "join";
+    std::filesystem::create_directories(destination);
+    std::filesystem::copy(source, destination,
+                          std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -473,6 +484,7 @@ int main(int argc, char** argv) {
         writeColumnManifest(options, chunksByVector);
         writeAggregateManifest(options, chunksByVector);
         writeScoreManifest(options, chunksByVector);
+        copyJoinArtifacts(options);
         writeBundleManifest(options, specs);
 
         std::cout << "encrypt_home_credit_payload complete\n";

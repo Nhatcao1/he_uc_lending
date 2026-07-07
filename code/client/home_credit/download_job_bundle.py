@@ -42,6 +42,8 @@ DECRYPT_CONFIG = {
     "home_credit_app_dist_amt_goods_price": numeric_decrypt_config("app_dist_amt_goods_price"),
     "home_credit_app_target_balance": aggregate_decrypt_config("app_target_balance"),
     "home_credit_app_selected_correlation_stats": aggregate_decrypt_config("app_selected_correlation_stats"),
+    "home_credit_join_hmac_prev_contract_status": aggregate_decrypt_config("join_hmac_prev_contract_status"),
+    "home_credit_join_psi_prev_contract_status": aggregate_decrypt_config("join_psi_prev_contract_status"),
     "home_credit_linear_score_demo": {
         "manifest": "linear_score_demo/score_summary_manifest.csv",
         "input_dir": "linear_score_demo",

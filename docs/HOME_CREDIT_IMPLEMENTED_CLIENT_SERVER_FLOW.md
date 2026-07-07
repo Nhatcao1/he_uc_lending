@@ -41,11 +41,12 @@ decrypted reports
 
 ## What Changed On Server
 
-Server now has three runnable OpenFHE jobs:
+Server now has four runnable OpenFHE jobs:
 
 ```text
 server_numeric_summary
 server_home_credit_aggregate
+server_home_credit_token_join_aggregate
 server_linear_score
 ```
 
@@ -126,6 +127,8 @@ prepared_payloads/home_credit_basic/aggregate_operations.csv
 prepared_payloads/home_credit_basic/numeric_vectors.csv
 prepared_payloads/home_credit_basic/linear_score_vectors.csv
 prepared_payloads/home_credit_basic/vectors/*.csv
+prepared_payloads/home_credit_basic/join/hmac/*.csv
+prepared_payloads/home_credit_basic/join/psi/*.csv
 ```
 
 These are plaintext local artifacts and should not be uploaded to the server.
@@ -155,6 +158,8 @@ encrypted_payloads/home_credit_basic/score_manifest.csv
 encrypted_payloads/home_credit_basic/columns/*.bin
 encrypted_payloads/home_credit_basic/vectors/*.bin
 encrypted_payloads/home_credit_basic/score_features/*.bin
+encrypted_payloads/home_credit_basic/join/hmac/*.csv
+encrypted_payloads/home_credit_basic/join/psi/*.csv
 ```
 
 Client-only secret:
@@ -231,6 +236,8 @@ prev_yield_group
 prev_product_combination
 prev_insured_on_approval
 app_selected_correlation_stats
+join_hmac_prev_contract_status
+join_psi_prev_contract_status
 linear_score_demo
 all
 ```
@@ -241,7 +248,39 @@ The specific criterion zips include only the required encrypted artifacts:
 app_dist_*: crypto_context.bin, eval_sum_keys.bin, filtered column_manifest.csv, referenced columns/*.bin
 category/target/previous/correlation criteria: crypto_context.bin, eval_sum_keys.bin, eval_mult_keys.bin, filtered aggregate_manifest.csv, referenced vectors/*.bin
 linear_score_demo: crypto_context.bin, score_manifest.csv, referenced score_features/*.bin
+join_*: crypto_context.bin, eval keys, filtered aggregate_manifest.csv, referenced encrypted vectors/*.bin, token CSVs
 ```
+
+## Merge-Aware Join Timing Workloads
+
+The merge-aware proof-of-concept follows the manual feature engineering
+notebooks' pattern: connect `previous_application.SK_ID_CURR` to the current
+`application_train.SK_ID_CURR` population, then count previous contract status.
+
+Two upload workloads are available over the same data size:
+
+```text
+join_hmac_prev_contract_status
+join_psi_prev_contract_status
+```
+
+Both run the same CKKS server binary:
+
+```text
+server_home_credit_token_join_aggregate
+```
+
+The difference is the source of the matched token set:
+
+| Workload | Match source | Server sees | HE operation |
+| --- | --- | --- | --- |
+| `join_hmac_prev_contract_status` | Local HMAC tokens from `SK_ID_CURR` | deterministic HMAC tokens, encrypted status masks | plaintext token selection mask times encrypted one-hot status mask, then `EvalSum` |
+| `join_psi_prev_contract_status` | PSI output token file when supplied; local fixture otherwise | PSI-matched tokens, encrypted status masks | same CKKS work as HMAC path for fair timing |
+
+Production PSI should create the matched token file before `prepare`. For
+workflow testing without PSI installed, omit `--psi-matched-token-file`; the
+prepare script writes a same-size local fixture and marks that in
+`join/join_manifest.json`.
 
 Use `all` only when you want the larger compatibility bundle for every current
 criterion.

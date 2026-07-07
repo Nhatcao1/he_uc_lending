@@ -3,7 +3,9 @@
 Source notebook:
 
 ```text
-home-credit-complete-eda-feature-importance.ipynb
+notebooks/home-credit-complete-eda-feature-importance.ipynb
+notebooks/introduction-to-manual-feature-engineering.ipynb
+notebooks/introduction-to-manual-feature-engineering-p2.ipynb
 ```
 
 Goal: map every EDA section in the notebook to a practical homomorphic
@@ -73,12 +75,46 @@ The web UI can show job status and result bundles. The client-side dashboard can
 pull encrypted results. Final readable numbers are produced only after client
 decryption.
 
+## Merge-Aware Notebook Context
+
+The complete EDA notebook mostly explores each table separately. The two manual
+feature engineering notebooks are where the real Home Credit relational shape
+appears. Their repeated pattern is:
+
+```text
+child table with many rows per client or loan
+-> groupby SK_ID_CURR or SK_ID_PREV/SK_ID_BUREAU
+-> aggregate numeric columns and categorical one-hot counts
+-> merge aggregate features into application_train/application_test
+-> train RandomForest/LightGBM on the expanded feature table
+```
+
+For HE, this changes the roadmap but not the current EDA implementation. The
+current notebook-facing EDA jobs remain useful because they validate encrypted
+sums, masks, target rates, and small score math. The merge-aware extension
+should add a small number of per-applicant aggregate features rather than trying
+to implement a full encrypted dataframe engine.
+
+Practical HE interpretation:
+
+| Notebook join/aggregation | HE prototype interpretation |
+| --- | --- |
+| `bureau.groupby(SK_ID_CURR)` then merge into train/test | Group by deterministic client token; encrypted sums/counts create previous external-credit features |
+| `bureau_balance.groupby(SK_ID_BUREAU)` then attach `SK_ID_CURR` through `bureau` | Use deterministic loan/client tokens; server can attach token mapping and aggregate encrypted status masks |
+| `previous_application.groupby(SK_ID_CURR)` then merge | Group previous Home Credit applications by client token; encrypted masks count approved/refused/cancelled applications |
+| `POS_CASH_balance`, `credit_card_balance`, `installments_payments` grouped by `SK_ID_PREV` then `SK_ID_CURR` | Two-stage tokenized aggregate: previous-loan token to client token, then encrypted per-client summaries |
+
+This is the boss-facing join story: the server can participate in
+tokenized/grouped feature engineering while values remain encrypted. It should
+not be described as pure CKKS encrypted equality join over hidden IDs.
+
 ## Implemented Notebook Jobs
 
 The user-facing web UI now follows the notebook sections one-by-one. The C++
 binaries are still reusable implementation details: numeric distribution jobs
 use `server_numeric_summary`, categorical/target/correlation jobs use
-`server_home_credit_aggregate`, and the optional scoring demo uses
+`server_home_credit_aggregate`, merge-aware token matching jobs use
+`server_home_credit_token_join_aggregate`, and the optional scoring demo uses
 `server_linear_score`.
 
 | Package workload | UI label | HE operation |
@@ -122,6 +158,8 @@ use `server_numeric_summary`, categorical/target/correlation jobs use
 | `prev_insured_on_approval` | 5.15.16 Previous Insured on Approval | `sum(previous_one_hot_mask)` |
 | `app_selected_correlation_stats` | 6 Pearson Correlation Support | encrypted selected pairwise sums |
 | `linear_score_demo` | 7 Linear Score Demo | optional CKKS weighted sum; not RandomForest |
+| `join_hmac_prev_contract_status` | Manual FE HMAC previous-status join | HMAC-token match mask times encrypted previous status mask, then sum |
+| `join_psi_prev_contract_status` | Manual FE PSI-ready previous-status join | PSI-matched token mask times encrypted previous status mask, then sum |
 
 Legacy package names (`target_balance`, `numeric_summary`, `category_eda`,
 `bucket_eda`, `domain_ratio_eda`, `linear_score`) are accepted as aliases only.

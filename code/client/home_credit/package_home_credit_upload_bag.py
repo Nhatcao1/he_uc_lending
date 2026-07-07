@@ -125,6 +125,18 @@ AGGREGATE_WORKLOADS = {
         "job_type": "home_credit_app_selected_correlation_stats",
         "analysis": "selected_correlation_stats",
     },
+    "join_hmac_prev_contract_status": {
+        "job_type": "home_credit_join_hmac_prev_contract_status",
+        "analysis": "previous_application_token_join_hmac",
+        "groups": ("NAME_CONTRACT_STATUS",),
+        "join_dir": "join/hmac",
+    },
+    "join_psi_prev_contract_status": {
+        "job_type": "home_credit_join_psi_prev_contract_status",
+        "analysis": "previous_application_token_join_psi",
+        "groups": ("NAME_CONTRACT_STATUS",),
+        "join_dir": "join/psi",
+    },
     "application_numeric_histograms": {
         "job_type": "home_credit_application_numeric_histograms",
         "analysis": "application_numeric_histograms",
@@ -206,6 +218,8 @@ CANONICAL_WORKLOADS = (
     "app_target_by_suite_type",
     *PREVIOUS_COLUMNS.keys(),
     "app_selected_correlation_stats",
+    "join_hmac_prev_contract_status",
+    "join_psi_prev_contract_status",
     "linear_score_demo",
 )
 LEGACY_WORKLOAD_ALIASES = {
@@ -256,6 +270,7 @@ OPTIONAL_DIRS = (
     "columns",
     "vectors",
     "score_features",
+    "join",
 )
 BLOCKED_PARTS = {
     "secret_key.bin",
@@ -458,6 +473,11 @@ def collect_aggregate_files(encrypted_dir: Path, workload: str) -> tuple[list[Pa
         path = encrypted_dir / "vectors" / rel
         require_file(path)
         files.append(path)
+    join_dir = str(workload_cfg.get("join_dir") or "")
+    if join_dir:
+        for name in ("left_tokens.csv", "right_tokens.csv"):
+            add_required_file(files, encrypted_dir, f"{join_dir}/{name}")
+        add_optional_file(files, encrypted_dir, "join/join_manifest.json")
     return files, generated
 
 

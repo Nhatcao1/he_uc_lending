@@ -64,6 +64,8 @@ JOB_LABELS = {
     "home_credit_prev_insured_on_approval": "5.15.16 Previous Insured on Approval",
     "home_credit_app_selected_correlation_stats": "6 Pearson Correlation Support",
     "home_credit_linear_score_demo": "7 Linear Score Demo",
+    "home_credit_join_hmac_prev_contract_status": "Manual FE: HMAC Token Join Previous Status",
+    "home_credit_join_psi_prev_contract_status": "Manual FE: PSI-Ready Join Previous Status",
 }
 
 

@@ -51,7 +51,7 @@ Before starting Docker, build the C++ OpenFHE server binaries on the host:
 
 ```bash
 cmake -S . -B build -DOpenFHE_DIR=$HOME/openfhe-development/build
-cmake --build build --target server_numeric_summary server_home_credit_aggregate server_linear_score
+cmake --build build --target server_numeric_summary server_home_credit_aggregate server_home_credit_token_join_aggregate server_linear_score
 ```
 
 Then start the Docker web stack:

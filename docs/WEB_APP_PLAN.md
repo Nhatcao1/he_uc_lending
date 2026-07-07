@@ -54,6 +54,8 @@ home_credit_prev_product_combination
 home_credit_prev_insured_on_approval
 home_credit_app_selected_correlation_stats
 home_credit_linear_score_demo
+home_credit_join_hmac_prev_contract_status
+home_credit_join_psi_prev_contract_status
 ```
 
 The page also shows a read-only current result view per EDA criterion. It
@@ -122,6 +124,7 @@ Keep the core HE work in C++:
 ```text
 server_numeric_summary
 server_home_credit_aggregate
+server_home_credit_token_join_aggregate
 server_linear_score
 ```
 
