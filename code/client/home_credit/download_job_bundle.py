@@ -17,61 +17,31 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
-DECRYPT_CONFIG = {
-    "home_credit_missing_data": {
-        "manifest": "missing_data/aggregate_summary_manifest.csv",
-        "input_dir": "missing_data",
-        "output_csv": "decrypted_missing_data.csv",
-        "manifest_type": "aggregate",
-    },
-    "home_credit_target_balance": {
-        "manifest": "target_balance/aggregate_summary_manifest.csv",
-        "input_dir": "target_balance",
-        "output_csv": "decrypted_target_balance.csv",
-        "manifest_type": "aggregate",
-    },
-    "home_credit_application_numeric_summary": {
-        "manifest": "application_numeric_summary/summary_manifest.csv",
-        "input_dir": "application_numeric_summary",
-        "output_csv": "decrypted_application_numeric_summary.csv",
+def numeric_decrypt_config(output_dir: str) -> dict[str, str]:
+    return {
+        "manifest": f"{output_dir}/summary_manifest.csv",
+        "input_dir": output_dir,
+        "output_csv": f"decrypted_{output_dir}.csv",
         "manifest_type": "numeric",
-    },
-    "home_credit_application_category_counts": {
-        "manifest": "application_category_counts/aggregate_summary_manifest.csv",
-        "input_dir": "application_category_counts",
-        "output_csv": "decrypted_application_category_counts.csv",
+    }
+
+
+def aggregate_decrypt_config(output_dir: str) -> dict[str, str]:
+    return {
+        "manifest": f"{output_dir}/aggregate_summary_manifest.csv",
+        "input_dir": output_dir,
+        "output_csv": f"decrypted_{output_dir}.csv",
         "manifest_type": "aggregate",
-    },
-    "home_credit_application_default_rates": {
-        "manifest": "application_default_rates/aggregate_summary_manifest.csv",
-        "input_dir": "application_default_rates",
-        "output_csv": "decrypted_application_default_rates.csv",
-        "manifest_type": "aggregate",
-    },
-    "home_credit_application_numeric_histograms": {
-        "manifest": "application_numeric_histograms/aggregate_summary_manifest.csv",
-        "input_dir": "application_numeric_histograms",
-        "output_csv": "decrypted_application_numeric_histograms.csv",
-        "manifest_type": "aggregate",
-    },
-    "home_credit_previous_application_category_counts": {
-        "manifest": "previous_application_category_counts/aggregate_summary_manifest.csv",
-        "input_dir": "previous_application_category_counts",
-        "output_csv": "decrypted_previous_application_category_counts.csv",
-        "manifest_type": "aggregate",
-    },
-    "home_credit_previous_application_target_rates": {
-        "manifest": "previous_application_target_rates/aggregate_summary_manifest.csv",
-        "input_dir": "previous_application_target_rates",
-        "output_csv": "decrypted_previous_application_target_rates.csv",
-        "manifest_type": "aggregate",
-    },
-    "home_credit_selected_correlation_stats": {
-        "manifest": "selected_correlation_stats/aggregate_summary_manifest.csv",
-        "input_dir": "selected_correlation_stats",
-        "output_csv": "decrypted_selected_correlation_stats.csv",
-        "manifest_type": "aggregate",
-    },
+    }
+
+
+DECRYPT_CONFIG = {
+    "home_credit_missing_data": aggregate_decrypt_config("missing_data"),
+    "home_credit_app_dist_amt_credit": numeric_decrypt_config("app_dist_amt_credit"),
+    "home_credit_app_dist_amt_income_total": numeric_decrypt_config("app_dist_amt_income_total"),
+    "home_credit_app_dist_amt_goods_price": numeric_decrypt_config("app_dist_amt_goods_price"),
+    "home_credit_app_target_balance": aggregate_decrypt_config("app_target_balance"),
+    "home_credit_app_selected_correlation_stats": aggregate_decrypt_config("app_selected_correlation_stats"),
     "home_credit_linear_score_demo": {
         "manifest": "linear_score_demo/score_summary_manifest.csv",
         "input_dir": "linear_score_demo",
@@ -79,6 +49,55 @@ DECRYPT_CONFIG = {
         "manifest_type": "score",
     },
 }
+
+for _suffix in (
+    "app_suite_type",
+    "app_loan_type",
+    "app_own_car_realty",
+    "app_income_type",
+    "app_family_status",
+    "app_occupation_type",
+    "app_education_type",
+    "app_housing_type",
+    "app_organization_type",
+    "app_target_by_income_type",
+    "app_target_by_family_status",
+    "app_target_by_occupation_type",
+    "app_target_by_education_type",
+    "app_target_by_housing_type",
+    "app_target_by_organization_type",
+    "app_target_by_suite_type",
+    "prev_contract_type",
+    "prev_weekday_process_start",
+    "prev_cash_loan_purpose",
+    "prev_contract_status",
+    "prev_payment_type",
+    "prev_reject_reason",
+    "prev_suite_type",
+    "prev_client_type",
+    "prev_goods_category",
+    "prev_portfolio",
+    "prev_product_type",
+    "prev_channel_type",
+    "prev_seller_industry",
+    "prev_yield_group",
+    "prev_product_combination",
+    "prev_insured_on_approval",
+):
+    DECRYPT_CONFIG[f"home_credit_{_suffix}"] = aggregate_decrypt_config(_suffix)
+
+DECRYPT_CONFIG.update(
+    {
+        "home_credit_target_balance": aggregate_decrypt_config("target_balance"),
+        "home_credit_application_numeric_summary": numeric_decrypt_config("application_numeric_summary"),
+        "home_credit_application_category_counts": aggregate_decrypt_config("application_category_counts"),
+        "home_credit_application_default_rates": aggregate_decrypt_config("application_default_rates"),
+        "home_credit_application_numeric_histograms": aggregate_decrypt_config("application_numeric_histograms"),
+        "home_credit_previous_application_category_counts": aggregate_decrypt_config("previous_application_category_counts"),
+        "home_credit_previous_application_target_rates": aggregate_decrypt_config("previous_application_target_rates"),
+        "home_credit_selected_correlation_stats": aggregate_decrypt_config("selected_correlation_stats"),
+    }
+)
 
 DECRYPT_CONFIG.update(
     {

@@ -5,22 +5,27 @@
 ```mermaid
 flowchart LR
   raw["application_train.csv"]
-  policy["Client policies\ncategory top-K\nmissing bucket\nfixed numeric bins"]
-  masks["One-hot masks\nbin masks\nTARGET mask\namount vectors"]
-  enc["CKKS encrypt"]
-  bags["Criterion bags\nnumeric_summary\ncategory_counts\ndefault_rates\nhistograms"]
-  server["OpenFHE\nEvalSum\nsum(mask * value)"]
-  encrypted["Encrypted aggregate tables"]
-  report["Client decrypts\ncounts, rates, means"]
+  prep["Client prep\nclean numeric values\none-hot categories\nTARGET mask"]
+  numeric["5.1 AMT_CREDIT\n5.2 AMT_INCOME_TOTAL\n5.3 AMT_GOODS_PRICE"]
+  category["5.4, 5.6-5.13\n9 category-count jobs"]
+  target["5.5 Target balance"]
+  bytarget["5.14.1-5.14.7\ncategory by target"]
+  server["OpenFHE server\nEvalSum / mask sums"]
+  report["Client-decrypted tables\nmeans, counts, rates"]
 
-  raw --> policy --> masks --> enc --> bags --> server --> encrypted --> report
+  raw --> prep
+  prep --> numeric --> server
+  prep --> category --> server
+  prep --> target --> server
+  prep --> bytarget --> server
+  server --> report
 ```
 
-HE operations:
+Representative HE operations:
 
 ```text
-count = sum(mask)
-default_count = sum(mask * TARGET)
-amount_sum = sum(mask * amount)
-numeric_sum = sum(numeric_vector)
+numeric_sum = EvalSum(numeric_vector)
+count = sum(category_mask)
+target_default_count = sum(target_default_mask)
+default_count_by_category = sum(category_mask * TARGET)
 ```

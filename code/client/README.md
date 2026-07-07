@@ -71,7 +71,7 @@ folder and copies only the ciphertexts/manifests needed by that criterion.
 ```bash
 python3 code/client/home_credit/package_home_credit_upload_bag.py \
   --encrypted-dir encrypted_payloads/home_credit_basic \
-  --workload application_default_rates \
+  --workload app_target_by_income_type \
   --output-dir client_runs/home_credit_basic/server_uploads \
   --client-key-dir keys/home_credit_basic
 ```
@@ -82,18 +82,47 @@ Upload this zip at:
 /jobs/new
 ```
 
-Useful criterion names:
+Useful criterion names follow the notebook:
 
 ```text
 missing_data
-target_balance
-application_numeric_summary
-application_category_counts
-application_default_rates
-application_numeric_histograms
-previous_application_category_counts
-previous_application_target_rates
-selected_correlation_stats
+app_dist_amt_credit
+app_dist_amt_income_total
+app_dist_amt_goods_price
+app_suite_type
+app_target_balance
+app_loan_type
+app_own_car_realty
+app_income_type
+app_family_status
+app_occupation_type
+app_education_type
+app_housing_type
+app_organization_type
+app_target_by_income_type
+app_target_by_family_status
+app_target_by_occupation_type
+app_target_by_education_type
+app_target_by_housing_type
+app_target_by_organization_type
+app_target_by_suite_type
+prev_contract_type
+prev_weekday_process_start
+prev_cash_loan_purpose
+prev_contract_status
+prev_payment_type
+prev_reject_reason
+prev_suite_type
+prev_client_type
+prev_goods_category
+prev_portfolio
+prev_product_type
+prev_channel_type
+prev_seller_industry
+prev_yield_group
+prev_product_combination
+prev_insured_on_approval
+app_selected_correlation_stats
 linear_score_demo
 all
 ```

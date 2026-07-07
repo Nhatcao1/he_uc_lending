@@ -84,16 +84,17 @@ For upload, select a small encrypted workload zip produced by:
 ```bash
 python3 code/client/home_credit/package_home_credit_upload_bag.py \
   --encrypted-dir encrypted_payloads/home_credit_basic \
-  --workload numeric_summary \
+  --workload app_dist_amt_credit \
   --output-dir client_runs/home_credit_basic/server_uploads \
   --client-key-dir keys/home_credit_basic
 ```
 
 The server extracts the zip, normalizes the bundle layout, and can auto-detect
-the workload from the manifests. Use `--workload category_eda`, `bucket_eda`,
-`domain_ratio_eda`, or `linear_score` for the other smaller upload artifacts.
-Only upload files from `server_uploads/`; `client_private/` is the local decrypt
-key area.
+the workload from `upload_bag_manifest.json`. Use notebook workload names such
+as `app_target_by_income_type`, `prev_contract_status`,
+`app_selected_correlation_stats`, or `linear_score_demo` for other smaller
+upload artifacts. Only upload files from `server_uploads/`; `client_private/`
+is the local decrypt key area.
 
 ## Run Detached
 

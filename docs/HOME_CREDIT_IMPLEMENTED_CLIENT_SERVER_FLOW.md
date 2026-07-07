@@ -171,7 +171,7 @@ output folder:
 ```bash
 python3 code/client/home_credit/package_home_credit_upload_bag.py \
   --encrypted-dir encrypted_payloads/home_credit_basic \
-  --workload application_default_rates \
+  --workload app_target_by_income_type \
   --output-dir client_runs/home_credit_basic/server_uploads \
   --client-key-dir keys/home_credit_basic
 ```
@@ -179,7 +179,7 @@ python3 code/client/home_credit/package_home_credit_upload_bag.py \
 This writes:
 
 ```text
-client_runs/home_credit_basic/server_uploads/home_credit_application_default_rates.upload.zip
+client_runs/home_credit_basic/server_uploads/home_credit_app_target_by_income_type.upload.zip
 client_runs/home_credit_basic/client_private/<client_material_id>/secret_key.bin
 client_runs/home_credit_basic/client_private/<client_material_id>/crypto_context.bin
 client_runs/home_credit_basic/client_private/<client_material_id>/README_DO_NOT_UPLOAD.txt
@@ -190,18 +190,47 @@ The upload zip contains `upload_bag_manifest.json` with `client_material_id`,
 copies that manifest into the returned result bundle, allowing the client
 download helper to choose the matching local key material for decrypt.
 
-Other criterion values:
+Notebook criterion values:
 
 ```text
 missing_data
-target_balance
-application_numeric_summary
-application_category_counts
-application_default_rates
-application_numeric_histograms
-previous_application_category_counts
-previous_application_target_rates
-selected_correlation_stats
+app_dist_amt_credit
+app_dist_amt_income_total
+app_dist_amt_goods_price
+app_suite_type
+app_target_balance
+app_loan_type
+app_own_car_realty
+app_income_type
+app_family_status
+app_occupation_type
+app_education_type
+app_housing_type
+app_organization_type
+app_target_by_income_type
+app_target_by_family_status
+app_target_by_occupation_type
+app_target_by_education_type
+app_target_by_housing_type
+app_target_by_organization_type
+app_target_by_suite_type
+prev_contract_type
+prev_weekday_process_start
+prev_cash_loan_purpose
+prev_contract_status
+prev_payment_type
+prev_reject_reason
+prev_suite_type
+prev_client_type
+prev_goods_category
+prev_portfolio
+prev_product_type
+prev_channel_type
+prev_seller_industry
+prev_yield_group
+prev_product_combination
+prev_insured_on_approval
+app_selected_correlation_stats
 linear_score_demo
 all
 ```
@@ -209,8 +238,8 @@ all
 The specific criterion zips include only the required encrypted artifacts:
 
 ```text
-application_numeric_summary: crypto_context.bin, eval_sum_keys.bin, column_manifest.csv, columns/*.bin referenced by the manifest
-all aggregate criteria: crypto_context.bin, eval_sum_keys.bin, eval_mult_keys.bin, filtered aggregate_manifest.csv, referenced vectors/*.bin
+app_dist_*: crypto_context.bin, eval_sum_keys.bin, filtered column_manifest.csv, referenced columns/*.bin
+category/target/previous/correlation criteria: crypto_context.bin, eval_sum_keys.bin, eval_mult_keys.bin, filtered aggregate_manifest.csv, referenced vectors/*.bin
 linear_score_demo: crypto_context.bin, score_manifest.csv, referenced score_features/*.bin
 ```
 
@@ -246,7 +275,7 @@ It also prints the matching `decrypt_ckks_results` command.
 
 ## Server Jobs
 
-Application numeric summary:
+Notebook 5.1 `AMT_CREDIT` distribution:
 
 ```bash
 ./build/server_numeric_summary \
@@ -254,10 +283,10 @@ Application numeric summary:
   --eval-sum-keys encrypted_payloads/home_credit_basic/eval_sum_keys.bin \
   --manifest encrypted_payloads/home_credit_basic/column_manifest.csv \
   --input-dir encrypted_payloads/home_credit_basic/columns \
-  --output-dir server_returns/application_numeric_summary
+  --output-dir server_returns/app_dist_amt_credit
 ```
 
-Application category default-rate EDA:
+Notebook 5.14.1 income type by target:
 
 ```bash
 ./build/server_home_credit_aggregate \
@@ -266,11 +295,11 @@ Application category default-rate EDA:
   --eval-mult-keys encrypted_payloads/home_credit_basic/eval_mult_keys.bin \
   --manifest encrypted_payloads/home_credit_basic/aggregate_manifest.csv \
   --input-dir encrypted_payloads/home_credit_basic/vectors \
-  --output-dir server_returns/application_default_rates \
+  --output-dir server_returns/app_target_by_income_type \
   --analysis-filter application_default_rates
 ```
 
-Application numeric histograms:
+Notebook 5.15.4 previous contract status:
 
 ```bash
 ./build/server_home_credit_aggregate \
@@ -279,8 +308,8 @@ Application numeric histograms:
   --eval-mult-keys encrypted_payloads/home_credit_basic/eval_mult_keys.bin \
   --manifest encrypted_payloads/home_credit_basic/aggregate_manifest.csv \
   --input-dir encrypted_payloads/home_credit_basic/vectors \
-  --output-dir server_returns/application_numeric_histograms \
-  --analysis-filter application_numeric_histograms
+  --output-dir server_returns/prev_contract_status \
+  --analysis-filter previous_application_category_counts
 ```
 
 Selected correlation stats:
@@ -292,7 +321,7 @@ Selected correlation stats:
   --eval-mult-keys encrypted_payloads/home_credit_basic/eval_mult_keys.bin \
   --manifest encrypted_payloads/home_credit_basic/aggregate_manifest.csv \
   --input-dir encrypted_payloads/home_credit_basic/vectors \
-  --output-dir server_returns/selected_correlation_stats \
+  --output-dir server_returns/app_selected_correlation_stats \
   --analysis-filter selected_correlation_stats
 ```
 
@@ -308,15 +337,15 @@ Linear score demo:
 
 ## Client Decryption
 
-Decrypt application numeric summary:
+Decrypt notebook 5.1 `AMT_CREDIT` distribution:
 
 ```bash
 ./build/decrypt_ckks_results \
   --context encrypted_payloads/home_credit_basic/crypto_context.bin \
   --secret-key keys/home_credit_basic/secret_key.bin \
-  --manifest server_returns/application_numeric_summary/summary_manifest.csv \
-  --input-dir server_returns/application_numeric_summary \
-  --output-csv server_returns/decrypted_application_numeric_summary.csv \
+  --manifest server_returns/app_dist_amt_credit/summary_manifest.csv \
+  --input-dir server_returns/app_dist_amt_credit \
+  --output-csv server_returns/decrypted_app_dist_amt_credit.csv \
   --manifest-type numeric
 ```
 
@@ -326,9 +355,9 @@ Decrypt aggregate EDA criterion:
 ./build/decrypt_ckks_results \
   --context encrypted_payloads/home_credit_basic/crypto_context.bin \
   --secret-key keys/home_credit_basic/secret_key.bin \
-  --manifest server_returns/application_default_rates/aggregate_summary_manifest.csv \
-  --input-dir server_returns/application_default_rates \
-  --output-csv server_returns/decrypted_application_default_rates.csv \
+  --manifest server_returns/app_target_by_income_type/aggregate_summary_manifest.csv \
+  --input-dir server_returns/app_target_by_income_type \
+  --output-csv server_returns/decrypted_app_target_by_income_type.csv \
   --manifest-type aggregate
 ```
 
@@ -365,14 +394,43 @@ The web receiver now lists runnable EDA criteria:
 
 ```text
 home_credit_missing_data
-home_credit_target_balance
-home_credit_application_numeric_summary
-home_credit_application_category_counts
-home_credit_application_default_rates
-home_credit_application_numeric_histograms
-home_credit_previous_application_category_counts
-home_credit_previous_application_target_rates
-home_credit_selected_correlation_stats
+home_credit_app_dist_amt_credit
+home_credit_app_dist_amt_income_total
+home_credit_app_dist_amt_goods_price
+home_credit_app_suite_type
+home_credit_app_target_balance
+home_credit_app_loan_type
+home_credit_app_own_car_realty
+home_credit_app_income_type
+home_credit_app_family_status
+home_credit_app_occupation_type
+home_credit_app_education_type
+home_credit_app_housing_type
+home_credit_app_organization_type
+home_credit_app_target_by_income_type
+home_credit_app_target_by_family_status
+home_credit_app_target_by_occupation_type
+home_credit_app_target_by_education_type
+home_credit_app_target_by_housing_type
+home_credit_app_target_by_organization_type
+home_credit_app_target_by_suite_type
+home_credit_prev_contract_type
+home_credit_prev_weekday_process_start
+home_credit_prev_cash_loan_purpose
+home_credit_prev_contract_status
+home_credit_prev_payment_type
+home_credit_prev_reject_reason
+home_credit_prev_suite_type
+home_credit_prev_client_type
+home_credit_prev_goods_category
+home_credit_prev_portfolio
+home_credit_prev_product_type
+home_credit_prev_channel_type
+home_credit_prev_seller_industry
+home_credit_prev_yield_group
+home_credit_prev_product_combination
+home_credit_prev_insured_on_approval
+home_credit_app_selected_correlation_stats
 home_credit_linear_score_demo
 ```
 

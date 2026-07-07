@@ -6,26 +6,43 @@
 flowchart LR
   app["application_train.csv\nTARGET lookup"]
   prev["previous_application.csv"]
-  join["Client-side join by SK_ID_CURR\nfor target-conditioned previous EDA"]
-  prev_masks["Previous category masks"]
-  corr["Selected numeric pair vectors\nvalid mask, x, y"]
-  enc["CKKS encrypt"]
-  server["server_home_credit_aggregate\nmasked sums"]
-  result["Encrypted aggregate tables"]
-  decrypt["Client decrypt"]
-  report["previous category counts\nprevious target rates\nselected correlation stats"]
+  prep["Client prep\none-hot each previous column\nselect correlation pairs"]
+  prevjobs["5.15.1-5.15.16\n16 previous_application jobs"]
+  corr["6 Pearson correlation support\nselected pairwise sums"]
+  server["server_home_credit_aggregate\nencrypted sums"]
+  report["Client-decrypted tables"]
 
-  app --> join
-  prev --> join --> prev_masks
-  app --> corr
-  prev_masks --> enc
-  corr --> enc
-  enc --> server --> result --> decrypt --> report
+  app --> prep
+  prev --> prep
+  prep --> prevjobs --> server
+  prep --> corr --> server
+  server --> report
+```
+
+Previous-application jobs:
+
+```text
+prev_contract_type
+prev_weekday_process_start
+prev_cash_loan_purpose
+prev_contract_status
+prev_payment_type
+prev_reject_reason
+prev_suite_type
+prev_client_type
+prev_goods_category
+prev_portfolio
+prev_product_type
+prev_channel_type
+prev_seller_industry
+prev_yield_group
+prev_product_combination
+prev_insured_on_approval
 ```
 
 Important boundary:
 
 ```text
 The server does not do encrypted relational joins. The client joins and masks
-before encryption, then the server only computes encrypted sums.
+before encryption when target-conditioned previous EDA is needed.
 ```

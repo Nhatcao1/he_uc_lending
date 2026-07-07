@@ -13,17 +13,199 @@ import zipfile
 from pathlib import Path
 
 
+NUMERIC_WORKLOADS = {
+    "app_dist_amt_credit": {
+        "job_type": "home_credit_app_dist_amt_credit",
+        "column": "AMT_CREDIT",
+    },
+    "app_dist_amt_income_total": {
+        "job_type": "home_credit_app_dist_amt_income_total",
+        "column": "AMT_INCOME_TOTAL",
+    },
+    "app_dist_amt_goods_price": {
+        "job_type": "home_credit_app_dist_amt_goods_price",
+        "column": "AMT_GOODS_PRICE",
+    },
+    "application_numeric_summary": {
+        "job_type": "home_credit_application_numeric_summary",
+        "column": None,
+    },
+}
+
+AGGREGATE_WORKLOADS = {
+    "missing_data": {
+        "job_type": "home_credit_missing_data",
+        "analysis": "missing_data",
+    },
+    "app_target_balance": {
+        "job_type": "home_credit_app_target_balance",
+        "analysis": "target_balance",
+    },
+    "app_suite_type": {
+        "job_type": "home_credit_app_suite_type",
+        "analysis": "application_category_counts",
+        "groups": ("NAME_TYPE_SUITE",),
+    },
+    "app_loan_type": {
+        "job_type": "home_credit_app_loan_type",
+        "analysis": "application_category_counts",
+        "groups": ("NAME_CONTRACT_TYPE",),
+    },
+    "app_own_car_realty": {
+        "job_type": "home_credit_app_own_car_realty",
+        "analysis": "application_category_counts",
+        "groups": ("FLAG_OWN_CAR", "FLAG_OWN_REALTY"),
+    },
+    "app_income_type": {
+        "job_type": "home_credit_app_income_type",
+        "analysis": "application_category_counts",
+        "groups": ("NAME_INCOME_TYPE",),
+    },
+    "app_family_status": {
+        "job_type": "home_credit_app_family_status",
+        "analysis": "application_category_counts",
+        "groups": ("NAME_FAMILY_STATUS",),
+    },
+    "app_occupation_type": {
+        "job_type": "home_credit_app_occupation_type",
+        "analysis": "application_category_counts",
+        "groups": ("OCCUPATION_TYPE",),
+    },
+    "app_education_type": {
+        "job_type": "home_credit_app_education_type",
+        "analysis": "application_category_counts",
+        "groups": ("NAME_EDUCATION_TYPE",),
+    },
+    "app_housing_type": {
+        "job_type": "home_credit_app_housing_type",
+        "analysis": "application_category_counts",
+        "groups": ("NAME_HOUSING_TYPE",),
+    },
+    "app_organization_type": {
+        "job_type": "home_credit_app_organization_type",
+        "analysis": "application_category_counts",
+        "groups": ("ORGANIZATION_TYPE",),
+    },
+    "app_target_by_income_type": {
+        "job_type": "home_credit_app_target_by_income_type",
+        "analysis": "application_default_rates",
+        "groups": ("NAME_INCOME_TYPE",),
+    },
+    "app_target_by_family_status": {
+        "job_type": "home_credit_app_target_by_family_status",
+        "analysis": "application_default_rates",
+        "groups": ("NAME_FAMILY_STATUS",),
+    },
+    "app_target_by_occupation_type": {
+        "job_type": "home_credit_app_target_by_occupation_type",
+        "analysis": "application_default_rates",
+        "groups": ("OCCUPATION_TYPE",),
+    },
+    "app_target_by_education_type": {
+        "job_type": "home_credit_app_target_by_education_type",
+        "analysis": "application_default_rates",
+        "groups": ("NAME_EDUCATION_TYPE",),
+    },
+    "app_target_by_housing_type": {
+        "job_type": "home_credit_app_target_by_housing_type",
+        "analysis": "application_default_rates",
+        "groups": ("NAME_HOUSING_TYPE",),
+    },
+    "app_target_by_organization_type": {
+        "job_type": "home_credit_app_target_by_organization_type",
+        "analysis": "application_default_rates",
+        "groups": ("ORGANIZATION_TYPE",),
+    },
+    "app_target_by_suite_type": {
+        "job_type": "home_credit_app_target_by_suite_type",
+        "analysis": "application_default_rates",
+        "groups": ("NAME_TYPE_SUITE",),
+    },
+    "app_selected_correlation_stats": {
+        "job_type": "home_credit_app_selected_correlation_stats",
+        "analysis": "selected_correlation_stats",
+    },
+    "application_numeric_histograms": {
+        "job_type": "home_credit_application_numeric_histograms",
+        "analysis": "application_numeric_histograms",
+    },
+    "previous_application_target_rates": {
+        "job_type": "home_credit_previous_application_target_rates",
+        "analysis": "previous_application_target_rates",
+    },
+    "target_balance": {
+        "job_type": "home_credit_target_balance",
+        "analysis": "target_balance",
+    },
+    "application_category_counts": {
+        "job_type": "home_credit_application_category_counts",
+        "analysis": "application_category_counts",
+    },
+    "application_default_rates": {
+        "job_type": "home_credit_application_default_rates",
+        "analysis": "application_default_rates",
+    },
+    "previous_application_category_counts": {
+        "job_type": "home_credit_previous_application_category_counts",
+        "analysis": "previous_application_category_counts",
+    },
+    "selected_correlation_stats": {
+        "job_type": "home_credit_selected_correlation_stats",
+        "analysis": "selected_correlation_stats",
+    },
+}
+
+PREVIOUS_COLUMNS = {
+    "prev_contract_type": "NAME_CONTRACT_TYPE",
+    "prev_weekday_process_start": "WEEKDAY_APPR_PROCESS_START",
+    "prev_cash_loan_purpose": "NAME_CASH_LOAN_PURPOSE",
+    "prev_contract_status": "NAME_CONTRACT_STATUS",
+    "prev_payment_type": "NAME_PAYMENT_TYPE",
+    "prev_reject_reason": "CODE_REJECT_REASON",
+    "prev_suite_type": "NAME_TYPE_SUITE",
+    "prev_client_type": "NAME_CLIENT_TYPE",
+    "prev_goods_category": "NAME_GOODS_CATEGORY",
+    "prev_portfolio": "NAME_PORTFOLIO",
+    "prev_product_type": "NAME_PRODUCT_TYPE",
+    "prev_channel_type": "CHANNEL_TYPE",
+    "prev_seller_industry": "NAME_SELLER_INDUSTRY",
+    "prev_yield_group": "NAME_YIELD_GROUP",
+    "prev_product_combination": "PRODUCT_COMBINATION",
+    "prev_insured_on_approval": "NFLAG_INSURED_ON_APPROVAL",
+}
+
+for workload, column in PREVIOUS_COLUMNS.items():
+    AGGREGATE_WORKLOADS[workload] = {
+        "job_type": f"home_credit_{workload}",
+        "analysis": "previous_application_category_counts",
+        "groups": (column,),
+    }
+
 CANONICAL_WORKLOADS = (
     "all",
     "missing_data",
-    "target_balance",
-    "application_numeric_summary",
-    "application_category_counts",
-    "application_default_rates",
-    "application_numeric_histograms",
-    "previous_application_category_counts",
-    "previous_application_target_rates",
-    "selected_correlation_stats",
+    "app_dist_amt_credit",
+    "app_dist_amt_income_total",
+    "app_dist_amt_goods_price",
+    "app_suite_type",
+    "app_target_balance",
+    "app_loan_type",
+    "app_own_car_realty",
+    "app_income_type",
+    "app_family_status",
+    "app_occupation_type",
+    "app_education_type",
+    "app_housing_type",
+    "app_organization_type",
+    "app_target_by_income_type",
+    "app_target_by_family_status",
+    "app_target_by_occupation_type",
+    "app_target_by_education_type",
+    "app_target_by_housing_type",
+    "app_target_by_organization_type",
+    "app_target_by_suite_type",
+    *PREVIOUS_COLUMNS.keys(),
+    "app_selected_correlation_stats",
     "linear_score_demo",
 )
 LEGACY_WORKLOAD_ALIASES = {
@@ -33,34 +215,31 @@ LEGACY_WORKLOAD_ALIASES = {
     "domain_ratio_eda": "application_numeric_histograms",
     "linear_score": "linear_score_demo",
 }
-WORKLOADS = CANONICAL_WORKLOADS + tuple(LEGACY_WORKLOAD_ALIASES)
-WORKLOAD_TO_JOB_TYPE = {
-    "all": "auto",
-    "missing_data": "home_credit_missing_data",
-    "target_balance": "home_credit_target_balance",
-    "application_numeric_summary": "home_credit_application_numeric_summary",
-    "application_category_counts": "home_credit_application_category_counts",
-    "application_default_rates": "home_credit_application_default_rates",
-    "application_numeric_histograms": "home_credit_application_numeric_histograms",
-    "previous_application_category_counts": "home_credit_previous_application_category_counts",
-    "previous_application_target_rates": "home_credit_previous_application_target_rates",
-    "selected_correlation_stats": "home_credit_selected_correlation_stats",
-    "linear_score_demo": "home_credit_linear_score_demo",
-}
+WORKLOADS = CANONICAL_WORKLOADS + (
+    "application_numeric_summary",
+    "application_numeric_histograms",
+    "previous_application_target_rates",
+    "target_balance",
+    "application_category_counts",
+    "application_default_rates",
+    "previous_application_category_counts",
+    "selected_correlation_stats",
+) + tuple(LEGACY_WORKLOAD_ALIASES)
+WORKLOAD_TO_JOB_TYPE = {"all": "auto", "linear_score_demo": "home_credit_linear_score_demo"}
+WORKLOAD_TO_JOB_TYPE.update({key: str(value["job_type"]) for key, value in NUMERIC_WORKLOADS.items()})
+WORKLOAD_TO_JOB_TYPE.update({key: str(value["job_type"]) for key, value in AGGREGATE_WORKLOADS.items()})
 WORKLOAD_FILE_STEMS = {
     workload: f"home_credit_{workload}" for workload in CANONICAL_WORKLOADS if workload != "all"
 }
+WORKLOAD_FILE_STEMS["application_numeric_summary"] = "home_credit_application_numeric_summary"
+WORKLOAD_FILE_STEMS["application_numeric_histograms"] = "home_credit_application_numeric_histograms"
+WORKLOAD_FILE_STEMS["previous_application_target_rates"] = "home_credit_previous_application_target_rates"
+WORKLOAD_FILE_STEMS["target_balance"] = "home_credit_target_balance"
+WORKLOAD_FILE_STEMS["application_category_counts"] = "home_credit_application_category_counts"
+WORKLOAD_FILE_STEMS["application_default_rates"] = "home_credit_application_default_rates"
+WORKLOAD_FILE_STEMS["previous_application_category_counts"] = "home_credit_previous_application_category_counts"
+WORKLOAD_FILE_STEMS["selected_correlation_stats"] = "home_credit_selected_correlation_stats"
 WORKLOAD_FILE_STEMS["all"] = "home_credit_all"
-AGGREGATE_ANALYSIS = {
-    "missing_data": "missing_data",
-    "target_balance": "target_balance",
-    "application_category_counts": "application_category_counts",
-    "application_default_rates": "application_default_rates",
-    "application_numeric_histograms": "application_numeric_histograms",
-    "previous_application_category_counts": "previous_application_category_counts",
-    "previous_application_target_rates": "previous_application_target_rates",
-    "selected_correlation_stats": "selected_correlation_stats",
-}
 REQUIRED_TOP_LEVEL = (
     "crypto_context.bin",
 )
@@ -229,13 +408,19 @@ def collect_all_files(encrypted_dir: Path, include_public_key: bool) -> tuple[li
     return safe_files, {}
 
 
-def collect_numeric_summary_files(encrypted_dir: Path) -> tuple[list[Path], dict[str, str]]:
+def collect_numeric_summary_files(encrypted_dir: Path, column: str | None = None) -> tuple[list[Path], dict[str, str]]:
     files: list[Path] = []
     generated: dict[str, str] = {}
     add_required_file(files, encrypted_dir, "crypto_context.bin")
     add_required_file(files, encrypted_dir, "eval_sum_keys.bin")
-    add_required_file(files, encrypted_dir, "column_manifest.csv")
     fieldnames, rows = read_csv_rows(encrypted_dir / "column_manifest.csv")
+    if column is not None:
+        rows = [row for row in rows if (row.get("column") or "").strip() == column]
+        if not rows:
+            raise ValueError(f"column_manifest.csv has no rows for column={column}")
+        generated["column_manifest.csv"] = write_manifest_text(fieldnames, rows)
+    else:
+        add_required_file(files, encrypted_dir, "column_manifest.csv")
     if "ciphertext" not in fieldnames:
         raise ValueError("column_manifest.csv must contain a ciphertext column")
     for rel in sorted(referenced_paths(rows, ("ciphertext",))):
@@ -246,7 +431,9 @@ def collect_numeric_summary_files(encrypted_dir: Path) -> tuple[list[Path], dict
 
 
 def collect_aggregate_files(encrypted_dir: Path, workload: str) -> tuple[list[Path], dict[str, str]]:
-    analysis = AGGREGATE_ANALYSIS[workload]
+    workload_cfg = AGGREGATE_WORKLOADS[workload]
+    analysis = str(workload_cfg["analysis"])
+    groups = set(workload_cfg.get("groups") or [])
     files: list[Path] = []
     generated: dict[str, str] = {}
     add_required_file(files, encrypted_dir, "crypto_context.bin")
@@ -256,9 +443,15 @@ def collect_aggregate_files(encrypted_dir: Path, workload: str) -> tuple[list[Pa
     fieldnames, rows = read_csv_rows(encrypted_dir / "aggregate_manifest.csv")
     if "analysis" not in fieldnames:
         raise ValueError("aggregate_manifest.csv must contain an analysis column")
-    filtered_rows = [row for row in rows if (row.get("analysis") or "").strip() == analysis]
+    filtered_rows = [
+        row
+        for row in rows
+        if (row.get("analysis") or "").strip() == analysis
+        and (not groups or (row.get("group") or "").strip() in groups)
+    ]
     if not filtered_rows:
-        raise ValueError(f"aggregate_manifest.csv has no rows for analysis={analysis}")
+        group_text = f" groups={sorted(groups)}" if groups else ""
+        raise ValueError(f"aggregate_manifest.csv has no rows for analysis={analysis}{group_text}")
     generated["aggregate_manifest.csv"] = write_manifest_text(fieldnames, filtered_rows)
 
     for rel in sorted(referenced_paths(filtered_rows, ("mask_ciphertext", "value_ciphertext"))):
@@ -286,9 +479,9 @@ def collect_linear_score_files(encrypted_dir: Path) -> tuple[list[Path], dict[st
 def collect_files(encrypted_dir: Path, workload: str, include_public_key: bool) -> tuple[list[Path], dict[str, str]]:
     if workload == "all":
         return collect_all_files(encrypted_dir, include_public_key)
-    if workload == "application_numeric_summary":
-        files, generated = collect_numeric_summary_files(encrypted_dir)
-    elif workload in AGGREGATE_ANALYSIS:
+    if workload in NUMERIC_WORKLOADS:
+        files, generated = collect_numeric_summary_files(encrypted_dir, NUMERIC_WORKLOADS[workload]["column"])
+    elif workload in AGGREGATE_WORKLOADS:
         files, generated = collect_aggregate_files(encrypted_dir, workload)
     elif workload == "linear_score_demo":
         files, generated = collect_linear_score_files(encrypted_dir)

@@ -28,6 +28,7 @@ from .security import normalize_upload_path
 from .settings import Settings, get_settings
 from .storage import (
     create_job_record,
+    delete_job,
     directory_size,
     get_job,
     init_db,
@@ -216,6 +217,10 @@ def render_page(title: str, active: str, body: str) -> HTMLResponse:
       background: #fbfcfe;
       font-weight: 750;
     }
+    .inline-form {
+      display: inline;
+      margin: 0;
+    }
     code {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: .95em;
@@ -374,13 +379,18 @@ def job_table(jobs: list[dict[str, Any]]) -> str:
   <td>{esc(job.get('runtime_duration') or '')}</td>
   <td>{esc(job.get('total_elapsed_duration') or '')}</td>
   <td>{len(job.get('output_files') or [])}</td>
+  <td>
+    <form class="inline-form" method="post" action="/jobs/{esc(job['job_id'])}/delete" onsubmit="return confirm('Delete this job and stored artifacts?');">
+      <button type="submit">Delete</button>
+    </form>
+  </td>
 </tr>"""
         )
     if not rows:
-        rows.append('<tr><td colspan="8" class="muted">No jobs yet.</td></tr>')
+        rows.append('<tr><td colspan="9" class="muted">No jobs yet.</td></tr>')
     return (
         "<table><thead><tr><th>Job</th><th>EDA criterion</th><th>Status</th>"
-        "<th>Created</th><th>Finished</th><th>HE runtime</th><th>Total elapsed</th><th>Outputs</th></tr></thead><tbody>"
+        "<th>Created</th><th>Finished</th><th>HE runtime</th><th>Total elapsed</th><th>Outputs</th><th>Actions</th></tr></thead><tbody>"
         + "\n".join(rows)
         + "</tbody></table>"
     )
@@ -670,6 +680,18 @@ setInterval(refreshDetail, 3000);
     return render_page(f"Job {job_id}", "jobs", body)
 
 
+@app.post("/jobs/{job_id}/delete")
+def delete_job_page(job_id: str, request: Request) -> RedirectResponse:
+    cfg = settings()
+    require_auth(request, cfg)
+    init_db(cfg)
+    try:
+        delete_job(cfg, job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return RedirectResponse("/jobs", status_code=303)
+
+
 @app.get("/results", response_class=HTMLResponse)
 def results_page(request: Request) -> HTMLResponse:
     cfg = settings()
@@ -947,6 +969,18 @@ def api_download_file(job_id: str, path: str, request: Request) -> FileResponse:
     if not target.is_file():
         raise HTTPException(status_code=404, detail="output file not found")
     return FileResponse(target, filename=target.name)
+
+
+@app.delete("/api/jobs/{job_id}")
+def api_delete_job(job_id: str, request: Request) -> dict[str, Any]:
+    cfg = settings()
+    require_auth(request, cfg)
+    init_db(cfg)
+    try:
+        delete_job(cfg, job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"deleted": True, "job_id": job_id}
 
 
 @app.get("/api/results")

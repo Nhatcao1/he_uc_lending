@@ -6,6 +6,42 @@ from copy import deepcopy
 from typing import Any
 
 
+def numeric_job(
+    *,
+    label: str,
+    stage: str,
+    description: str,
+    output_dir: str,
+    notebook_cells: str,
+    client_requirements: list[str],
+) -> dict[str, Any]:
+    return {
+        "label": label,
+        "family": "Home Credit Complete EDA",
+        "stage": stage,
+        "scheme": "CKKS",
+        "binary": "server_numeric_summary",
+        "description": description,
+        "notebook_cells": notebook_cells,
+        "he_operation": "EvalSum(encrypted_numeric_vector)",
+        "required": ["crypto_context.bin", "eval_sum_keys.bin", "column_manifest.csv", "columns/"],
+        "client_requirements": client_requirements,
+        "server_returns": [f"{output_dir}/summary_manifest.csv", f"{output_dir}/sums/*.bin"],
+        "command": [
+            "--context",
+            "crypto_context.bin",
+            "--eval-sum-keys",
+            "eval_sum_keys.bin",
+            "--manifest",
+            "column_manifest.csv",
+            "--input-dir",
+            "columns",
+            "--output-dir",
+            f"output/{output_dir}",
+        ],
+    }
+
+
 def aggregate_job(
     *,
     label: str,
@@ -49,28 +85,84 @@ def aggregate_job(
     }
 
 
+def aggregate_returns(output_dir: str) -> list[str]:
+    return [f"{output_dir}/aggregate_summary_manifest.csv", f"{output_dir}/aggregates/*.bin"]
+
+
+COMMON_CATEGORY_CLIENT_REQS = [
+    "Client normalizes strings, applies __MISSING__, and uses top-K plus __OTHER__ where needed.",
+    "Client one-hot encodes category labels into encrypted 0/1 masks.",
+    "Server sees chosen label metadata and encrypted masks, not raw category values.",
+]
+
+COMMON_TARGET_CLIENT_REQS = [
+    "Client prepares category masks and the TARGET default mask before encryption.",
+    "Server returns encrypted category counts and encrypted default counts.",
+    "Default rates are computed only after the trusted client decrypts the count table.",
+]
+
+COMMON_PREVIOUS_CLIENT_REQS = [
+    "Client reads previous_application.csv locally and one-hot encodes the selected column.",
+    "High-cardinality columns use top-K plus __OTHER__ before encryption.",
+    "Server receives encrypted masks only; raw previous_application rows remain client-side.",
+]
+
+
 JOB_TYPES: dict[str, dict[str, Any]] = {
     "home_credit_missing_data": aggregate_job(
-        label="Missing Data Counts",
+        label="4.x Missing Data Checks",
         stage="Notebook 4.x missing-value checks",
-        description="Encrypted missing-count table for selected Home Credit application columns.",
+        description="Encrypted missing-count table for selected application_train columns. More source tables require client prep extensions.",
         analysis="missing_data",
         output_dir="missing_data",
         notebook_cells="29, 31, 33, 35, 37, 39, 41",
         he_operation="sum(is_null_column_mask)",
         client_requirements=[
             "Client maps raw null/blank/nan values to one encrypted 0/1 missing mask per selected column.",
-            "Column choice and null policy are plaintext metadata; raw cell values stay client-side.",
+            "Current code covers selected application_train columns; the notebook's other CSV checks are documented as prep extensions.",
             "Server only sums encrypted missing masks; percentages are computed after client decrypts counts.",
         ],
-        server_returns=["missing_data/aggregate_summary_manifest.csv", "missing_data/aggregates/*.bin"],
+        server_returns=aggregate_returns("missing_data"),
     ),
-    "home_credit_target_balance": aggregate_job(
-        label="Target Balance",
-        stage="Notebook 5.5 target imbalance",
-        description="Encrypted default/repaid count support for the Home Credit TARGET column.",
+    "home_credit_app_dist_amt_credit": numeric_job(
+        label="5.1 Distribution of AMT_CREDIT",
+        stage="Notebook 5.1",
+        description="Encrypted sum support for the AMT_CREDIT distribution table.",
+        output_dir="app_dist_amt_credit",
+        notebook_cells="44",
+        client_requirements=[
+            "Client cleans AMT_CREDIT, encrypts the numeric vector, and records row/valid-count metadata.",
+            "Server computes encrypted sum; mean and chart-ready table are client-side after decryption.",
+        ],
+    ),
+    "home_credit_app_dist_amt_income_total": numeric_job(
+        label="5.2 Distribution of AMT_INCOME_TOTAL",
+        stage="Notebook 5.2",
+        description="Encrypted sum support for the AMT_INCOME_TOTAL distribution table.",
+        output_dir="app_dist_amt_income_total",
+        notebook_cells="46",
+        client_requirements=[
+            "Client cleans AMT_INCOME_TOTAL, encrypts the numeric vector, and records row/valid-count metadata.",
+            "Server computes encrypted sum; mean and chart-ready table are client-side after decryption.",
+        ],
+    ),
+    "home_credit_app_dist_amt_goods_price": numeric_job(
+        label="5.3 Distribution of AMT_GOODS_PRICE",
+        stage="Notebook 5.3",
+        description="Encrypted sum support for the AMT_GOODS_PRICE distribution table.",
+        output_dir="app_dist_amt_goods_price",
+        notebook_cells="48",
+        client_requirements=[
+            "Client cleans AMT_GOODS_PRICE, encrypts the numeric vector, and records row/valid-count metadata.",
+            "Server computes encrypted sum; mean and chart-ready table are client-side after decryption.",
+        ],
+    ),
+    "home_credit_app_target_balance": aggregate_job(
+        label="5.5 Target Balance",
+        stage="Notebook 5.5",
+        description="Encrypted count support for repaid/defaulted loan class balance.",
         analysis="target_balance",
-        output_dir="target_balance",
+        output_dir="app_target_balance",
         notebook_cells="52, 53",
         he_operation="sum(target_default_mask), sum(target_repaid_mask), sum(row_mask)",
         client_requirements=[
@@ -78,133 +170,14 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
             "Rows with missing TARGET should be excluded or represented by a documented target_missing mask.",
             "Server returns encrypted counts only; class percentages are client-side after decryption.",
         ],
-        server_returns=["target_balance/aggregate_summary_manifest.csv", "target_balance/aggregates/*.bin"],
+        server_returns=aggregate_returns("app_target_balance"),
     ),
-    "home_credit_application_numeric_summary": {
-        "label": "Application Numeric Summary",
-        "family": "Home Credit Complete EDA",
-        "stage": "Notebook 5.1-5.3 distributions",
-        "scheme": "CKKS",
-        "binary": "server_numeric_summary",
-        "description": "Packed encrypted sums for selected application_train numeric columns.",
-        "notebook_cells": "44, 46, 48",
-        "he_operation": "EvalSum(numeric_vector)",
-        "required": ["crypto_context.bin", "eval_sum_keys.bin", "column_manifest.csv", "columns/"],
-        "client_requirements": [
-            "Client cleans or imputes numeric values before encryption and records missing policy separately.",
-            "Selected columns include AMT_CREDIT, AMT_INCOME_TOTAL, AMT_ANNUITY, AMT_GOODS_PRICE, EXT_SOURCE_*, DAYS_BIRTH, and DAYS_EMPLOYED by default.",
-            "Server returns encrypted sums; means need decrypted sum plus row/valid-count metadata on the client.",
-        ],
-        "server_returns": ["application_numeric_summary/summary_manifest.csv", "application_numeric_summary/sums/*.bin"],
-        "command": [
-            "--context",
-            "crypto_context.bin",
-            "--eval-sum-keys",
-            "eval_sum_keys.bin",
-            "--manifest",
-            "column_manifest.csv",
-            "--input-dir",
-            "columns",
-            "--output-dir",
-            "output/application_numeric_summary",
-        ],
-    },
-    "home_credit_application_category_counts": aggregate_job(
-        label="Application Category Counts",
-        stage="Notebook 5.4-5.13 categorical distributions",
-        description="Encrypted value-count tables for application_train categorical columns.",
-        analysis="application_category_counts",
-        output_dir="application_category_counts",
-        notebook_cells="50, 56, 59, 61, 64, 67, 70, 73, 76",
-        he_operation="sum(one_hot_category_mask)",
-        client_requirements=[
-            "Client normalizes strings, applies __MISSING__, and uses top-K plus __OTHER__ where needed.",
-            "Client one-hot encodes category labels into encrypted masks.",
-            "Server never sees raw category strings beyond chosen label metadata in the manifest.",
-        ],
-        server_returns=[
-            "application_category_counts/aggregate_summary_manifest.csv",
-            "application_category_counts/aggregates/*.bin",
-        ],
-    ),
-    "home_credit_application_default_rates": aggregate_job(
-        label="Application Category Default Rates",
-        stage="Notebook 5.14 category by target",
-        description="Encrypted category counts, default counts, and amount sums for application_train categories.",
-        analysis="application_default_rates",
-        output_dir="application_default_rates",
-        notebook_cells="80, 82, 84, 86, 88, 90, 92",
-        he_operation="sum(mask), sum(mask * TARGET), sum(mask * amount)",
-        client_requirements=[
-            "Client prepares category masks and the TARGET default mask before encryption.",
-            "Amount vectors such as AMT_CREDIT, AMT_INCOME_TOTAL, and AMT_ANNUITY can be encrypted for grouped sums.",
-            "Default rates and amount means are computed client-side after decrypting server aggregate outputs.",
-        ],
-        server_returns=[
-            "application_default_rates/aggregate_summary_manifest.csv",
-            "application_default_rates/aggregates/*.bin",
-        ],
-    ),
-    "home_credit_application_numeric_histograms": aggregate_job(
-        label="Application Numeric Histograms",
-        stage="Notebook 5.1-5.3 and EXT_SOURCE/age bucket EDA",
-        description="Encrypted bin-count and default-count tables for selected numeric, age, EXT_SOURCE, and domain-ratio buckets.",
-        analysis="application_numeric_histograms",
-        output_dir="application_numeric_histograms",
-        notebook_cells="44, 46, 48 plus age/EXT_SOURCE/domain-ratio bucket checks",
-        he_operation="sum(bin_mask), sum(bin_mask * TARGET)",
-        client_requirements=[
-            "Client chooses fixed bins, creates one encrypted 0/1 mask per bin, and records invalid/null buckets.",
-            "Server sums encrypted masks and target-conditioned masks; it does not discover bins or percentiles.",
-            "Final percentages and plots/tables are produced only after client decryption.",
-        ],
-        server_returns=[
-            "application_numeric_histograms/aggregate_summary_manifest.csv",
-            "application_numeric_histograms/aggregates/*.bin",
-        ],
-    ),
-    "home_credit_previous_application_category_counts": aggregate_job(
-        label="Previous Application Category Counts",
-        stage="Notebook 5.15 previous_application distributions",
-        description="Encrypted value-count tables for selected previous_application categorical columns.",
-        analysis="previous_application_category_counts",
-        output_dir="previous_application_category_counts",
-        notebook_cells="95, 98, 101, 104, 107, 110, 112, 115, 118, 120, 122, 124, 127, 129, 131, 133",
-        he_operation="sum(previous_table_category_mask)",
-        client_requirements=[
-            "Client reads previous_application.csv locally and one-hot encodes selected categorical columns.",
-            "High-cardinality columns should use top-K plus __OTHER__ before encryption.",
-            "Server receives encrypted masks only; raw previous_application rows remain client-side.",
-        ],
-        server_returns=[
-            "previous_application_category_counts/aggregate_summary_manifest.csv",
-            "previous_application_category_counts/aggregates/*.bin",
-        ],
-    ),
-    "home_credit_previous_application_target_rates": aggregate_job(
-        label="Previous Application Target-Conditioned EDA",
-        stage="Notebook 5.15 previous_application joined to current TARGET",
-        description="Encrypted previous_application category counts conditioned on current application TARGET after a client-side SK_ID_CURR join.",
-        analysis="previous_application_target_rates",
-        output_dir="previous_application_target_rates",
-        notebook_cells="95-133 with application_train TARGET join",
-        he_operation="sum(joined_mask), sum(joined_mask * current_TARGET)",
-        client_requirements=[
-            "Client joins previous_application to application_train TARGET by SK_ID_CURR before encryption.",
-            "Client creates masks only for previous rows with a known training TARGET.",
-            "Server performs encrypted sums; it does not do encrypted joins in this prototype.",
-        ],
-        server_returns=[
-            "previous_application_target_rates/aggregate_summary_manifest.csv",
-            "previous_application_target_rates/aggregates/*.bin",
-        ],
-    ),
-    "home_credit_selected_correlation_stats": aggregate_job(
-        label="Selected Numeric Correlation Stats",
-        stage="Notebook 6 correlation heatmap replacement",
+    "home_credit_app_selected_correlation_stats": aggregate_job(
+        label="6 Pearson Correlation Support",
+        stage="Notebook 6",
         description="Encrypted selected-pair sums needed for client-side Pearson correlation tables.",
         analysis="selected_correlation_stats",
-        output_dir="selected_correlation_stats",
+        output_dir="app_selected_correlation_stats",
         notebook_cells="135",
         he_operation="sum(valid), sum(valid*x), sum(valid*y), sum(x*y), sum(x*x), sum(y*y)",
         client_requirements=[
@@ -212,18 +185,15 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
             "Client fills missing numeric pair values with zero and separately masks valid pairs.",
             "Server computes encrypted pairwise sums; division, square root, and final correlation happen after decryption.",
         ],
-        server_returns=[
-            "selected_correlation_stats/aggregate_summary_manifest.csv",
-            "selected_correlation_stats/aggregates/*.bin",
-        ],
+        server_returns=aggregate_returns("app_selected_correlation_stats"),
     ),
     "home_credit_linear_score_demo": {
-        "label": "Linear Score Demo",
-        "family": "Home Credit Optional",
-        "stage": "Optional encrypted inference plumbing",
+        "label": "7 Linear Score Demo",
+        "family": "Home Credit Complete EDA",
+        "stage": "Notebook 7 replacement",
         "scheme": "CKKS",
         "binary": "server_linear_score",
-        "description": "Optional encrypted CKKS weighted-sum inference demo. This replaces RandomForest only for HE feasibility testing.",
+        "description": "Optional encrypted CKKS weighted-sum inference demo. This is a practical HE substitute for the notebook RandomForest section.",
         "notebook_cells": "139, 140 alternative, not RandomForest",
         "he_operation": "sum(feature_i * plaintext_weight_i) + bias",
         "required": ["crypto_context.bin", "score_manifest.csv", "score_features/"],
@@ -247,6 +217,185 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
 }
 
 
+APPLICATION_CATEGORY_JOBS = [
+    ("home_credit_app_suite_type", "5.4 Who Accompanied Client", "NAME_TYPE_SUITE", "50"),
+    ("home_credit_app_loan_type", "5.6 Types of Loan", "NAME_CONTRACT_TYPE", "56"),
+    ("home_credit_app_own_car_realty", "5.7 Own Car / Own Realty Flags", "FLAG_OWN_CAR, FLAG_OWN_REALTY", "59"),
+    ("home_credit_app_income_type", "5.8 Income Sources", "NAME_INCOME_TYPE", "61"),
+    ("home_credit_app_family_status", "5.9 Family Status", "NAME_FAMILY_STATUS", "64"),
+    ("home_credit_app_occupation_type", "5.10 Occupation", "OCCUPATION_TYPE", "67"),
+    ("home_credit_app_education_type", "5.11 Education", "NAME_EDUCATION_TYPE", "70"),
+    ("home_credit_app_housing_type", "5.12 Housing Type", "NAME_HOUSING_TYPE", "73"),
+    ("home_credit_app_organization_type", "5.13 Organization Type", "ORGANIZATION_TYPE", "76"),
+]
+
+for job_type, label, column_label, cells in APPLICATION_CATEGORY_JOBS:
+    output_dir = job_type.removeprefix("home_credit_")
+    JOB_TYPES[job_type] = aggregate_job(
+        label=label,
+        stage=label.split(" ", 1)[0],
+        description=f"Encrypted value-count table for {column_label}.",
+        analysis="application_category_counts",
+        output_dir=output_dir,
+        notebook_cells=cells,
+        he_operation="sum(one_hot_category_mask)",
+        client_requirements=COMMON_CATEGORY_CLIENT_REQS,
+        server_returns=aggregate_returns(output_dir),
+    )
+
+
+APPLICATION_TARGET_JOBS = [
+    ("home_credit_app_target_by_income_type", "5.14.1 Income Type by Target", "NAME_INCOME_TYPE", "80"),
+    ("home_credit_app_target_by_family_status", "5.14.2 Family Status by Target", "NAME_FAMILY_STATUS", "82"),
+    ("home_credit_app_target_by_occupation_type", "5.14.3 Occupation by Target", "OCCUPATION_TYPE", "84"),
+    ("home_credit_app_target_by_education_type", "5.14.4 Education by Target", "NAME_EDUCATION_TYPE", "86"),
+    ("home_credit_app_target_by_housing_type", "5.14.5 Housing Type by Target", "NAME_HOUSING_TYPE", "88"),
+    ("home_credit_app_target_by_organization_type", "5.14.6 Organization Type by Target", "ORGANIZATION_TYPE", "90"),
+    ("home_credit_app_target_by_suite_type", "5.14.7 Suite Type by Target", "NAME_TYPE_SUITE", "92"),
+]
+
+for job_type, label, column_label, cells in APPLICATION_TARGET_JOBS:
+    output_dir = job_type.removeprefix("home_credit_")
+    JOB_TYPES[job_type] = aggregate_job(
+        label=label,
+        stage=label.rsplit(" ", 2)[0],
+        description=f"Encrypted count and default-count table for {column_label}.",
+        analysis="application_default_rates",
+        output_dir=output_dir,
+        notebook_cells=cells,
+        he_operation="sum(mask), sum(mask * TARGET), optional sum(mask * amount)",
+        client_requirements=COMMON_TARGET_CLIENT_REQS,
+        server_returns=aggregate_returns(output_dir),
+    )
+
+
+PREVIOUS_APPLICATION_JOBS = [
+    ("home_credit_prev_contract_type", "5.15.1 Previous Contract Type", "NAME_CONTRACT_TYPE", "95"),
+    ("home_credit_prev_weekday_process_start", "5.15.2 Previous Application Weekday", "WEEKDAY_APPR_PROCESS_START", "98"),
+    ("home_credit_prev_cash_loan_purpose", "5.15.3 Previous Cash Loan Purpose", "NAME_CASH_LOAN_PURPOSE", "101"),
+    ("home_credit_prev_contract_status", "5.15.4 Previous Contract Status", "NAME_CONTRACT_STATUS", "104"),
+    ("home_credit_prev_payment_type", "5.15.5 Previous Payment Type", "NAME_PAYMENT_TYPE", "107"),
+    ("home_credit_prev_reject_reason", "5.15.6 Previous Reject Reason", "CODE_REJECT_REASON", "110"),
+    ("home_credit_prev_suite_type", "5.15.7 Previous Suite Type", "NAME_TYPE_SUITE", "112"),
+    ("home_credit_prev_client_type", "5.15.8 Previous Client Type", "NAME_CLIENT_TYPE", "115"),
+    ("home_credit_prev_goods_category", "5.15.9 Previous Goods Category", "NAME_GOODS_CATEGORY", "118"),
+    ("home_credit_prev_portfolio", "5.15.10 Previous Portfolio", "NAME_PORTFOLIO", "120"),
+    ("home_credit_prev_product_type", "5.15.11 Previous Product Type", "NAME_PRODUCT_TYPE", "122"),
+    ("home_credit_prev_channel_type", "5.15.12 Previous Channel Type", "CHANNEL_TYPE", "124"),
+    ("home_credit_prev_seller_industry", "5.15.13 Previous Seller Industry", "NAME_SELLER_INDUSTRY", "127"),
+    ("home_credit_prev_yield_group", "5.15.14 Previous Yield Group", "NAME_YIELD_GROUP", "129"),
+    ("home_credit_prev_product_combination", "5.15.15 Previous Product Combination", "PRODUCT_COMBINATION", "131"),
+    ("home_credit_prev_insured_on_approval", "5.15.16 Previous Insured on Approval", "NFLAG_INSURED_ON_APPROVAL", "133"),
+]
+
+for job_type, label, column_label, cells in PREVIOUS_APPLICATION_JOBS:
+    output_dir = job_type.removeprefix("home_credit_")
+    JOB_TYPES[job_type] = aggregate_job(
+        label=label,
+        stage="Notebook 5.15",
+        description=f"Encrypted previous_application value-count table for {column_label}.",
+        analysis="previous_application_category_counts",
+        output_dir=output_dir,
+        notebook_cells=cells,
+        he_operation="sum(previous_table_category_mask)",
+        client_requirements=COMMON_PREVIOUS_CLIENT_REQS,
+        server_returns=aggregate_returns(output_dir),
+    )
+
+
+HIDDEN_LEGACY_JOBS = {
+    "home_credit_target_balance": aggregate_job(
+        label="Legacy Target Balance",
+        stage="Legacy broad workload",
+        description="Legacy broad target-balance job.",
+        analysis="target_balance",
+        output_dir="target_balance",
+        notebook_cells="52, 53",
+        he_operation="sum(target_default_mask), sum(target_repaid_mask), sum(row_mask)",
+        client_requirements=[],
+        server_returns=aggregate_returns("target_balance"),
+    ),
+    "home_credit_application_numeric_summary": numeric_job(
+        label="Legacy Application Numeric Summary",
+        stage="Legacy broad workload",
+        description="Legacy broad numeric summary job.",
+        output_dir="application_numeric_summary",
+        notebook_cells="44, 46, 48",
+        client_requirements=[],
+    ),
+    "home_credit_application_category_counts": aggregate_job(
+        label="Legacy Application Category Counts",
+        stage="Legacy broad workload",
+        description="Legacy broad application category-count job.",
+        analysis="application_category_counts",
+        output_dir="application_category_counts",
+        notebook_cells="50, 56, 59, 61, 64, 67, 70, 73, 76",
+        he_operation="sum(one_hot_category_mask)",
+        client_requirements=[],
+        server_returns=aggregate_returns("application_category_counts"),
+    ),
+    "home_credit_application_default_rates": aggregate_job(
+        label="Legacy Application Category Default Rates",
+        stage="Legacy broad workload",
+        description="Legacy broad category-by-target job.",
+        analysis="application_default_rates",
+        output_dir="application_default_rates",
+        notebook_cells="80, 82, 84, 86, 88, 90, 92",
+        he_operation="sum(mask), sum(mask * TARGET), optional sum(mask * amount)",
+        client_requirements=[],
+        server_returns=aggregate_returns("application_default_rates"),
+    ),
+    "home_credit_application_numeric_histograms": aggregate_job(
+        label="Legacy Application Numeric Histograms",
+        stage="Legacy broad workload",
+        description="Legacy broad histogram/bin job.",
+        analysis="application_numeric_histograms",
+        output_dir="application_numeric_histograms",
+        notebook_cells="44, 46, 48",
+        he_operation="sum(bin_mask), sum(bin_mask * TARGET)",
+        client_requirements=[],
+        server_returns=aggregate_returns("application_numeric_histograms"),
+    ),
+    "home_credit_previous_application_category_counts": aggregate_job(
+        label="Legacy Previous Application Category Counts",
+        stage="Legacy broad workload",
+        description="Legacy broad previous_application category-count job.",
+        analysis="previous_application_category_counts",
+        output_dir="previous_application_category_counts",
+        notebook_cells="95-133",
+        he_operation="sum(previous_table_category_mask)",
+        client_requirements=[],
+        server_returns=aggregate_returns("previous_application_category_counts"),
+    ),
+    "home_credit_previous_application_target_rates": aggregate_job(
+        label="Legacy Previous Application Target Rates",
+        stage="Legacy broad workload",
+        description="Legacy broad previous_application target-conditioned job.",
+        analysis="previous_application_target_rates",
+        output_dir="previous_application_target_rates",
+        notebook_cells="95-133 with application_train TARGET join",
+        he_operation="sum(joined_mask), sum(joined_mask * TARGET)",
+        client_requirements=[],
+        server_returns=aggregate_returns("previous_application_target_rates"),
+    ),
+    "home_credit_selected_correlation_stats": aggregate_job(
+        label="Legacy Selected Correlation Stats",
+        stage="Legacy broad workload",
+        description="Legacy selected-pair correlation support job.",
+        analysis="selected_correlation_stats",
+        output_dir="selected_correlation_stats",
+        notebook_cells="135",
+        he_operation="sum(valid), sum(valid*x), sum(valid*y), sum(x*y), sum(x*x), sum(y*y)",
+        client_requirements=[],
+        server_returns=aggregate_returns("selected_correlation_stats"),
+    ),
+}
+
+for legacy_cfg in HIDDEN_LEGACY_JOBS.values():
+    legacy_cfg["hidden"] = True
+JOB_TYPES.update(HIDDEN_LEGACY_JOBS)
+
+
 LEGACY_JOB_ALIASES = {
     "home_credit_numeric_summary": "home_credit_application_numeric_summary",
     "home_credit_category_eda": "home_credit_application_default_rates",
@@ -256,6 +405,8 @@ LEGACY_JOB_ALIASES = {
 }
 
 for legacy_job_type, canonical in LEGACY_JOB_ALIASES.items():
+    if legacy_job_type in JOB_TYPES:
+        continue
     legacy_cfg = deepcopy(JOB_TYPES[canonical])
     legacy_cfg["label"] = f"Legacy alias for {JOB_TYPES[canonical]['label']}"
     legacy_cfg["hidden"] = True
@@ -265,18 +416,7 @@ JOB_TYPES["home_credit_numeric_summary"]["server_returns"] = [
     "numeric_summary/summary_manifest.csv",
     "numeric_summary/sums/*.bin",
 ]
-JOB_TYPES["home_credit_numeric_summary"]["command"] = [
-    "--context",
-    "crypto_context.bin",
-    "--eval-sum-keys",
-    "eval_sum_keys.bin",
-    "--manifest",
-    "column_manifest.csv",
-    "--input-dir",
-    "columns",
-    "--output-dir",
-    "output/numeric_summary",
-]
+JOB_TYPES["home_credit_numeric_summary"]["command"][-1] = "output/numeric_summary"
 JOB_TYPES["home_credit_category_eda"]["server_returns"] = [
     "category_eda/aggregate_summary_manifest.csv",
     "category_eda/aggregates/*.bin",
@@ -300,6 +440,52 @@ JOB_TYPES["home_credit_linear_score"]["server_returns"] = [
     "linear_score/scores/*.bin",
 ]
 JOB_TYPES["home_credit_linear_score"]["command"][-1] = "output/linear_score"
+
+NOTEBOOK_JOB_ORDER = [
+    "home_credit_missing_data",
+    "home_credit_app_dist_amt_credit",
+    "home_credit_app_dist_amt_income_total",
+    "home_credit_app_dist_amt_goods_price",
+    "home_credit_app_suite_type",
+    "home_credit_app_target_balance",
+    "home_credit_app_loan_type",
+    "home_credit_app_own_car_realty",
+    "home_credit_app_income_type",
+    "home_credit_app_family_status",
+    "home_credit_app_occupation_type",
+    "home_credit_app_education_type",
+    "home_credit_app_housing_type",
+    "home_credit_app_organization_type",
+    "home_credit_app_target_by_income_type",
+    "home_credit_app_target_by_family_status",
+    "home_credit_app_target_by_occupation_type",
+    "home_credit_app_target_by_education_type",
+    "home_credit_app_target_by_housing_type",
+    "home_credit_app_target_by_organization_type",
+    "home_credit_app_target_by_suite_type",
+    "home_credit_prev_contract_type",
+    "home_credit_prev_weekday_process_start",
+    "home_credit_prev_cash_loan_purpose",
+    "home_credit_prev_contract_status",
+    "home_credit_prev_payment_type",
+    "home_credit_prev_reject_reason",
+    "home_credit_prev_suite_type",
+    "home_credit_prev_client_type",
+    "home_credit_prev_goods_category",
+    "home_credit_prev_portfolio",
+    "home_credit_prev_product_type",
+    "home_credit_prev_channel_type",
+    "home_credit_prev_seller_industry",
+    "home_credit_prev_yield_group",
+    "home_credit_prev_product_combination",
+    "home_credit_prev_insured_on_approval",
+    "home_credit_app_selected_correlation_stats",
+    "home_credit_linear_score_demo",
+]
+JOB_TYPES = {
+    **{job_type: JOB_TYPES[job_type] for job_type in NOTEBOOK_JOB_ORDER if job_type in JOB_TYPES},
+    **{job_type: cfg for job_type, cfg in JOB_TYPES.items() if job_type not in NOTEBOOK_JOB_ORDER},
+}
 
 
 ANALYSIS_TO_JOB_TYPE = {

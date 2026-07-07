@@ -18,15 +18,13 @@ separate bucket/domain use-case names.
 | Priority | Criterion | Client preparation | Server HE work | Result after decrypt |
 | --- | --- | --- | --- | --- |
 | 1 | `missing_data` | Create null masks for selected columns | Sum encrypted missing masks | Missing count/percent table |
-| 2 | `target_balance` | Encode TARGET default/repaid masks | Sum encrypted target masks | Repaid/default count table |
-| 3 | `application_numeric_summary` | Clean selected numeric values | Sum encrypted numeric vectors | Sum/mean support table |
-| 4 | `application_category_counts` | One-hot application categories | Sum category masks | Category count table |
-| 5 | `application_default_rates` | Category masks, TARGET mask, amount vectors | Sum masks; sum mask times TARGET; sum mask times amount | Count, default rate, amount means |
-| 6 | `application_numeric_histograms` | Client bins AMT, age, EXT_SOURCE, and ratio fields | Sum encrypted bin masks and target-conditioned masks | Histogram/default-rate tables |
-| 7 | `previous_application_category_counts` | One-hot previous_application categories | Sum previous masks | Previous category count tables |
-| 8 | `previous_application_target_rates` | Client joins previous_application to TARGET by `SK_ID_CURR` before encryption | Sum joined masks and joined mask times TARGET | Historical category risk tables |
-| 9 | `selected_correlation_stats` | Select small numeric pairs and valid masks | Sum x, y, xy, x2, y2 support values | Client computes selected correlations |
-| 10 | `linear_score_demo` | Optional scaled numeric feature vectors | CKKS weighted sum | Encrypted inference smoke test |
+| 2 | `app_dist_amt_credit`, `app_dist_amt_income_total`, `app_dist_amt_goods_price` | Clean selected numeric values | Sum encrypted numeric vectors | Sum/mean support table |
+| 3 | `app_suite_type`, `app_loan_type`, `app_own_car_realty`, etc. | One-hot application categories | Sum category masks | Category count table |
+| 4 | `app_target_balance` | Encode TARGET default/repaid masks | Sum encrypted target masks | Repaid/default count table |
+| 5 | `app_target_by_income_type`, `app_target_by_family_status`, etc. | Category masks plus TARGET mask | Sum masks; sum mask times TARGET | Count and default-rate table |
+| 6 | `prev_contract_type`, `prev_contract_status`, etc. | One-hot previous_application categories | Sum previous masks | Previous category count tables |
+| 7 | `app_selected_correlation_stats` | Select small numeric pairs and valid masks | Sum x, y, xy, x2, y2 support values | Client computes selected correlations |
+| 8 | `linear_score_demo` | Optional scaled numeric feature vectors | CKKS weighted sum | Encrypted inference smoke test |
 
 Detailed mapping from original notebook EDA to the HE implementation choices:
 

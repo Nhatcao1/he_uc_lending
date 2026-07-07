@@ -73,41 +73,58 @@ The web UI can show job status and result bundles. The client-side dashboard can
 pull encrypted results. Final readable numbers are produced only after client
 decryption.
 
-## Implemented Criterion Names
+## Implemented Notebook Jobs
 
-The user-facing names now follow notebook EDA criteria. The C++ binary names are
-implementation details.
+The user-facing web UI now follows the notebook sections one-by-one. The C++
+binaries are still reusable implementation details: numeric distribution jobs
+use `server_numeric_summary`, categorical/target/correlation jobs use
+`server_home_credit_aggregate`, and the optional scoring demo uses
+`server_linear_score`.
 
-| Criterion id | UI label | Server HE operation |
+| Package workload | UI label | HE operation |
 | --- | --- | --- |
-| `home_credit_missing_data` | Missing Data Counts | `sum(is_null_mask)` |
-| `home_credit_target_balance` | Target Balance | `sum(target_default)`, `sum(target_repaid)` |
-| `home_credit_application_numeric_summary` | Application Numeric Summary | `EvalSum(numeric_vector)` |
-| `home_credit_application_category_counts` | Application Category Counts | `sum(category_mask)` |
-| `home_credit_application_default_rates` | Application Category Default Rates | `sum(mask)`, `sum(mask * TARGET)`, `sum(mask * amount)` |
-| `home_credit_application_numeric_histograms` | Application Numeric Histograms | `sum(bin_mask)`, `sum(bin_mask * TARGET)` |
-| `home_credit_previous_application_category_counts` | Previous Application Category Counts | `sum(previous_category_mask)` |
-| `home_credit_previous_application_target_rates` | Previous Application Target-Conditioned EDA | `sum(joined_mask)`, `sum(joined_mask * TARGET)` |
-| `home_credit_selected_correlation_stats` | Selected Numeric Correlation Stats | selected encrypted pairwise sums |
-| `home_credit_linear_score_demo` | Linear Score Demo | optional CKKS weighted sum; not RandomForest |
+| `missing_data` | 4.x Missing Data Checks | `sum(is_null_mask)` |
+| `app_dist_amt_credit` | 5.1 Distribution of `AMT_CREDIT` | `EvalSum(numeric_vector)` |
+| `app_dist_amt_income_total` | 5.2 Distribution of `AMT_INCOME_TOTAL` | `EvalSum(numeric_vector)` |
+| `app_dist_amt_goods_price` | 5.3 Distribution of `AMT_GOODS_PRICE` | `EvalSum(numeric_vector)` |
+| `app_suite_type` | 5.4 Who Accompanied Client | `sum(one_hot_mask)` |
+| `app_target_balance` | 5.5 Target Balance | `sum(target_default)`, `sum(target_repaid)` |
+| `app_loan_type` | 5.6 Types of Loan | `sum(one_hot_mask)` |
+| `app_own_car_realty` | 5.7 Own Car / Own Realty Flags | `sum(one_hot_mask)` |
+| `app_income_type` | 5.8 Income Sources | `sum(one_hot_mask)` |
+| `app_family_status` | 5.9 Family Status | `sum(one_hot_mask)` |
+| `app_occupation_type` | 5.10 Occupation | `sum(one_hot_mask)` |
+| `app_education_type` | 5.11 Education | `sum(one_hot_mask)` |
+| `app_housing_type` | 5.12 Housing Type | `sum(one_hot_mask)` |
+| `app_organization_type` | 5.13 Organization Type | `sum(one_hot_mask)` |
+| `app_target_by_income_type` | 5.14.1 Income Type by Target | `sum(mask)`, `sum(mask * TARGET)` |
+| `app_target_by_family_status` | 5.14.2 Family Status by Target | `sum(mask)`, `sum(mask * TARGET)` |
+| `app_target_by_occupation_type` | 5.14.3 Occupation by Target | `sum(mask)`, `sum(mask * TARGET)` |
+| `app_target_by_education_type` | 5.14.4 Education by Target | `sum(mask)`, `sum(mask * TARGET)` |
+| `app_target_by_housing_type` | 5.14.5 Housing Type by Target | `sum(mask)`, `sum(mask * TARGET)` |
+| `app_target_by_organization_type` | 5.14.6 Organization Type by Target | `sum(mask)`, `sum(mask * TARGET)` |
+| `app_target_by_suite_type` | 5.14.7 Suite Type by Target | `sum(mask)`, `sum(mask * TARGET)` |
+| `prev_contract_type` | 5.15.1 Previous Contract Type | `sum(previous_one_hot_mask)` |
+| `prev_weekday_process_start` | 5.15.2 Previous Application Weekday | `sum(previous_one_hot_mask)` |
+| `prev_cash_loan_purpose` | 5.15.3 Previous Cash Loan Purpose | `sum(previous_one_hot_mask)` |
+| `prev_contract_status` | 5.15.4 Previous Contract Status | `sum(previous_one_hot_mask)` |
+| `prev_payment_type` | 5.15.5 Previous Payment Type | `sum(previous_one_hot_mask)` |
+| `prev_reject_reason` | 5.15.6 Previous Reject Reason | `sum(previous_one_hot_mask)` |
+| `prev_suite_type` | 5.15.7 Previous Suite Type | `sum(previous_one_hot_mask)` |
+| `prev_client_type` | 5.15.8 Previous Client Type | `sum(previous_one_hot_mask)` |
+| `prev_goods_category` | 5.15.9 Previous Goods Category | `sum(previous_one_hot_mask)` |
+| `prev_portfolio` | 5.15.10 Previous Portfolio | `sum(previous_one_hot_mask)` |
+| `prev_product_type` | 5.15.11 Previous Product Type | `sum(previous_one_hot_mask)` |
+| `prev_channel_type` | 5.15.12 Previous Channel Type | `sum(previous_one_hot_mask)` |
+| `prev_seller_industry` | 5.15.13 Previous Seller Industry | `sum(previous_one_hot_mask)` |
+| `prev_yield_group` | 5.15.14 Previous Yield Group | `sum(previous_one_hot_mask)` |
+| `prev_product_combination` | 5.15.15 Previous Product Combination | `sum(previous_one_hot_mask)` |
+| `prev_insured_on_approval` | 5.15.16 Previous Insured on Approval | `sum(previous_one_hot_mask)` |
+| `app_selected_correlation_stats` | 6 Pearson Correlation Support | encrypted selected pairwise sums |
+| `linear_score_demo` | 7 Linear Score Demo | optional CKKS weighted sum; not RandomForest |
 
-Client package names:
-
-```text
-missing_data
-target_balance
-application_numeric_summary
-application_category_counts
-application_default_rates
-application_numeric_histograms
-previous_application_category_counts
-previous_application_target_rates
-selected_correlation_stats
-linear_score_demo
-```
-
-Legacy package names (`numeric_summary`, `category_eda`, `bucket_eda`,
-`domain_ratio_eda`, `linear_score`) are accepted as aliases only.
+Legacy package names (`target_balance`, `numeric_summary`, `category_eda`,
+`bucket_eda`, `domain_ratio_eda`, `linear_score`) are accepted as aliases only.
 
 ## Data Loading And Glimpse
 
@@ -238,10 +255,11 @@ What cannot be HE-server-side:
 
 Current coverage:
 
-- `home_credit_application_numeric_summary` supports encrypted sums for selected
-  numeric columns.
-- `home_credit_application_numeric_histograms` uses encrypted client-created bin
-  masks for AMT, age, `EXT_SOURCE_*`, and ratio buckets.
+- `app_dist_amt_credit`, `app_dist_amt_income_total`, and
+  `app_dist_amt_goods_price` expose the three notebook distribution sections as
+  separate jobs.
+- Extra histogram/bin masks can still be prepared by the client, but the
+  sales-facing UI now prioritizes the notebook's named AMT distribution sections.
 
 ## Simple Categorical Value Counts
 
@@ -299,10 +317,12 @@ Recommended category policy:
 
 Current coverage:
 
-- `home_credit_application_category_counts` follows this pattern for selected
-  application columns.
-- `home_credit_application_default_rates` adds target-conditioned and amount-sum
-  operations over the same encrypted masks.
+- `app_suite_type`, `app_loan_type`, `app_own_car_realty`,
+  `app_income_type`, `app_family_status`, `app_occupation_type`,
+  `app_education_type`, `app_housing_type`, and `app_organization_type` expose
+  these notebook criteria as separate jobs.
+- `app_target_by_*` jobs add target-conditioned count operations over selected
+  encrypted masks.
 
 ## Target Balance
 
@@ -594,17 +614,15 @@ The dynamic server/client flow is reused for each row:
 client package criterion -> server job queue -> client result dashboard/download -> client decrypt table
 ```
 
-| Priority | Notebook section | HE criterion | Numeric output table | Use current flow? |
+| Priority | Notebook section | HE workload | Numeric output table | Use current flow? |
 | --- | --- | --- | --- | --- |
-| 1 | 5.5 Target balance | `target_balance` | `target_label,count,percent` | Yes |
-| 2 | 5.1-5.3 Numeric distributions | `application_numeric_summary` | `column,total_rows,sum,mean` | Yes |
-| 3 | 5.4-5.13 Application category counts | `application_category_counts` | `column,label,count,percent` | Yes |
-| 4 | 5.14 Category by target | `application_default_rates` | `column,label,count,default_count,default_rate` | Yes |
-| 5 | 5.1-5.3 Histograms | `application_numeric_histograms` | `column,bin,count,percent` | Yes |
-| 6 | 5.15 Previous application counts | `previous_application_category_counts` | `table,column,label,count,percent` | Yes, if `previous_application.csv` is provided |
-| 7 | 5.15 Previous application vs target | `previous_application_target_rates` | `joined_feature,label,count,default_count,default_rate` | Yes, after client-side join |
-| 8 | 6 Correlation heatmap | `selected_correlation_stats` | `feature_x,feature_y,n,sum_x,sum_y,sum_xy,...` | Yes, selected pairs only |
-| 9 | 7 RandomForest importance | Non-HE modeling | `feature,importance` | No HE server; client/trusted only |
+| 1 | 5.1-5.3 Numeric distributions | `app_dist_amt_credit`, `app_dist_amt_income_total`, `app_dist_amt_goods_price` | `column,total_rows,sum,mean` | Yes |
+| 2 | 5.4, 5.6-5.13 Category distributions | `app_suite_type`, `app_loan_type`, `app_own_car_realty`, etc. | `column,label,count,percent` | Yes |
+| 3 | 5.5 Target balance | `app_target_balance` | `target_label,count,percent` | Yes |
+| 4 | 5.14 Category by target | `app_target_by_income_type`, `app_target_by_family_status`, etc. | `column,label,count,default_count,default_rate` | Yes |
+| 5 | 5.15 Previous application counts | `prev_contract_type`, `prev_contract_status`, etc. | `table,column,label,count,percent` | Yes, if `previous_application.csv` is provided |
+| 6 | 6 Correlation heatmap | `app_selected_correlation_stats` | `feature_x,feature_y,n,sum_x,sum_y,sum_xy,...` | Yes, selected pairs only |
+| 7 | 7 RandomForest importance | `linear_score_demo` replacement | `row_id,score` | HE server supports simple linear score only |
 
 ## Brief Per Notebook Output
 

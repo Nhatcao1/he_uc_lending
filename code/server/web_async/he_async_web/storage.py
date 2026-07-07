@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import sqlite3
 import threading
 import time
@@ -184,6 +185,14 @@ def list_output_files(settings: Settings, job_id: str) -> list[str]:
     if not root.exists():
         return []
     return [path.relative_to(root).as_posix() for path in sorted(root.rglob("*")) if path.is_file()]
+
+
+def delete_job(settings: Settings, job_id: str) -> None:
+    with DB_LOCK, connect(settings) as conn:
+        deleted = conn.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,)).rowcount
+    if deleted == 0:
+        raise KeyError(f"job not found: {job_id}")
+    shutil.rmtree(job_dir(settings, job_id), ignore_errors=True)
 
 
 def directory_size(path: Path) -> int:

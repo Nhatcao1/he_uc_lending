@@ -1,66 +1,103 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
-  <title id="title">Notebook EDA Criteria Map</title>
-  <desc id="desc">Map from notebook sections to client preparation, HE server operations, and decrypted EDA tables.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="840" viewBox="0 0 1400 840" role="img" aria-labelledby="title desc">
+  <title id="title">Home Credit Notebook EDA Criteria Map</title>
+  <desc id="desc">Sales-friendly map from Home Credit notebook sections to client preparation, encrypted HE jobs, and decrypted numeric tables.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#eef2ff"/></linearGradient>
-    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#0f172a" flood-opacity=".12"/></filter>
-    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#475569"/></marker>
-    <style>.title{font:800 34px ui-sans-serif,system-ui;fill:#172033}.sub{font:400 16px ui-sans-serif,system-ui;fill:#64748b}.h{font:800 17px ui-sans-serif,system-ui;fill:#111827}.t{font:500 14px ui-sans-serif,system-ui;fill:#475569}.small{font:800 12px ui-sans-serif,system-ui;letter-spacing:.08em;fill:#64748b}.line{stroke:#64748b;stroke-width:2.4;fill:none;marker-end:url(#arrow)}</style>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#0f172a" flood-opacity=".12"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="5" orient="auto">
+      <path d="M0,0 L11,5 L0,10 Z" fill="#475569"/>
+    </marker>
+    <style>
+      .title{font:800 34px ui-sans-serif,system-ui;fill:#172033}
+      .sub{font:400 16px ui-sans-serif,system-ui;fill:#64748b}
+      .h{font:800 17px ui-sans-serif,system-ui;fill:#111827}
+      .t{font:500 14px ui-sans-serif,system-ui;fill:#475569}
+      .small{font:800 12px ui-sans-serif,system-ui;letter-spacing:.08em;fill:#64748b}
+      .num{font:900 28px ui-sans-serif,system-ui;fill:#0f766e}
+      .line{stroke:#64748b;stroke-width:2.4;fill:none;marker-end:url(#arrow)}
+    </style>
   </defs>
-  <rect width="1400" height="820" fill="url(#bg)"/>
-  <text class="title" x="70" y="68">Home Credit Notebook EDA Criteria</text>
-  <text class="sub" x="70" y="96">The notebook graphs become encrypted aggregate jobs and client-decrypted numeric tables.</text>
+  <rect width="1400" height="840" fill="#f5f7fb"/>
+  <text class="title" x="70" y="66">Home Credit Notebook EDA Criteria</text>
+  <text class="sub" x="70" y="96">Each notebook section becomes a small encrypted job and a client-decrypted numeric table.</text>
 
   <g filter="url(#shadow)">
-    <rect x="70" y="150" width="260" height="96" rx="8" fill="#fff7ed" stroke="#fdba74"/>
-    <text class="h" x="92" y="182">Notebook sections</text>
-    <text class="t" x="92" y="208">missing, target, categories</text>
-    <text class="t" x="92" y="228">histograms, previous, corr</text>
+    <rect x="70" y="142" width="230" height="104" rx="8" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="h" x="92" y="176">Notebook section</text>
+    <text class="t" x="92" y="203">4.x, 5.1-5.15, 6, 7</text>
+    <text class="t" x="92" y="224">boss-readable labels</text>
 
-    <rect x="418" y="150" width="292" height="96" rx="8" fill="#ecfdf5" stroke="#86efac"/>
-    <text class="h" x="440" y="182">Client preparation</text>
-    <text class="t" x="440" y="208">null masks, one-hot masks</text>
-    <text class="t" x="440" y="228">bins, joins, selected pairs</text>
+    <rect x="355" y="142" width="250" height="104" rx="8" fill="#ecfdf5" stroke="#86efac"/>
+    <text class="h" x="377" y="176">Trusted client prep</text>
+    <text class="t" x="377" y="203">null masks, one-hot masks</text>
+    <text class="t" x="377" y="224">joins, scaling, bins</text>
 
-    <rect x="798" y="150" width="254" height="96" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
-    <text class="h" x="820" y="182">Encrypted server jobs</text>
-    <text class="t" x="820" y="208">EvalSum</text>
-    <text class="t" x="820" y="228">mask * value then sum</text>
+    <rect x="660" y="142" width="230" height="104" rx="8" fill="#eef2ff" stroke="#c4b5fd"/>
+    <text class="h" x="682" y="176">Upload bag</text>
+    <text class="t" x="682" y="203">one zip per criterion</text>
+    <text class="t" x="682" y="224">manifest filters rows</text>
 
-    <rect x="1140" y="150" width="200" height="96" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
-    <text class="h" x="1162" y="182">Client tables</text>
-    <text class="t" x="1162" y="208">counts, rates</text>
-    <text class="t" x="1162" y="228">means, correlations</text>
+    <rect x="945" y="142" width="215" height="104" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="h" x="967" y="176">HE server</text>
+    <text class="t" x="967" y="203">OpenFHE C++</text>
+    <text class="t" x="967" y="224">EvalSum, mask sums</text>
+
+    <rect x="1210" y="142" width="140" height="104" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text class="h" x="1230" y="176">Tables</text>
+    <text class="t" x="1230" y="203">counts</text>
+    <text class="t" x="1230" y="224">means, rates</text>
   </g>
-  <path class="line" d="M330 198 H410"/><path class="line" d="M710 198 H790"/><path class="line" d="M1052 198 H1132"/>
+  <path class="line" d="M300 194 H347"/>
+  <path class="line" d="M605 194 H652"/>
+  <path class="line" d="M890 194 H937"/>
+  <path class="line" d="M1160 194 H1202"/>
 
-  <text class="small" x="86" y="318">CRITERION BAGS</text>
+  <text class="small" x="80" y="310">VISIBLE WEB JOBS</text>
   <g filter="url(#shadow)">
-    <rect x="80" y="344" width="270" height="72" rx="8" fill="#ffffff" stroke="#d6deea"/>
-    <text class="h" x="102" y="374">missing_data</text><text class="t" x="102" y="396">sum null masks</text>
-    <rect x="390" y="344" width="270" height="72" rx="8" fill="#ffffff" stroke="#d6deea"/>
-    <text class="h" x="412" y="374">target_balance</text><text class="t" x="412" y="396">sum target masks</text>
-    <rect x="700" y="344" width="270" height="72" rx="8" fill="#ffffff" stroke="#d6deea"/>
-    <text class="h" x="722" y="374">application_numeric_summary</text><text class="t" x="722" y="396">sum numeric vectors</text>
-    <rect x="1010" y="344" width="300" height="72" rx="8" fill="#ffffff" stroke="#d6deea"/>
-    <text class="h" x="1032" y="374">application_category_counts</text><text class="t" x="1032" y="396">sum one-hot category masks</text>
+    <rect x="70" y="336" width="180" height="128" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="num" x="92" y="378">1</text>
+    <text class="h" x="92" y="408">Missing data</text>
+    <text class="t" x="92" y="433">4.x selected null masks</text>
 
-    <rect x="80" y="456" width="270" height="72" rx="8" fill="#ffffff" stroke="#d6deea"/>
-    <text class="h" x="102" y="486">application_default_rates</text><text class="t" x="102" y="508">sum mask * TARGET</text>
-    <rect x="390" y="456" width="270" height="72" rx="8" fill="#ffffff" stroke="#d6deea"/>
-    <text class="h" x="412" y="486">application_numeric_histograms</text><text class="t" x="412" y="508">sum bin masks</text>
-    <rect x="700" y="456" width="270" height="72" rx="8" fill="#ffffff" stroke="#d6deea"/>
-    <text class="h" x="722" y="486">previous_application_counts</text><text class="t" x="722" y="508">sum previous masks</text>
-    <rect x="1010" y="456" width="300" height="72" rx="8" fill="#ffffff" stroke="#d6deea"/>
-    <text class="h" x="1032" y="486">previous_target_rates</text><text class="t" x="1032" y="508">client join, encrypted sums</text>
+    <rect x="280" y="336" width="180" height="128" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="num" x="302" y="378">3</text>
+    <text class="h" x="302" y="408">Numeric dist.</text>
+    <text class="t" x="302" y="433">5.1-5.3 AMT fields</text>
 
-    <rect x="238" y="568" width="320" height="72" rx="8" fill="#ffffff" stroke="#d6deea"/>
-    <text class="h" x="260" y="598">selected_correlation_stats</text><text class="t" x="260" y="620">selected pairwise sums</text>
-    <rect x="842" y="568" width="320" height="72" rx="8" fill="#ffffff" stroke="#d6deea"/>
-    <text class="h" x="864" y="598">linear_score_demo</text><text class="t" x="864" y="620">optional weighted sum, not RF</text>
+    <rect x="490" y="336" width="180" height="128" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="num" x="512" y="378">9</text>
+    <text class="h" x="512" y="408">App categories</text>
+    <text class="t" x="512" y="433">5.4, 5.6-5.13</text>
+
+    <rect x="700" y="336" width="180" height="128" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="num" x="722" y="378">1</text>
+    <text class="h" x="722" y="408">Target balance</text>
+    <text class="t" x="722" y="433">5.5 default/repaid</text>
+
+    <rect x="910" y="336" width="180" height="128" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="num" x="932" y="378">7</text>
+    <text class="h" x="932" y="408">By target</text>
+    <text class="t" x="932" y="433">5.14 subcriteria</text>
+
+    <rect x="1120" y="336" width="180" height="128" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="num" x="1142" y="378">16</text>
+    <text class="h" x="1142" y="408">Previous app</text>
+    <text class="t" x="1142" y="433">5.15.1-5.15.16</text>
   </g>
 
-  <rect x="128" y="700" width="1144" height="54" rx="8" fill="#fff1f2" stroke="#fecdd3"/>
-  <text class="h" x="154" y="733">Not HE-server work:</text>
-  <text class="t" x="326" y="733">raw CSV parsing, string grouping, top-K discovery, encrypted joins, plotting, RandomForest training.</text>
+  <g filter="url(#shadow)">
+    <rect x="330" y="530" width="300" height="112" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="num" x="352" y="572">1</text>
+    <text class="h" x="392" y="572">Correlation support</text>
+    <text class="t" x="352" y="604">Notebook 6: encrypted selected pairwise sums</text>
+
+    <rect x="770" y="530" width="300" height="112" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="num" x="792" y="572">1</text>
+    <text class="h" x="832" y="572">Linear score demo</text>
+    <text class="t" x="792" y="604">Notebook 7: practical HE replacement for RandomForest</text>
+  </g>
+
+  <rect x="210" y="708" width="980" height="64" rx="8" fill="#ecfdf5" stroke="#86efac"/>
+  <text class="h" x="238" y="746">Total: 39 visible jobs. The server computes encrypted sums; the client owns raw data, secret key, and final readable reports.</text>
 </svg>

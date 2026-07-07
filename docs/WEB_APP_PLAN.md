@@ -16,14 +16,43 @@ It should not implement HE math. It should:
 
 ```text
 home_credit_missing_data
-home_credit_target_balance
-home_credit_application_numeric_summary
-home_credit_application_category_counts
-home_credit_application_default_rates
-home_credit_application_numeric_histograms
-home_credit_previous_application_category_counts
-home_credit_previous_application_target_rates
-home_credit_selected_correlation_stats
+home_credit_app_dist_amt_credit
+home_credit_app_dist_amt_income_total
+home_credit_app_dist_amt_goods_price
+home_credit_app_suite_type
+home_credit_app_target_balance
+home_credit_app_loan_type
+home_credit_app_own_car_realty
+home_credit_app_income_type
+home_credit_app_family_status
+home_credit_app_occupation_type
+home_credit_app_education_type
+home_credit_app_housing_type
+home_credit_app_organization_type
+home_credit_app_target_by_income_type
+home_credit_app_target_by_family_status
+home_credit_app_target_by_occupation_type
+home_credit_app_target_by_education_type
+home_credit_app_target_by_housing_type
+home_credit_app_target_by_organization_type
+home_credit_app_target_by_suite_type
+home_credit_prev_contract_type
+home_credit_prev_weekday_process_start
+home_credit_prev_cash_loan_purpose
+home_credit_prev_contract_status
+home_credit_prev_payment_type
+home_credit_prev_reject_reason
+home_credit_prev_suite_type
+home_credit_prev_client_type
+home_credit_prev_goods_category
+home_credit_prev_portfolio
+home_credit_prev_product_type
+home_credit_prev_channel_type
+home_credit_prev_seller_industry
+home_credit_prev_yield_group
+home_credit_prev_product_combination
+home_credit_prev_insured_on_approval
+home_credit_app_selected_correlation_stats
 home_credit_linear_score_demo
 ```
 
@@ -277,6 +306,7 @@ GET    /api/jobs/<job_id>
 GET    /api/jobs/<job_id>/logs
 GET    /api/jobs/<job_id>/download-bundle
 POST   /api/jobs/<job_id>/cancel
+DELETE /api/jobs/<job_id>
 GET    /api/workloads
 GET    /api/results
 ```
@@ -286,7 +316,7 @@ Job record:
 ```json
 {
   "job_id": "20260705-120000-abcd1234",
-  "job_type": "home_credit_application_default_rates",
+  "job_type": "home_credit_app_target_by_income_type",
   "status": "running",
   "created_at": "...",
   "started_at": "...",
