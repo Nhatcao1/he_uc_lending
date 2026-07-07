@@ -22,7 +22,7 @@ from rq import Queue
 from rq.job import Job
 from starlette.datastructures import UploadFile
 
-from .job_types import ANALYSIS_TO_JOB_TYPE, JOB_TYPES, canonical_job_type, public_job_types, visible_job_types
+from .job_types import ANALYSIS_TO_JOB_TYPE, JOB_TYPES, canonical_job_type, public_job_types
 from .runner import create_result_bundle, read_log_tail
 from .security import normalize_upload_path
 from .settings import Settings, get_settings
@@ -464,27 +464,11 @@ def root() -> RedirectResponse:
 
 @app.get("/jobs/new", response_class=HTMLResponse)
 def submit_page() -> HTMLResponse:
-    cards = []
+    job_catalog = public_job_types()
+    catalog_json = json.dumps(job_catalog).replace("</", "<\\/")
     options = ['<option value="auto" selected>Auto-detect from artifact</option>']
-    for job_type, cfg in visible_job_types().items():
+    for job_type, cfg in job_catalog.items():
         options.append(f'<option value="{esc(job_type)}">{esc(cfg["label"])}</option>')
-        requirements = "".join(f"<li><code>{esc(item)}</code></li>" for item in cfg["required"])
-        returns = "".join(f"<li><code>{esc(item)}</code></li>" for item in cfg.get("server_returns", []))
-        client_requirements = "".join(f"<li>{esc(item)}</li>" for item in cfg.get("client_requirements", []))
-        cards.append(
-            f"""<div class="card">
-  <h3>{esc(cfg['label'])}</h3>
-  <p class="muted">{esc(cfg['description'])}</p>
-  <p><strong>Notebook cells</strong>: <code>{esc(cfg.get('notebook_cells', ''))}</code></p>
-  <p><strong>HE operation</strong>: <code>{esc(cfg.get('he_operation', ''))}</code></p>
-  <p><strong>Client preparation</strong></p>
-  <ul>{client_requirements}</ul>
-  <p><strong>Upload contract</strong></p>
-  <ul>{requirements}</ul>
-  <p><strong>Encrypted server returns</strong></p>
-  <ul>{returns}</ul>
-</div>"""
-        )
     body = f"""
 <div class="grid">
   <section>
@@ -511,25 +495,84 @@ def submit_page() -> HTMLResponse:
     </form>
   </section>
   <section>
-    <h2>Server Boundary</h2>
-    <p class="muted">The server stores encrypted artifacts, public/eval keys, job metadata, logs, and encrypted Home Credit EDA result bundles.</p>
-    <p><strong>Never upload</strong></p>
+    <h2 id="guidanceTitle">Criterion Guidance</h2>
+    <p id="guidanceDescription" class="muted">Select a notebook EDA criterion to see exactly what the client must prepare, what the upload bag contains, and what encrypted files the server returns.</p>
+    <div id="guidanceMeta" class="muted"></div>
+    <h3>Client preparation</h3>
+    <ul id="guidanceClient"><li class="muted">Auto-detect uses the <code>upload_bag_manifest.json</code> inside the zip.</li></ul>
+    <h3>Upload contract</h3>
+    <ul id="guidanceRequired"><li><code>upload_bag_manifest.json</code></li><li class="muted">The server validates the matching files after auto-detect.</li></ul>
+    <h3>Encrypted server returns</h3>
+    <ul id="guidanceReturns"><li class="muted">Shown after selecting a specific criterion.</li></ul>
+    <h3>Server boundary</h3>
     <ul>
-      <li>raw Home Credit CSV files</li>
-      <li>plaintext prepared vectors</li>
-      <li><code>secret_key.bin</code> or private keys</li>
-      <li>decrypted reports</li>
+      <li>Upload encrypted bags only.</li>
+      <li>Do not upload raw Home Credit CSV files.</li>
+      <li>Do not upload plaintext prepared vectors.</li>
+      <li>Do not upload <code>secret_key.bin</code> or decrypted reports.</li>
     </ul>
   </section>
 </div>
-<section>
-  <h2>Available Notebook Criteria</h2>
-  <div class="cards">{"".join(cards)}</div>
-</section>
+<script id="jobCatalog" type="application/json">{catalog_json}</script>
 <script>
 const form = document.getElementById('submitJobForm');
 const button = document.getElementById('queueButton');
 const statusLine = document.getElementById('uploadStatus');
+const jobTypeSelect = document.getElementById('job_type');
+const jobCatalog = JSON.parse(document.getElementById('jobCatalog').textContent);
+const guidanceTitle = document.getElementById('guidanceTitle');
+const guidanceDescription = document.getElementById('guidanceDescription');
+const guidanceMeta = document.getElementById('guidanceMeta');
+const guidanceClient = document.getElementById('guidanceClient');
+const guidanceRequired = document.getElementById('guidanceRequired');
+const guidanceReturns = document.getElementById('guidanceReturns');
+
+function escHtml(value) {{
+  return String(value).replace(/[&<>"']/g, (char) => ({{
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }}[char]));
+}}
+
+function listHtml(items, codeItems = false, fallback = 'None') {{
+  if (!items || !items.length) {{
+    return `<li class="muted">${{escHtml(fallback)}}</li>`;
+  }}
+  return items.map((item) => {{
+    const content = codeItems ? `<code>${{escHtml(item)}}</code>` : escHtml(item);
+    return `<li>${{content}}</li>`;
+  }}).join('');
+}}
+
+function updateGuidance() {{
+  const selected = jobTypeSelect.value;
+  const cfg = jobCatalog[selected];
+  if (!cfg) {{
+    guidanceTitle.textContent = 'Auto-detect from artifact';
+    guidanceDescription.textContent = 'Use this when the upload bag was produced by package_home_credit_upload_bag.py. The server reads upload_bag_manifest.json and picks the matching notebook criterion.';
+    guidanceMeta.innerHTML = '<p><strong>Best for</strong>: normal browser uploads from generated .upload.zip files.</p>';
+    guidanceClient.innerHTML = '<li>Package one notebook criterion on the trusted client.</li><li>Keep raw CSV files, plaintext vectors, secret keys, and decrypted reports off the server.</li>';
+    guidanceRequired.innerHTML = '<li><code>upload_bag_manifest.json</code></li><li>Encrypted artifacts referenced by that manifest.</li>';
+    guidanceReturns.innerHTML = '<li class="muted">Choose a specific criterion to preview exact result paths.</li>';
+    return;
+  }}
+  guidanceTitle.textContent = cfg.label;
+  guidanceDescription.textContent = cfg.description || '';
+  guidanceMeta.innerHTML = `
+    <p><strong>Stage</strong>: ${{escHtml(cfg.stage || '')}}</p>
+    <p><strong>Notebook cells</strong>: <code>${{escHtml(cfg.notebook_cells || '')}}</code></p>
+    <p><strong>HE operation</strong>: <code>${{escHtml(cfg.he_operation || '')}}</code></p>
+  `;
+  guidanceClient.innerHTML = listHtml(cfg.client_requirements, false, 'No extra client preparation listed.');
+  guidanceRequired.innerHTML = listHtml(cfg.required, true, 'No upload contract listed.');
+  guidanceReturns.innerHTML = listHtml(cfg.server_returns, true, 'No encrypted return paths listed.');
+}}
+
+jobTypeSelect.addEventListener('change', updateGuidance);
+updateGuidance();
 
 form.addEventListener('submit', (event) => {{
   event.preventDefault();
