@@ -10,7 +10,7 @@ flowchart LR
   db["SQLite job DB\nstatus + paths + logs pointer"]
   queue["Redis/RQ queue\npending HE jobs"]
   worker["RQ worker\none HE job at a time"]
-  cpp["C++ OpenFHE binaries\nnumeric, aggregate, score"]
+  cpp["C++ OpenFHE binaries\ncriteria runners"]
   storage["server_jobs volume\nencrypted input/output bundles"]
 
   browser --> nginx --> web
@@ -30,7 +30,8 @@ Purpose:
 
 ```text
 Make slow HE jobs asynchronous: submit now, monitor status/logs, download the
-encrypted result bundle later.
+encrypted result bundle later. The web UI lists notebook EDA criteria, not the
+old prototype bucket/domain workload names.
 ```
 
 Trust boundary:

@@ -342,7 +342,7 @@ What cannot be HE-server-side:
 Recommended implementation:
 
 - Include target default count as a standard aggregate in every
-  target-conditioned workload.
+  target-conditioned criterion.
 
 ## Category By Target EDA
 

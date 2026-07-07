@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="760" viewBox="0 0 1320 760" role="img" aria-labelledby="title desc">
+  <title id="title">Application EDA Criteria</title>
+  <desc id="desc">Application numeric summaries, category counts, default rates, and histograms share client masks and HE aggregate sums.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#ecfeff"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#0f172a" flood-opacity=".12"/></filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#475569"/></marker>
+    <style>.title{font:800 32px ui-sans-serif,system-ui;fill:#172033}.sub{font:400 15px ui-sans-serif,system-ui;fill:#64748b}.h{font:800 17px ui-sans-serif,system-ui;fill:#111827}.t{font:500 14px ui-sans-serif,system-ui;fill:#475569}.small{font:800 12px ui-sans-serif,system-ui;letter-spacing:.08em;fill:#64748b}.line{stroke:#64748b;stroke-width:2.4;fill:none;marker-end:url(#arrow)}</style>
+  </defs>
+  <rect width="1320" height="760" fill="url(#bg)"/>
+  <text class="title" x="60" y="64">Application EDA Criteria</text>
+  <text class="sub" x="60" y="92">Four notebook outputs use the same encrypted aggregate engine with different client-prepared masks.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="154" width="206" height="86" rx="8" fill="#ecfdf5" stroke="#86efac"/>
+    <text class="h" x="92" y="184">application_train</text>
+    <text class="t" x="92" y="210">raw rows stay local</text>
+
+    <rect x="342" y="154" width="244" height="86" rx="8" fill="#ecfdf5" stroke="#86efac"/>
+    <text class="h" x="364" y="184">Client EDA policy</text>
+    <text class="t" x="364" y="210">top-K, OTHER, bins</text>
+    <text class="t" x="364" y="230">missing bucket</text>
+
+    <rect x="652" y="154" width="248" height="86" rx="8" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="h" x="674" y="184">Prepared vectors</text>
+    <text class="t" x="674" y="210">category masks, bin masks</text>
+    <text class="t" x="674" y="230">TARGET and amount vectors</text>
+
+    <rect x="966" y="154" width="230" height="86" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="h" x="988" y="184">OpenFHE aggregate</text>
+    <text class="t" x="988" y="210">sum(mask)</text>
+    <text class="t" x="988" y="230">sum(mask * value)</text>
+  </g>
+  <path class="line" d="M276 197 H334"/><path class="line" d="M586 197 H644"/><path class="line" d="M900 197 H958"/>
+
+  <text class="small" x="82" y="314">CRITERIA FROM THIS PATH</text>
+  <g filter="url(#shadow)">
+    <rect x="86" y="344" width="250" height="118" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="h" x="108" y="374">application_numeric_summary</text>
+    <text class="t" x="108" y="400">AMT and EXT_SOURCE sums</text>
+    <text class="t" x="108" y="422">client computes means</text>
+    <text class="t" x="108" y="444">server op: EvalSum(vector)</text>
+
+    <rect x="386" y="344" width="250" height="118" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="h" x="408" y="374">application_category_counts</text>
+    <text class="t" x="408" y="400">income, family, education</text>
+    <text class="t" x="408" y="422">occupation, organization</text>
+    <text class="t" x="408" y="444">server op: sum(mask)</text>
+
+    <rect x="686" y="344" width="250" height="118" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="h" x="708" y="374">application_default_rates</text>
+    <text class="t" x="708" y="400">category count</text>
+    <text class="t" x="708" y="422">default count and amount sums</text>
+    <text class="t" x="708" y="444">server op: sum(mask * TARGET)</text>
+
+    <rect x="986" y="344" width="250" height="118" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="h" x="1008" y="374">application_numeric_histograms</text>
+    <text class="t" x="1008" y="400">fixed bins for AMT, age</text>
+    <text class="t" x="1008" y="422">EXT_SOURCE and ratios</text>
+    <text class="t" x="1008" y="444">server op: sum(bin_mask)</text>
+  </g>
+
+  <rect x="142" y="548" width="1036" height="92" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text class="h" x="166" y="580">Client decrypts one numeric table per criterion</text>
+  <text class="t" x="166" y="608">Counts become percentages. Default counts become default rates. Amount sums become means.</text>
+  <text class="t" x="166" y="630">Graphs are deferred: this prototype proves encrypted computation with tables first.</text>
+</svg>

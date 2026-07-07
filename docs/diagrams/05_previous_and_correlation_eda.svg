@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="760" viewBox="0 0 1320 760" role="img" aria-labelledby="title desc">
+  <title id="title">Previous Application And Correlation EDA</title>
+  <desc id="desc">Previous application category EDA and selected correlation stats require client-side joins and selected pair preparation before encryption.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#fdf2f8"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#0f172a" flood-opacity=".12"/></filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#475569"/></marker>
+    <style>.title{font:800 32px ui-sans-serif,system-ui;fill:#172033}.sub{font:400 15px ui-sans-serif,system-ui;fill:#64748b}.lane{font:800 12px ui-sans-serif,system-ui;letter-spacing:.12em;fill:#475569}.h{font:800 17px ui-sans-serif,system-ui;fill:#111827}.t{font:500 14px ui-sans-serif,system-ui;fill:#475569}.line{stroke:#64748b;stroke-width:2.4;fill:none;marker-end:url(#arrow)}</style>
+  </defs>
+  <rect width="1320" height="760" fill="url(#bg)"/>
+  <text class="title" x="60" y="64">Previous Application And Correlation EDA</text>
+  <text class="sub" x="60" y="92">The harder notebook sections remain HE-friendly only after client-side joins, masks, and selected numeric pair prep.</text>
+
+  <rect x="56" y="132" width="560" height="460" rx="8" fill="#ffffff" opacity=".76"/>
+  <rect x="704" y="132" width="560" height="460" rx="8" fill="#ffffff" opacity=".76"/>
+  <text class="lane" x="84" y="166">CLIENT PREP</text><text class="lane" x="732" y="166">SERVER HE</text>
+
+  <g filter="url(#shadow)">
+    <rect x="92" y="208" width="210" height="78" rx="8" fill="#ecfdf5" stroke="#86efac"/>
+    <text class="h" x="112" y="238">application_train</text>
+    <text class="t" x="112" y="262">SK_ID_CURR + TARGET</text>
+
+    <rect x="92" y="346" width="210" height="78" rx="8" fill="#ecfdf5" stroke="#86efac"/>
+    <text class="h" x="112" y="376">previous_application</text>
+    <text class="t" x="112" y="400">previous categories</text>
+
+    <rect x="372" y="276" width="196" height="100" rx="8" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="h" x="392" y="306">Client join + masks</text>
+    <text class="t" x="392" y="332">join by SK_ID_CURR</text>
+    <text class="t" x="392" y="352">top-K + missing bucket</text>
+
+    <rect x="372" y="462" width="196" height="86" rx="8" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="h" x="392" y="492">Selected pairs</text>
+    <text class="t" x="392" y="518">valid, x, y vectors</text>
+    <text class="t" x="392" y="538">small pair list only</text>
+
+    <rect x="748" y="242" width="222" height="86" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="h" x="768" y="272">Previous EDA sums</text>
+    <text class="t" x="768" y="298">sum(mask)</text>
+    <text class="t" x="768" y="318">sum(mask * TARGET)</text>
+
+    <rect x="748" y="430" width="222" height="86" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="h" x="768" y="460">Correlation support</text>
+    <text class="t" x="768" y="486">sum x, y, xy, x2, y2</text>
+    <text class="t" x="768" y="506">client computes corr</text>
+
+    <rect x="1040" y="332" width="172" height="96" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text class="h" x="1060" y="362">Encrypted tables</text>
+    <text class="t" x="1060" y="388">download bundle</text>
+    <text class="t" x="1060" y="408">client decrypts</text>
+  </g>
+
+  <path class="line" d="M302 247 C330 247 346 306 364 314"/>
+  <path class="line" d="M302 385 C330 385 346 346 364 338"/>
+  <path class="line" d="M568 326 H740"/>
+  <path class="line" d="M568 505 H740"/>
+  <path class="line" d="M970 285 C1012 285 1016 348 1032 362"/>
+  <path class="line" d="M970 473 C1012 473 1016 414 1032 398"/>
+
+  <rect x="112" y="628" width="1096" height="56" rx="8" fill="#fff1f2" stroke="#fecdd3"/>
+  <text class="h" x="136" y="662">Boundary:</text>
+  <text class="t" x="228" y="662">server never performs raw SK_ID joins, raw category grouping, or all-pairs heatmap computation.</text>
+</svg>

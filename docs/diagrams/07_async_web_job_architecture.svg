@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title desc">
   <title id="title">Async Web Job Architecture</title>
-  <desc id="desc">FastAPI receives encrypted Home Credit HE jobs, Redis Queue schedules them, an RQ worker runs C++ OpenFHE binaries, and the browser monitors results.</desc>
+  <desc id="desc">FastAPI receives encrypted Home Credit EDA criterion jobs, Redis Queue schedules them, an RQ worker runs C++ OpenFHE binaries, and the browser monitors results.</desc>
   <defs>
     <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
       <stop offset="0%" stop-color="#f8fafc"/>
@@ -46,7 +46,7 @@
   </defs>
   <rect width="1400" height="820" fill="url(#bg)"/>
   <text class="title" x="70" y="68">Async Web Job Architecture</text>
-  <text class="sub" x="70" y="96">Submit encrypted bundles quickly, run slow C++ OpenFHE jobs in workers, download encrypted results later.</text>
+  <text class="sub" x="70" y="96">Submit encrypted criterion bags quickly, run slow C++ OpenFHE jobs in workers, download encrypted results later.</text>
 
   <rect x="52" y="132" width="1296" height="118" rx="8" fill="#ffffff" opacity="0.78"/>
   <text class="lane" x="72" y="164">ENTRYPOINT</text>
@@ -98,7 +98,7 @@
 
     <rect x="604" y="586" width="278" height="76" rx="8" fill="url(#compute)" stroke="#fdba74"/>
     <text class="box-title" x="624" y="616">C++ OpenFHE binaries</text>
-    <text class="box-text" x="624" y="642">numeric, aggregate, score</text>
+    <text class="box-text" x="624" y="642">criteria runners</text>
 
     <rect x="998" y="586" width="242" height="76" rx="8" fill="url(#store)" stroke="#f9a8d4"/>
     <text class="box-title" x="1018" y="616">Result bundle</text>

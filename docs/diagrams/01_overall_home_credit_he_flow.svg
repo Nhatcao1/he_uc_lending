@@ -1,117 +1,89 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="780" viewBox="0 0 1400 780" role="img" aria-labelledby="title desc">
-  <title id="title">Overall Home Credit HE Flow</title>
-  <desc id="desc">Client prepares and encrypts Home Credit data, server runs encrypted OpenFHE jobs, client decrypts final reports.</desc>
+  <title id="title">Overall Home Credit HE EDA Flow</title>
+  <desc id="desc">Client prepares notebook EDA criteria, encrypts vectors, server runs encrypted OpenFHE jobs, client decrypts final tables.</desc>
   <defs>
-    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0%" stop-color="#f7fafc"/>
-      <stop offset="100%" stop-color="#e8eef6"/>
-    </linearGradient>
-    <linearGradient id="client" x1="0" x2="1">
-      <stop offset="0%" stop-color="#ecfdf3"/>
-      <stop offset="100%" stop-color="#d1fae5"/>
-    </linearGradient>
-    <linearGradient id="server" x1="0" x2="1">
-      <stop offset="0%" stop-color="#eff6ff"/>
-      <stop offset="100%" stop-color="#dbeafe"/>
-    </linearGradient>
-    <linearGradient id="warn" x1="0" x2="1">
-      <stop offset="0%" stop-color="#fff7ed"/>
-      <stop offset="100%" stop-color="#ffedd5"/>
-    </linearGradient>
-    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%">
-      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.12"/>
-    </filter>
-    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto">
-      <path d="M0,0 L10,5 L0,10 Z" fill="#475569"/>
-    </marker>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#e6f4f1"/></linearGradient>
+    <linearGradient id="client" x1="0" x2="1"><stop offset="0%" stop-color="#ecfdf5"/><stop offset="100%" stop-color="#d1fae5"/></linearGradient>
+    <linearGradient id="server" x1="0" x2="1"><stop offset="0%" stop-color="#eff6ff"/><stop offset="100%" stop-color="#dbeafe"/></linearGradient>
+    <linearGradient id="warn" x1="0" x2="1"><stop offset="0%" stop-color="#fff7ed"/><stop offset="100%" stop-color="#ffedd5"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.12"/></filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#475569"/></marker>
     <style>
-      .title{font:700 34px ui-sans-serif,system-ui;fill:#172033}
-      .sub{font:400 16px ui-sans-serif,system-ui;fill:#64748b}
-      .lane{font:800 13px ui-sans-serif,system-ui;letter-spacing:.12em;fill:#334155}
-      .box-title{font:800 18px ui-sans-serif,system-ui;fill:#111827}
-      .box-text{font:500 14px ui-sans-serif,system-ui;fill:#475569}
-      .small{font:700 12px ui-sans-serif,system-ui;fill:#64748b}
-      .line{stroke:#64748b;stroke-width:2.5;fill:none;marker-end:url(#arrow)}
-      .dash{stroke:#94a3b8;stroke-width:2;stroke-dasharray:8 8;fill:none}
+      .title{font:800 34px ui-sans-serif,system-ui;fill:#172033}.sub{font:400 16px ui-sans-serif,system-ui;fill:#64748b}
+      .lane{font:800 13px ui-sans-serif,system-ui;letter-spacing:.12em;fill:#334155}.h{font:800 18px ui-sans-serif,system-ui;fill:#111827}.t{font:500 14px ui-sans-serif,system-ui;fill:#475569}.small{font:700 12px ui-sans-serif,system-ui;fill:#64748b}
+      .line{stroke:#64748b;stroke-width:2.5;fill:none;marker-end:url(#arrow)}.dash{stroke:#94a3b8;stroke-width:2;stroke-dasharray:8 8;fill:none}
     </style>
   </defs>
   <rect width="1400" height="780" fill="url(#bg)"/>
-  <text class="title" x="70" y="68">Home Credit HE Prototype</text>
-  <text class="sub" x="70" y="96">Raw applicant data stays client-side; the server only executes encrypted OpenFHE jobs.</text>
+  <text class="title" x="70" y="68">Home Credit HE Notebook EDA Flow</text>
+  <text class="sub" x="70" y="96">Client owns raw data and keys. Server only receives encrypted criterion bags and returns encrypted tables.</text>
 
-  <rect x="52" y="130" width="1296" height="188" rx="8" fill="#ffffff" opacity="0.76"/>
-  <text class="lane" x="72" y="162">CLIENT SIDE</text>
-  <rect x="52" y="354" width="1296" height="188" rx="8" fill="#ffffff" opacity="0.76"/>
-  <text class="lane" x="72" y="386">SERVER SIDE</text>
-  <rect x="52" y="580" width="1296" height="126" rx="8" fill="#ffffff" opacity="0.76"/>
-  <text class="lane" x="72" y="612">CLIENT SIDE RESULT</text>
-
-  <g filter="url(#shadow)">
-    <rect x="88" y="190" width="178" height="88" rx="8" fill="url(#client)" stroke="#86efac"/>
-    <text class="box-title" x="108" y="222">Raw CSV</text>
-    <text class="box-text" x="108" y="248">application_train.csv</text>
-    <text class="small" x="108" y="268">never upload</text>
-
-    <rect x="314" y="190" width="190" height="88" rx="8" fill="url(#client)" stroke="#86efac"/>
-    <text class="box-title" x="334" y="216">Client prep</text>
-    <text class="box-text" x="334" y="242">clean, bucket, one-hot</text>
-    <text class="box-text" x="334" y="264">scale ML features</text>
-
-    <rect x="552" y="190" width="190" height="88" rx="8" fill="url(#warn)" stroke="#fed7aa"/>
-    <text class="box-title" x="572" y="216">Local vectors</text>
-    <text class="box-text" x="572" y="242">plaintext masks</text>
-    <text class="box-text" x="572" y="264">local only</text>
-
-    <rect x="790" y="190" width="190" height="88" rx="8" fill="url(#client)" stroke="#86efac"/>
-    <text class="box-title" x="810" y="216">CKKS encrypt</text>
-    <text class="box-text" x="810" y="242">ciphertext chunks</text>
-    <text class="small" x="810" y="264">secret key stays here</text>
-
-    <rect x="1028" y="190" width="234" height="88" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
-    <text class="box-title" x="1048" y="216">Encrypted bundle</text>
-    <text class="box-text" x="1048" y="242">context, eval keys</text>
-    <text class="box-text" x="1048" y="264">manifests, ciphertexts</text>
-  </g>
-
-  <path class="line" d="M266 234 H306"/>
-  <path class="line" d="M504 234 H544"/>
-  <path class="line" d="M742 234 H782"/>
-  <path class="line" d="M980 234 H1020"/>
-  <path class="line" d="M1145 278 V344"/>
+  <rect x="52" y="130" width="1296" height="190" rx="8" fill="#ffffff" opacity=".78"/>
+  <text class="lane" x="72" y="164">TRUSTED CLIENT PREPARATION</text>
+  <rect x="52" y="356" width="1296" height="190" rx="8" fill="#ffffff" opacity=".78"/>
+  <text class="lane" x="72" y="390">HE SERVER EXECUTION</text>
+  <rect x="52" y="582" width="1296" height="118" rx="8" fill="#ffffff" opacity=".78"/>
+  <text class="lane" x="72" y="616">CLIENT RESULT</text>
 
   <g filter="url(#shadow)">
-    <rect x="180" y="414" width="218" height="88" rx="8" fill="url(#server)" stroke="#93c5fd"/>
-    <text class="box-title" x="200" y="440">Web receiver</text>
-    <text class="box-text" x="200" y="466">store job bundle</text>
-    <text class="box-text" x="200" y="488">validate required files</text>
+    <rect x="88" y="196" width="202" height="88" rx="8" fill="url(#client)" stroke="#86efac"/>
+    <text class="h" x="108" y="224">Raw Kaggle CSVs</text>
+    <text class="t" x="108" y="250">application_train</text>
+    <text class="t" x="108" y="270">previous_application</text>
 
-    <rect x="476" y="414" width="250" height="88" rx="8" fill="url(#server)" stroke="#93c5fd"/>
-    <text class="box-title" x="496" y="440">OpenFHE jobs</text>
-    <text class="box-text" x="496" y="466">numeric, aggregate</text>
-    <text class="box-text" x="496" y="488">linear score</text>
+    <rect x="338" y="196" width="224" height="88" rx="8" fill="url(#client)" stroke="#86efac"/>
+    <text class="h" x="358" y="224">Notebook criteria prep</text>
+    <text class="t" x="358" y="250">null masks, one-hot</text>
+    <text class="t" x="358" y="270">bins, joins, pair stats</text>
 
-    <rect x="804" y="414" width="250" height="88" rx="8" fill="url(#server)" stroke="#93c5fd"/>
-    <text class="box-title" x="824" y="440">Encrypted returns</text>
-    <text class="box-text" x="824" y="466">result manifests</text>
-    <text class="box-text" x="824" y="488">ciphertext outputs</text>
+    <rect x="610" y="196" width="214" height="88" rx="8" fill="url(#warn)" stroke="#fed7aa"/>
+    <text class="h" x="630" y="224">Local plaintext vectors</text>
+    <text class="t" x="630" y="250">ignored by git</text>
+    <text class="t" x="630" y="270">never uploaded</text>
+
+    <rect x="872" y="196" width="198" height="88" rx="8" fill="url(#client)" stroke="#86efac"/>
+    <text class="h" x="892" y="224">CKKS encrypt</text>
+    <text class="t" x="892" y="250">ciphertext chunks</text>
+    <text class="small" x="892" y="270">secret key stays local</text>
+
+    <rect x="1118" y="196" width="178" height="88" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text class="h" x="1138" y="224">Criterion bag</text>
+    <text class="t" x="1138" y="250">manifest + ciphers</text>
+    <text class="t" x="1138" y="270">one zip per task</text>
   </g>
-  <path class="line" d="M398 458 H468"/>
-  <path class="line" d="M726 458 H796"/>
-  <path class="line" d="M929 502 V570"/>
+
+  <path class="line" d="M290 240 H330"/><path class="line" d="M562 240 H602"/><path class="line" d="M824 240 H864"/><path class="line" d="M1070 240 H1110"/>
+  <path class="line" d="M1207 284 V348"/>
 
   <g filter="url(#shadow)">
-    <rect x="560" y="636" width="194" height="56" rx="8" fill="url(#client)" stroke="#86efac"/>
-    <text class="box-title" x="580" y="670">Client decrypt</text>
-    <rect x="820" y="636" width="250" height="56" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
-    <text class="box-title" x="840" y="660">Readable report</text>
-    <text class="box-text" x="840" y="682">EDA tables and scores</text>
+    <rect x="166" y="424" width="244" height="86" rx="8" fill="url(#server)" stroke="#93c5fd"/>
+    <text class="h" x="186" y="452">FastAPI + RQ</text>
+    <text class="t" x="186" y="478">upload, queue, logs</text>
+    <text class="t" x="186" y="498">job status and timing</text>
+
+    <rect x="486" y="424" width="300" height="86" rx="8" fill="url(#server)" stroke="#93c5fd"/>
+    <text class="h" x="506" y="452">OpenFHE C++ criteria</text>
+    <text class="t" x="506" y="478">EvalSum, mask * target</text>
+    <text class="t" x="506" y="498">selected pair products</text>
+
+    <rect x="862" y="424" width="260" height="86" rx="8" fill="url(#server)" stroke="#93c5fd"/>
+    <text class="h" x="882" y="452">Encrypted result bundle</text>
+    <text class="t" x="882" y="478">manifest, ciphertexts</text>
+    <text class="t" x="882" y="498">server never decrypts</text>
   </g>
-  <path class="line" d="M754 664 H812"/>
+  <path class="line" d="M410 467 H478"/><path class="line" d="M786 467 H854"/><path class="line" d="M992 510 V574"/>
 
-  <rect x="1110" y="620" width="190" height="72" rx="8" fill="#fff1f2" stroke="#fecdd3"/>
-  <text class="box-title" x="1130" y="648">Never upload</text>
-  <text class="box-text" x="1130" y="672">raw CSV or secret key</text>
+  <g filter="url(#shadow)">
+    <rect x="520" y="638" width="206" height="50" rx="8" fill="url(#client)" stroke="#86efac"/>
+    <text class="h" x="542" y="669">Client decrypt</text>
+    <rect x="806" y="638" width="284" height="50" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+    <text class="h" x="828" y="660">EDA tables</text>
+    <text class="t" x="928" y="660">counts, rates, means</text>
+  </g>
+  <path class="line" d="M726 663 H798"/>
 
-  <path class="dash" d="M700 126 V710"/>
-  <text class="small" x="716" y="148">privacy boundary</text>
+  <rect x="1120" y="624" width="190" height="64" rx="8" fill="#fff1f2" stroke="#fecdd3"/>
+  <text class="h" x="1140" y="650">Never upload</text>
+  <text class="t" x="1140" y="672">raw CSV or secret key</text>
+  <path class="dash" d="M700 128 V706"/><text class="small" x="716" y="150">privacy boundary</text>
 </svg>

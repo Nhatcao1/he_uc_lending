@@ -114,13 +114,14 @@ sum(category_mask * AMT_INCOME_TOTAL)
 
 Client decrypts aggregates and computes rates/averages.
 
-### 2. Age / Source Bucket EDA
+### 2. Application Numeric Histogram Criteria
 
 Questions:
 
 - What is default rate by age bucket?
 - What is default rate by `EXT_SOURCE_1/2/3` bucket?
 - How different is the `DAYS_EMPLOYED == 365243` anomaly group?
+- What is the distribution support for AMT and ratio fields?
 
 Server operations:
 
@@ -129,7 +130,7 @@ sum(bucket_mask)
 sum(bucket_mask * target_mask)
 ```
 
-### 3. Domain Ratio EDA
+### 3. Domain Ratios Inside Histogram Criteria
 
 Client computes and buckets:
 
@@ -140,14 +141,18 @@ CREDIT_TERM = AMT_ANNUITY / AMT_CREDIT
 DAYS_EMPLOYED_PERCENT = DAYS_EMPLOYED / DAYS_BIRTH
 ```
 
-Server aggregates encrypted bucket counts/default counts.
+Server aggregates encrypted bucket counts/default counts under:
+
+```text
+application_numeric_histograms
+```
 
 ## Next Implementation
 
-Build client preparation first:
+Superseded by the current client preparation script:
 
 ```text
-code/client/prepare_home_credit_category_eda.py
+code/client/home_credit/prepare_home_credit_basic_eda.py
 ```
 
 Then build server aggregate support:

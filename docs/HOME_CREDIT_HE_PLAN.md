@@ -10,15 +10,23 @@ home-credit-complete-eda-feature-importance.ipynb
 Use `application_train.csv` first. Avoid the full multi-table join problem until
 the single-table encrypted aggregate path is working.
 
-## First HE Use Cases
+## Implemented HE Criteria
 
-| Priority | Use case | Client preparation | Server HE work | Result after decrypt |
+The current implementation follows notebook-facing criteria instead of the older
+separate bucket/domain use-case names.
+
+| Priority | Criterion | Client preparation | Server HE work | Result after decrypt |
 | --- | --- | --- | --- | --- |
-| 1 | Category default-rate table | One-hot masks for `NAME_INCOME_TYPE`, `OCCUPATION_TYPE`, `NAME_EDUCATION_TYPE`, `ORGANIZATION_TYPE`; encrypted `TARGET` mask | Sum category masks; sum category mask times target mask; sum selected amount columns by category | Count, default count, default rate, average credit/income by category |
-| 2 | Age bucket default-rate table | Convert `DAYS_BIRTH` to age years; bucket locally; encrypt bucket masks and target mask | Encrypted count and default count per age bucket | Failure-to-repay rate by age group |
-| 3 | `DAYS_EMPLOYED` anomaly report | Encode `DAYS_EMPLOYED == 365243` as anomaly mask; encode normal/invalid buckets | Encrypted anomaly count and anomaly default count | Compare anomaly default rate vs normal |
-| 4 | `EXT_SOURCE` bucket reports | Null handling plus score buckets for `EXT_SOURCE_1/2/3` | Encrypted count/default count per bucket | Default rate by external-source score bucket |
-| 5 | Domain ratio bucket reports | Compute `CREDIT_INCOME_PERCENT`, `ANNUITY_INCOME_PERCENT`, `CREDIT_TERM`, `DAYS_EMPLOYED_PERCENT`; bucket ratios | Encrypted count/default count per ratio bucket | Risk trend by financial ratio |
+| 1 | `missing_data` | Create null masks for selected columns | Sum encrypted missing masks | Missing count/percent table |
+| 2 | `target_balance` | Encode TARGET default/repaid masks | Sum encrypted target masks | Repaid/default count table |
+| 3 | `application_numeric_summary` | Clean selected numeric values | Sum encrypted numeric vectors | Sum/mean support table |
+| 4 | `application_category_counts` | One-hot application categories | Sum category masks | Category count table |
+| 5 | `application_default_rates` | Category masks, TARGET mask, amount vectors | Sum masks; sum mask times TARGET; sum mask times amount | Count, default rate, amount means |
+| 6 | `application_numeric_histograms` | Client bins AMT, age, EXT_SOURCE, and ratio fields | Sum encrypted bin masks and target-conditioned masks | Histogram/default-rate tables |
+| 7 | `previous_application_category_counts` | One-hot previous_application categories | Sum previous masks | Previous category count tables |
+| 8 | `previous_application_target_rates` | Client joins previous_application to TARGET by `SK_ID_CURR` before encryption | Sum joined masks and joined mask times TARGET | Historical category risk tables |
+| 9 | `selected_correlation_stats` | Select small numeric pairs and valid masks | Sum x, y, xy, x2, y2 support values | Client computes selected correlations |
+| 10 | `linear_score_demo` | Optional scaled numeric feature vectors | CKKS weighted sum | Encrypted inference smoke test |
 
 Detailed mapping from original notebook EDA to the HE implementation choices:
 
@@ -35,7 +43,9 @@ docs/HOME_CREDIT_IMPLEMENTED_CLIENT_SERVER_FLOW.md
 
 ## Basic EDA First Slice
 
-The first category EDA implementation should be intentionally small:
+The old first slice was category-only. The active implementation now prepares
+all criteria from one client script, while each browser upload is still one
+small criterion zip.
 
 ```text
 NAME_INCOME_TYPE
@@ -90,17 +100,18 @@ decrypted report
 
 ## Next Implementation Slice
 
-Create a Home Credit client preparation script that emits:
+Current client preparation script emits:
 
 ```text
-category_manifest.csv
-masks/*.bin or prepared mask CSV before encryption wrapper exists
-target/*.bin or prepared target mask CSV before encryption wrapper exists
-amounts/*.bin or prepared amount CSV before encryption wrapper exists
-home_credit_prep_manifest.json
+vector_manifest.csv
+aggregate_operations.csv
+numeric_vectors.csv
+linear_score_vectors.csv
+vectors/*.csv
+preparation_manifest.json
 ```
 
-Then add the server aggregate executable for:
+Server aggregate executable supports:
 
 ```text
 sum(mask)

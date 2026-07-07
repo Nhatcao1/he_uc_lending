@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-labelledby="title desc">
+  <title id="title">Missing Data And Target Balance</title>
+  <desc id="desc">Client creates missing and target masks, server sums encrypted masks, client decrypts count tables.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#f8fafc"/><stop offset="100%" stop-color="#e0f2fe"/></linearGradient>
+    <filter id="shadow" x="-10%" y="-15%" width="120%" height="140%"><feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#0f172a" flood-opacity=".13"/></filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="10" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 Z" fill="#475569"/></marker>
+    <style>.title{font:800 32px ui-sans-serif,system-ui;fill:#172033}.sub{font:400 15px ui-sans-serif,system-ui;fill:#64748b}.lane{font:800 12px ui-sans-serif,system-ui;letter-spacing:.12em;fill:#475569}.h{font:800 18px ui-sans-serif,system-ui;fill:#111827}.t{font:500 14px ui-sans-serif,system-ui;fill:#475569}.line{stroke:#64748b;stroke-width:2.4;fill:none;marker-end:url(#arrow)}</style>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <text class="title" x="60" y="64">Missing Data And Target Balance</text>
+  <text class="sub" x="60" y="92">Notebook null checks and TARGET imbalance become encrypted mask-count jobs.</text>
+
+  <rect x="58" y="132" width="548" height="438" rx="8" fill="#ffffff" opacity=".76"/>
+  <rect x="674" y="132" width="548" height="438" rx="8" fill="#ffffff" opacity=".76"/>
+  <text class="lane" x="86" y="166">CLIENT</text><text class="lane" x="702" y="166">SERVER</text>
+
+  <g filter="url(#shadow)">
+    <rect x="94" y="202" width="196" height="86" rx="8" fill="#ecfdf5" stroke="#86efac"/>
+    <text class="h" x="114" y="230">Missing masks</text>
+    <text class="t" x="114" y="256">EXT_SOURCE_1 null</text>
+    <text class="t" x="114" y="276">AMT_ANNUITY null</text>
+
+    <rect x="94" y="352" width="196" height="86" rx="8" fill="#ecfdf5" stroke="#86efac"/>
+    <text class="h" x="114" y="380">TARGET masks</text>
+    <text class="t" x="114" y="406">default = 1</text>
+    <text class="t" x="114" y="426">repaid = 0</text>
+
+    <rect x="360" y="276" width="196" height="86" rx="8" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="h" x="380" y="304">Encrypt masks</text>
+    <text class="t" x="380" y="330">vectors/*.bin</text>
+    <text class="t" x="380" y="350">aggregate_manifest</text>
+
+    <rect x="720" y="276" width="230" height="86" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="h" x="740" y="304">HE server sum</text>
+    <text class="t" x="740" y="330">count = EvalSum(mask)</text>
+    <text class="t" x="740" y="350">no null parsing here</text>
+
+    <rect x="1000" y="276" width="176" height="86" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="h" x="1020" y="304">Encrypted counts</text>
+    <text class="t" x="1020" y="330">one result per mask</text>
+    <text class="t" x="1020" y="350">client decrypts</text>
+  </g>
+
+  <path class="line" d="M290 245 C320 245 326 302 352 312"/>
+  <path class="line" d="M290 395 C320 395 326 340 352 328"/>
+  <path class="line" d="M556 319 H712"/>
+  <path class="line" d="M950 319 H992"/>
+
+  <rect x="120" y="506" width="410" height="92" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <text class="h" x="144" y="536">Client final math</text>
+  <text class="t" x="144" y="562">missing_percent = missing_count / total_rows</text>
+  <text class="t" x="144" y="584">target_percent = target_count / train_rows</text>
+
+  <rect x="740" y="506" width="410" height="92" rx="8" fill="#fff1f2" stroke="#fecdd3"/>
+  <text class="h" x="764" y="536">Server cannot do</text>
+  <text class="t" x="764" y="562">raw null detection from CSV strings</text>
+  <text class="t" x="764" y="584">sorting top missing columns</text>
+</svg>
