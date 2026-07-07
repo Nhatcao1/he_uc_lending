@@ -70,7 +70,9 @@ using AggregateKey = std::tuple<std::string, std::string, std::string, std::stri
         << "    --manifest <aggregate_manifest.csv> \\\n"
         << "    --input-dir <encrypted_vectors_dir> \\\n"
         << "    --output-dir <server_returns_dir> \\\n"
-        << "    [--analysis-filter category|bucket|ratio]\n";
+        << "    [--analysis-filter missing_data|target_balance|application_category_counts|"
+           "application_default_rates|application_numeric_histograms|previous_application_category_counts|"
+           "previous_application_target_rates|selected_correlation_stats]\n";
     std::exit(error.empty() ? 0 : 2);
 }
 

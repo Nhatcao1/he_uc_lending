@@ -86,8 +86,8 @@ The submit page accepts one encrypted artifact bundle.
 Recommended browser flow:
 
 ```text
-select workload = Auto-detect from artifact
-choose the encrypted upload bag zip
+select Notebook EDA criterion = Auto-detect from artifact
+choose the encrypted criterion upload bag zip
 queue job
 ```
 
@@ -96,7 +96,9 @@ Create that zip on the client:
 ```bash
 python3 code/client/home_credit/package_home_credit_upload_bag.py \
   --encrypted-dir encrypted_payloads/home_credit_basic \
-  --output encrypted_payloads/home_credit_basic.upload.zip
+  --workload application_default_rates \
+  --output-dir client_runs/home_credit_basic/server_uploads \
+  --client-key-dir keys/home_credit_basic
 ```
 
 The server normalizes bundle paths, so a zip containing this layout is enough:
@@ -115,8 +117,23 @@ encrypted_payloads/home_credit_basic/
 ```
 
 The server extracts the zip, blocks raw/secret-looking paths, and auto-detects
-the workload when possible. If a bundle contains artifacts for multiple
-workloads, choose the exact workload in the dropdown.
+the EDA criterion when possible. If a bundle contains artifacts for multiple
+criteria, choose the exact criterion in the dropdown.
+
+Current notebook criteria:
+
+```text
+missing_data
+target_balance
+application_numeric_summary
+application_category_counts
+application_default_rates
+application_numeric_histograms
+previous_application_category_counts
+previous_application_target_rates
+selected_correlation_stats
+linear_score_demo
+```
 
 ## API
 

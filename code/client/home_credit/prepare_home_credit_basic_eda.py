@@ -23,13 +23,80 @@ MISSING_BUCKET = "__MISSING__"
 OTHER_BUCKET = "__OTHER__"
 
 DEFAULT_CATEGORY_CONFIG: dict[str, dict[str, object]] = {
+    "NAME_TYPE_SUITE": {"mode": "all"},
+    "NAME_CONTRACT_TYPE": {"mode": "all"},
+    "FLAG_OWN_CAR": {"mode": "all"},
+    "FLAG_OWN_REALTY": {"mode": "all"},
     "NAME_INCOME_TYPE": {"mode": "all"},
+    "NAME_FAMILY_STATUS": {"mode": "all"},
     "NAME_EDUCATION_TYPE": {"mode": "all"},
+    "NAME_HOUSING_TYPE": {"mode": "all"},
     "OCCUPATION_TYPE": {"mode": "top_k", "k": 20, "other_bucket": True},
     "ORGANIZATION_TYPE": {"mode": "top_k", "k": 30, "other_bucket": True},
 }
 
+DEFAULT_PREVIOUS_CATEGORY_CONFIG: dict[str, dict[str, object]] = {
+    "NAME_CONTRACT_TYPE": {"mode": "all"},
+    "WEEKDAY_APPR_PROCESS_START": {"mode": "all"},
+    "NAME_CASH_LOAN_PURPOSE": {"mode": "top_k", "k": 20, "other_bucket": True},
+    "NAME_CONTRACT_STATUS": {"mode": "all"},
+    "NAME_PAYMENT_TYPE": {"mode": "all"},
+    "CODE_REJECT_REASON": {"mode": "all"},
+    "NAME_TYPE_SUITE": {"mode": "all"},
+    "NAME_CLIENT_TYPE": {"mode": "all"},
+    "NAME_GOODS_CATEGORY": {"mode": "top_k", "k": 25, "other_bucket": True},
+    "NAME_PORTFOLIO": {"mode": "all"},
+    "NAME_PRODUCT_TYPE": {"mode": "all"},
+    "CHANNEL_TYPE": {"mode": "all"},
+    "NAME_SELLER_INDUSTRY": {"mode": "all"},
+    "NAME_YIELD_GROUP": {"mode": "all"},
+    "PRODUCT_COMBINATION": {"mode": "top_k", "k": 25, "other_bucket": True},
+    "NFLAG_INSURED_ON_APPROVAL": {"mode": "all"},
+}
+
 DEFAULT_AMOUNT_COLUMNS = ["AMT_CREDIT", "AMT_INCOME_TOTAL", "AMT_ANNUITY"]
+DEFAULT_NUMERIC_SUMMARY_COLUMNS = [
+    "AMT_CREDIT",
+    "AMT_INCOME_TOTAL",
+    "AMT_ANNUITY",
+    "AMT_GOODS_PRICE",
+    "EXT_SOURCE_1",
+    "EXT_SOURCE_2",
+    "EXT_SOURCE_3",
+    "DAYS_BIRTH",
+    "DAYS_EMPLOYED",
+]
+DEFAULT_MISSING_COLUMNS = [
+    "AMT_ANNUITY",
+    "AMT_GOODS_PRICE",
+    "EXT_SOURCE_1",
+    "EXT_SOURCE_2",
+    "EXT_SOURCE_3",
+    "OCCUPATION_TYPE",
+    "NAME_TYPE_SUITE",
+    "DAYS_EMPLOYED",
+]
+DEFAULT_HISTOGRAM_COLUMNS = [
+    "AMT_CREDIT",
+    "AMT_INCOME_TOTAL",
+    "AMT_ANNUITY",
+    "AMT_GOODS_PRICE",
+    "AGE_YEARS",
+    "EXT_SOURCE_1",
+    "EXT_SOURCE_2",
+    "EXT_SOURCE_3",
+    "CREDIT_INCOME_PERCENT",
+    "ANNUITY_INCOME_PERCENT",
+    "CREDIT_TERM",
+    "DAYS_EMPLOYED_PERCENT",
+]
+DEFAULT_CORRELATION_PAIRS = [
+    ("AMT_CREDIT", "AMT_INCOME_TOTAL"),
+    ("AMT_CREDIT", "AMT_ANNUITY"),
+    ("AMT_CREDIT", "AMT_GOODS_PRICE"),
+    ("EXT_SOURCE_2", "EXT_SOURCE_3"),
+    ("CREDIT_INCOME_PERCENT", "ANNUITY_INCOME_PERCENT"),
+]
 
 DEFAULT_MODEL_FEATURES = [
     {"name": "AMT_CREDIT_scaled", "source": "AMT_CREDIT", "weight": 0.15},
@@ -68,6 +135,7 @@ class RunningStats:
 
 @dataclass
 class VectorDef:
+    table: str
     name: str
     kind: str
     source_column: str
@@ -80,14 +148,46 @@ class VectorDef:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare Home Credit client-side EDA vectors.")
     parser.add_argument("--input", default="data/home_credit/application_train.csv")
+    parser.add_argument(
+        "--previous-application",
+        default="",
+        help="Optional previous_application.csv path for notebook 5.15 criteria.",
+    )
     parser.add_argument("--output-dir", default="prepared_payloads/home_credit_basic_eda")
     parser.add_argument("--row-limit", type=int, default=0, help="Optional local test limit. 0 means all rows.")
+    parser.add_argument(
+        "--previous-row-limit",
+        type=int,
+        default=0,
+        help="Optional previous_application local test limit. 0 means all rows.",
+    )
     parser.add_argument("--category-config", help="Optional JSON category policy file.")
+    parser.add_argument("--previous-category-config", help="Optional JSON previous_application category policy file.")
     parser.add_argument("--model-json", help="Optional trained/exported linear model JSON.")
     parser.add_argument(
         "--amount-columns",
         default=",".join(DEFAULT_AMOUNT_COLUMNS),
         help="Comma-separated amount columns to include in masked sums.",
+    )
+    parser.add_argument(
+        "--numeric-columns",
+        default=",".join(DEFAULT_NUMERIC_SUMMARY_COLUMNS),
+        help="Comma-separated application numeric columns for encrypted summary sums.",
+    )
+    parser.add_argument(
+        "--missing-columns",
+        default=",".join(DEFAULT_MISSING_COLUMNS),
+        help="Comma-separated application columns for encrypted missing-value counts.",
+    )
+    parser.add_argument(
+        "--histogram-columns",
+        default=",".join(DEFAULT_HISTOGRAM_COLUMNS),
+        help="Comma-separated application derived/raw numeric columns to bucket into encrypted histogram masks.",
+    )
+    parser.add_argument(
+        "--correlation-pairs",
+        default=";".join(f"{left}:{right}" for left, right in DEFAULT_CORRELATION_PAIRS),
+        help="Semicolon-separated selected pairs such as AMT_CREDIT:AMT_INCOME_TOTAL.",
     )
     return parser.parse_args()
 
@@ -108,6 +208,35 @@ def read_category_config(path: str | None) -> dict[str, dict[str, object]]:
     return {str(key): dict(value) for key, value in columns.items()}
 
 
+def read_previous_category_config(path: str | None) -> dict[str, dict[str, object]]:
+    if not path:
+        return DEFAULT_PREVIOUS_CATEGORY_CONFIG
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    columns = data.get("categorical_columns", data)
+    if not isinstance(columns, dict):
+        raise ValueError("previous category config must be a dict or contain categorical_columns")
+    return {str(key): dict(value) for key, value in columns.items()}
+
+
+def split_list(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def parse_correlation_pairs(value: str) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for item in value.split(";"):
+        cleaned = item.strip()
+        if not cleaned:
+            continue
+        if ":" not in cleaned:
+            raise ValueError(f"correlation pair must be left:right, got: {cleaned}")
+        left, right = [part.strip() for part in cleaned.split(":", 1)]
+        if not left or not right:
+            raise ValueError(f"correlation pair must be left:right, got: {cleaned}")
+        pairs.append((left, right))
+    return pairs
+
+
 def iter_rows(path: Path, row_limit: int) -> Iterable[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as input_file:
         reader = csv.DictReader(input_file)
@@ -124,6 +253,13 @@ def normalize_category(value: str | None) -> str:
     if not cleaned or cleaned.lower() in {"nan", "none", "null"}:
         return MISSING_BUCKET
     return cleaned
+
+
+def is_missing_value(value: str | None) -> bool:
+    if value is None:
+        return True
+    cleaned = str(value).strip()
+    return not cleaned or cleaned.lower() in {"nan", "none", "null"}
 
 
 def parse_float(value: str | None) -> float | None:
@@ -238,17 +374,36 @@ def collect_first_pass(
     row_limit: int,
     category_config: dict[str, dict[str, object]],
     model_features: list[dict[str, object]],
-) -> tuple[int, dict[str, Counter[str]], dict[str, RunningStats]]:
+) -> tuple[int, dict[str, Counter[str]], dict[str, RunningStats], dict[str, int]]:
     category_counts = {column: Counter() for column in category_config}
     stats = {str(feature["source"]): RunningStats() for feature in model_features}
+    target_by_curr: dict[str, int] = {}
+    rows = 0
+    for row in iter_rows(input_path, row_limit):
+        rows += 1
+        sk_id = (row.get("SK_ID_CURR") or "").strip()
+        target = parse_float(row.get("TARGET"))
+        if sk_id and target is not None:
+            target_by_curr[sk_id] = int(target)
+        for column, counter in category_counts.items():
+            counter[normalize_category(row.get(column))] += 1
+        for source, stat in stats.items():
+            stat.add(value_from_source(row, source))
+    return rows, category_counts, stats, target_by_curr
+
+
+def collect_category_counts(
+    input_path: Path,
+    row_limit: int,
+    category_config: dict[str, dict[str, object]],
+) -> tuple[int, dict[str, Counter[str]]]:
+    category_counts = {column: Counter() for column in category_config}
     rows = 0
     for row in iter_rows(input_path, row_limit):
         rows += 1
         for column, counter in category_counts.items():
             counter[normalize_category(row.get(column))] += 1
-        for source, stat in stats.items():
-            stat.add(value_from_source(row, source))
-    return rows, category_counts, stats
+    return rows, category_counts
 
 
 def selected_categories(category_config: dict[str, dict[str, object]], counts: dict[str, Counter[str]]) -> dict[str, list[str]]:
@@ -321,52 +476,131 @@ def scaled_feature(row: dict[str, str], feature: dict[str, object]) -> float:
 def build_vector_defs(
     category_config: dict[str, dict[str, object]],
     categories: dict[str, list[str]],
+    previous_categories: dict[str, list[str]],
     amount_columns: list[str],
+    numeric_columns: list[str],
+    missing_columns: list[str],
+    histogram_columns: list[str],
+    correlation_pairs: list[tuple[str, str]],
     model: dict[str, object],
+    target_by_curr: dict[str, int],
 ) -> tuple[list[VectorDef], list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
     vectors: list[VectorDef] = []
     aggregate_ops: list[dict[str, str]] = []
     numeric_rows: list[dict[str, str]] = []
     score_rows: list[dict[str, str]] = []
+    vector_names: set[str] = set()
+    numeric_vector_names: dict[str, str] = {}
 
-    target_name = "target.default"
-    vectors.append(
-        VectorDef(
-            name=target_name,
-            kind="target",
-            source_column="TARGET",
-            analysis="target",
-            group="TARGET",
-            label="default",
-            value_fn=lambda row: float(int(parse_float(row.get("TARGET")) or 0)),
-        )
-    )
+    def add_vector(vector: VectorDef) -> None:
+        if vector.name in vector_names:
+            return
+        vector_names.add(vector.name)
+        vectors.append(vector)
 
-    for column in amount_columns:
-        vector_name = f"numeric.{column}"
-        vectors.append(
+    def add_numeric_vector(source: str, *, summary: bool) -> str:
+        existing = numeric_vector_names.get(source)
+        if existing:
+            if summary and not any(row["column"] == source for row in numeric_rows):
+                numeric_rows.append({"column": source, "vector": existing})
+            return existing
+        vector_name = f"numeric.{safe_name(source)}"
+        numeric_vector_names[source] = vector_name
+        add_vector(
             VectorDef(
+                table="application_train",
                 name=vector_name,
-                kind="numeric",
-                source_column=column,
-                analysis="numeric_summary",
-                group=column,
-                label=column,
-                value_fn=lambda row, selected_column=column: float(value_from_source(row, selected_column) or 0.0),
+                kind="numeric" if summary else "numeric_aux",
+                source_column=source,
+                analysis="application_numeric_summary" if summary else "numeric_aux",
+                group=source,
+                label=source,
+                value_fn=lambda row, selected_source=source: float(value_from_source(row, selected_source) or 0.0),
             )
         )
-        numeric_rows.append({"column": column, "vector": vector_name})
+        if summary:
+            numeric_rows.append({"column": source, "vector": vector_name})
+        return vector_name
+
+    row_mask = "row.application_train.all"
+    target_default = "target.default"
+    target_repaid = "target.repaid"
+    add_vector(
+        VectorDef(
+            table="application_train",
+            name=row_mask,
+            kind="mask",
+            source_column="__ROW__",
+            analysis="target_balance",
+            group="TARGET",
+            label="all_rows",
+            value_fn=lambda row: 1.0,
+        )
+    )
+    add_vector(
+        VectorDef(
+            table="application_train",
+            name=target_default,
+            kind="target",
+            source_column="TARGET",
+            analysis="target_balance",
+            group="TARGET",
+            label="default",
+            value_fn=lambda row: float(int(parse_float(row.get("TARGET")) or 0) == 1),
+        )
+    )
+    add_vector(
+        VectorDef(
+            table="application_train",
+            name=target_repaid,
+            kind="target",
+            source_column="TARGET",
+            analysis="target_balance",
+            group="TARGET",
+            label="repaid",
+            value_fn=lambda row: float(parse_float(row.get("TARGET")) == 0),
+        )
+    )
+    add_count_op(aggregate_ops, "target_balance", "TARGET", "all_rows", row_mask)
+    add_count_op(aggregate_ops, "target_balance", "TARGET", "default", target_default)
+    add_count_op(aggregate_ops, "target_balance", "TARGET", "repaid", target_repaid)
+
+    for column in numeric_columns:
+        add_numeric_vector(column, summary=True)
+    for column in amount_columns:
+        add_numeric_vector(column, summary=column in numeric_columns)
+
+    for column in missing_columns:
+        vector_name = f"missing.application_train.{safe_name(column)}"
+        add_vector(
+            VectorDef(
+                table="application_train",
+                name=vector_name,
+                kind="mask",
+                source_column=column,
+                analysis="missing_data",
+                group=column,
+                label=MISSING_BUCKET,
+                value_fn=lambda row, selected_column=column: float(
+                    is_missing_value(row.get(selected_column))
+                    if selected_column not in {"AGE_YEARS", "CREDIT_INCOME_PERCENT", "ANNUITY_INCOME_PERCENT", "CREDIT_TERM", "DAYS_EMPLOYED_PERCENT"}
+                    else value_from_source(row, selected_column) is None
+                ),
+            )
+        )
+        add_count_op(aggregate_ops, "missing_data", column, MISSING_BUCKET, vector_name)
 
     for column in category_config:
         labels = categories[column]
         for label in labels:
-            vector_name = f"category.{safe_name(column)}.{safe_name(label)}"
-            vectors.append(
+            vector_name = f"category.application_train.{safe_name(column)}.{safe_name(label)}"
+            add_vector(
                 VectorDef(
+                    table="application_train",
                     name=vector_name,
                     kind="mask",
                     source_column=column,
-                    analysis="category",
+                    analysis="application_category_counts",
                     group=column,
                     label=label,
                     value_fn=lambda row, selected_column=column, selected_label=label, selected_labels=labels: float(
@@ -374,23 +608,141 @@ def build_vector_defs(
                     ),
                 )
             )
-            add_mask_ops(aggregate_ops, "category", column, label, vector_name, target_name, amount_columns)
+            add_count_op(aggregate_ops, "application_category_counts", column, label, vector_name)
+            add_mask_ops(
+                aggregate_ops,
+                "application_default_rates",
+                column,
+                label,
+                vector_name,
+                target_default,
+                amount_columns,
+            )
 
-    add_bucket_vectors(vectors, aggregate_ops, target_name)
-    add_ratio_vectors(vectors, aggregate_ops, target_name)
+    for source in histogram_columns:
+        for label in histogram_labels(source):
+            vector_name = f"histogram.application_train.{safe_name(source)}.{safe_name(label)}"
+            add_vector(
+                VectorDef(
+                    table="application_train",
+                    name=vector_name,
+                    kind="mask",
+                    source_column=source,
+                    analysis="application_numeric_histograms",
+                    group=source,
+                    label=label,
+                    value_fn=lambda row, selected_source=source, selected_label=label: float(
+                        bucket_histogram(row, selected_source) == selected_label
+                    ),
+                )
+            )
+            add_mask_ops(
+                aggregate_ops,
+                "application_numeric_histograms",
+                source,
+                label,
+                vector_name,
+                target_default,
+                [],
+            )
+
+    previous_target = "previous_application.target.default"
+    if previous_categories:
+        add_vector(
+            VectorDef(
+                table="previous_application",
+                name=previous_target,
+                kind="target",
+                source_column="SK_ID_CURR",
+                analysis="previous_application_target_rates",
+                group="TARGET",
+                label="default",
+                value_fn=lambda row: float(target_by_curr.get((row.get("SK_ID_CURR") or "").strip(), 0) == 1),
+            )
+        )
+    for column, labels in previous_categories.items():
+        for label in labels:
+            base_vector = f"category.previous_application.{safe_name(column)}.{safe_name(label)}"
+            joined_vector = f"joined.previous_application.{safe_name(column)}.{safe_name(label)}"
+            add_vector(
+                VectorDef(
+                    table="previous_application",
+                    name=base_vector,
+                    kind="mask",
+                    source_column=column,
+                    analysis="previous_application_category_counts",
+                    group=column,
+                    label=label,
+                    value_fn=lambda row, selected_column=column, selected_label=label, selected_labels=labels: float(
+                        category_label_for_value(row.get(selected_column), selected_labels) == selected_label
+                    ),
+                )
+            )
+            add_vector(
+                VectorDef(
+                    table="previous_application",
+                    name=joined_vector,
+                    kind="mask",
+                    source_column=f"{column}+SK_ID_CURR",
+                    analysis="previous_application_target_rates",
+                    group=column,
+                    label=label,
+                    value_fn=lambda row, selected_column=column, selected_label=label, selected_labels=labels: float(
+                        (row.get("SK_ID_CURR") or "").strip() in target_by_curr
+                        and category_label_for_value(row.get(selected_column), selected_labels) == selected_label
+                    ),
+                )
+            )
+            add_count_op(aggregate_ops, "previous_application_category_counts", column, label, base_vector)
+            add_mask_ops(
+                aggregate_ops,
+                "previous_application_target_rates",
+                column,
+                label,
+                joined_vector,
+                previous_target,
+                [],
+            )
+
+    for left, right in correlation_pairs:
+        left_vector = add_numeric_vector(left, summary=left in numeric_columns)
+        right_vector = add_numeric_vector(right, summary=right in numeric_columns)
+        pair_label = f"{left}__{right}"
+        valid_vector = f"corr.valid.{safe_name(left)}.{safe_name(right)}"
+        add_vector(
+            VectorDef(
+                table="application_train",
+                name=valid_vector,
+                kind="mask",
+                source_column=pair_label,
+                analysis="selected_correlation_stats",
+                group=pair_label,
+                label="valid_pair",
+                value_fn=lambda row, selected_left=left, selected_right=right: float(
+                    value_from_source(row, selected_left) is not None and value_from_source(row, selected_right) is not None
+                ),
+            )
+        )
+        add_count_op(aggregate_ops, "selected_correlation_stats", pair_label, "n", valid_vector)
+        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_x", valid_vector, left_vector)
+        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_y", valid_vector, right_vector)
+        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_xy", left_vector, right_vector)
+        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_x2", left_vector, left_vector)
+        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_y2", right_vector, right_vector)
 
     for feature in model.get("features", []):
         if not isinstance(feature, dict):
             continue
         feature_name = str(feature["name"])
         vector_name = f"ml.{safe_name(feature_name)}"
-        vectors.append(
+        add_vector(
             VectorDef(
+                table="application_train",
                 name=vector_name,
                 kind="ml_feature",
                 source_column=str(feature.get("source", feature_name)),
-                analysis="linear_score",
-                group="linear_score",
+                analysis="linear_score_demo",
+                group="linear_score_demo",
                 label=feature_name,
                 value_fn=lambda row, selected_feature=feature: scaled_feature(row, selected_feature),
             )
@@ -407,14 +759,12 @@ def build_vector_defs(
     return vectors, aggregate_ops, numeric_rows, score_rows
 
 
-def add_mask_ops(
+def add_count_op(
     aggregate_ops: list[dict[str, str]],
     analysis: str,
     group: str,
     label: str,
     mask_vector: str,
-    target_vector: str,
-    amount_columns: list[str],
 ) -> None:
     aggregate_ops.append(
         {
@@ -427,6 +777,39 @@ def add_mask_ops(
             "value_vector": "",
         }
     )
+
+
+def add_masked_sum_op(
+    aggregate_ops: list[dict[str, str]],
+    analysis: str,
+    group: str,
+    value_name: str,
+    mask_vector: str,
+    value_vector: str,
+) -> None:
+    aggregate_ops.append(
+        {
+            "analysis": analysis,
+            "group": group,
+            "label": value_name,
+            "operation": "masked_sum",
+            "value_name": value_name,
+            "mask_vector": mask_vector,
+            "value_vector": value_vector,
+        }
+    )
+
+
+def add_mask_ops(
+    aggregate_ops: list[dict[str, str]],
+    analysis: str,
+    group: str,
+    label: str,
+    mask_vector: str,
+    target_vector: str,
+    amount_columns: list[str],
+) -> None:
+    add_count_op(aggregate_ops, analysis, group, label, mask_vector)
     aggregate_ops.append(
         {
             "analysis": analysis,
@@ -452,84 +835,50 @@ def add_mask_ops(
         )
 
 
-def add_bucket_vectors(vectors: list[VectorDef], aggregate_ops: list[dict[str, str]], target_name: str) -> None:
-    amount_columns: list[str] = []
-    age_labels = ["lt_25", "25_34", "35_44", "45_54", "55_64", "65_plus", MISSING_BUCKET]
-    for label in age_labels:
-        name = f"bucket.age.{safe_name(label)}"
-        vectors.append(
-            VectorDef(
-                name=name,
-                kind="mask",
-                source_column="DAYS_BIRTH",
-                analysis="bucket",
-                group="AGE_YEARS",
-                label=label,
-                value_fn=lambda row, selected_label=label: float(bucket_age(row) == selected_label),
-            )
-        )
-        add_mask_ops(aggregate_ops, "bucket", "AGE_YEARS", label, name, target_name, amount_columns)
-
-    ext_labels = [MISSING_BUCKET, "0_0.2", "0.2_0.4", "0.4_0.6", "0.6_0.8", "0.8_1.0"]
-    for column in ["EXT_SOURCE_1", "EXT_SOURCE_2", "EXT_SOURCE_3"]:
-        for label in ext_labels:
-            name = f"bucket.{safe_name(column)}.{safe_name(label)}"
-            vectors.append(
-                VectorDef(
-                    name=name,
-                    kind="mask",
-                    source_column=column,
-                    analysis="bucket",
-                    group=column,
-                    label=label,
-                    value_fn=lambda row, selected_column=column, selected_label=label: float(
-                        bucket_ext_source(row, selected_column) == selected_label
-                    ),
-                )
-            )
-            add_mask_ops(aggregate_ops, "bucket", column, label, name, target_name, amount_columns)
-
-    for label in [MISSING_BUCKET, "anomaly_365243", "normal"]:
-        name = f"bucket.DAYS_EMPLOYED.{safe_name(label)}"
-        vectors.append(
-            VectorDef(
-                name=name,
-                kind="mask",
-                source_column="DAYS_EMPLOYED",
-                analysis="bucket",
-                group="DAYS_EMPLOYED",
-                label=label,
-                value_fn=lambda row, selected_label=label: float(bucket_days_employed(row) == selected_label),
-            )
-        )
-        add_mask_ops(aggregate_ops, "bucket", "DAYS_EMPLOYED", label, name, target_name, amount_columns)
+def histogram_labels(source: str) -> list[str]:
+    if source == "AGE_YEARS":
+        return ["lt_25", "25_34", "35_44", "45_54", "55_64", "65_plus", MISSING_BUCKET]
+    if source in {"EXT_SOURCE_1", "EXT_SOURCE_2", "EXT_SOURCE_3"}:
+        return [MISSING_BUCKET, "0_0.2", "0.2_0.4", "0.4_0.6", "0.6_0.8", "0.8_1.0"]
+    if source == "DAYS_EMPLOYED":
+        return [MISSING_BUCKET, "anomaly_365243", "normal"]
+    if source in {"CREDIT_INCOME_PERCENT", "ANNUITY_INCOME_PERCENT", "CREDIT_TERM", "DAYS_EMPLOYED_PERCENT"}:
+        return ["invalid", "negative", "0_0.1", "0.1_0.2", "0.2_0.4", "0.4_0.6", "0.6_1.0", "gte_1.0"]
+    if source == "AMT_INCOME_TOTAL":
+        return [MISSING_BUCKET, "0_100k", "100k_200k", "200k_500k", "500k_plus"]
+    return [MISSING_BUCKET, "0_100k", "100k_300k", "300k_600k", "600k_1m", "1m_plus"]
 
 
-def add_ratio_vectors(vectors: list[VectorDef], aggregate_ops: list[dict[str, str]], target_name: str) -> None:
-    ratio_sources = [
-        "CREDIT_INCOME_PERCENT",
-        "ANNUITY_INCOME_PERCENT",
-        "CREDIT_TERM",
-        "DAYS_EMPLOYED_PERCENT",
-    ]
-    labels = ["invalid", "negative", "0_0.1", "0.1_0.2", "0.2_0.4", "0.4_0.6", "0.6_1.0", "gte_1.0"]
-    for source in ratio_sources:
-        for label in labels:
-            name = f"ratio.{safe_name(source)}.{safe_name(label)}"
-            vectors.append(
-                VectorDef(
-                    name=name,
-                    kind="mask",
-                    source_column=source,
-                    analysis="ratio",
-                    group=source,
-                    label=label,
-                    value_fn=lambda row, selected_source=source, selected_label=label: float(
-                        bucket_ratio(row, selected_source) == selected_label
-                    ),
-                )
-            )
-            add_mask_ops(aggregate_ops, "ratio", source, label, name, target_name, [])
+def bucket_histogram(row: dict[str, str], source: str) -> str:
+    if source == "AGE_YEARS":
+        return bucket_age(row)
+    if source in {"EXT_SOURCE_1", "EXT_SOURCE_2", "EXT_SOURCE_3"}:
+        return bucket_ext_source(row, source)
+    if source == "DAYS_EMPLOYED":
+        return bucket_days_employed(row)
+    if source in {"CREDIT_INCOME_PERCENT", "ANNUITY_INCOME_PERCENT", "CREDIT_TERM", "DAYS_EMPLOYED_PERCENT"}:
+        return bucket_ratio(row, source)
+
+    value = value_from_source(row, source)
+    if value is None:
+        return MISSING_BUCKET
+    if source == "AMT_INCOME_TOTAL":
+        if value < 100_000:
+            return "0_100k"
+        if value < 200_000:
+            return "100k_200k"
+        if value < 500_000:
+            return "200k_500k"
+        return "500k_plus"
+    if value < 100_000:
+        return "0_100k"
+    if value < 300_000:
+        return "100k_300k"
+    if value < 600_000:
+        return "300k_600k"
+    if value < 1_000_000:
+        return "600k_1m"
+    return "1m_plus"
 
 
 def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, object]]) -> None:
@@ -539,20 +888,31 @@ def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, object]]) 
         writer.writerows(rows)
 
 
-def write_vectors(input_path: Path, output_dir: Path, row_limit: int, vectors: list[VectorDef]) -> int:
+def write_vectors(
+    table_inputs: dict[str, tuple[Path, int]],
+    output_dir: Path,
+    vectors: list[VectorDef],
+) -> dict[str, int]:
     vector_dir = output_dir / "vectors"
     vector_dir.mkdir(parents=True, exist_ok=True)
     handles: dict[str, object] = {}
+    rows_by_vector: dict[str, int] = {vector.name: 0 for vector in vectors}
+    vectors_by_table: dict[str, list[VectorDef]] = defaultdict(list)
+    for vector in vectors:
+        vectors_by_table[vector.table].append(vector)
     try:
         for vector in vectors:
             handles[vector.name] = (vector_dir / f"{safe_name(vector.name)}.csv").open("w", encoding="utf-8", newline="")
-        rows = 0
-        for row in iter_rows(input_path, row_limit):
-            rows += 1
-            for vector in vectors:
-                value = vector.value_fn(row)
-                handles[vector.name].write(f"{float(value):.17g}\n")
-        return rows
+        for table, table_vectors in vectors_by_table.items():
+            if table not in table_inputs:
+                raise ValueError(f"no input path configured for vector table: {table}")
+            input_path, row_limit = table_inputs[table]
+            for row in iter_rows(input_path, row_limit):
+                for vector in table_vectors:
+                    value = vector.value_fn(row)
+                    handles[vector.name].write(f"{float(value):.17g}\n")
+                    rows_by_vector[vector.name] += 1
+        return rows_by_vector
     finally:
         for handle in handles.values():
             handle.close()
@@ -561,38 +921,74 @@ def write_vectors(input_path: Path, output_dir: Path, row_limit: int, vectors: l
 def main() -> None:
     args = parse_args()
     input_path = Path(args.input)
+    previous_path = Path(args.previous_application) if args.previous_application else None
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    amount_columns = [item.strip() for item in args.amount_columns.split(",") if item.strip()]
-    category_config = read_category_config(args.category_config)
+    if previous_path and not previous_path.is_file():
+        raise FileNotFoundError(f"previous_application file not found: {previous_path}")
 
-    rows, category_counts, initial_stats = collect_first_pass(
+    amount_columns = split_list(args.amount_columns)
+    numeric_columns = list(dict.fromkeys(split_list(args.numeric_columns) + amount_columns))
+    missing_columns = split_list(args.missing_columns)
+    histogram_columns = split_list(args.histogram_columns)
+    correlation_pairs = parse_correlation_pairs(args.correlation_pairs)
+    category_config = read_category_config(args.category_config)
+    previous_category_config = read_previous_category_config(args.previous_category_config) if previous_path else {}
+
+    rows, category_counts, initial_stats, target_by_curr = collect_first_pass(
         input_path,
         args.row_limit,
         category_config,
         DEFAULT_MODEL_FEATURES,
     )
+    previous_rows = 0
+    previous_selected: dict[str, list[str]] = {}
+    if previous_path:
+        previous_rows, previous_counts = collect_category_counts(
+            previous_path,
+            args.previous_row_limit,
+            previous_category_config,
+        )
+        previous_selected = selected_categories(previous_category_config, previous_counts)
+
     model = read_model(args.model_json, initial_stats)
     selected = selected_categories(category_config, category_counts)
-    vectors, aggregate_ops, numeric_rows, score_rows = build_vector_defs(category_config, selected, amount_columns, model)
-    written_rows = write_vectors(input_path, output_dir, args.row_limit, vectors)
+    vectors, aggregate_ops, numeric_rows, score_rows = build_vector_defs(
+        category_config,
+        selected,
+        previous_selected,
+        amount_columns,
+        numeric_columns,
+        missing_columns,
+        histogram_columns,
+        correlation_pairs,
+        model,
+        target_by_curr,
+    )
+    table_inputs: dict[str, tuple[Path, int]] = {
+        "application_train": (input_path, args.row_limit),
+    }
+    if previous_path:
+        table_inputs["previous_application"] = (previous_path, args.previous_row_limit)
+    rows_by_vector = write_vectors(table_inputs, output_dir, vectors)
 
     vector_manifest_rows = [
         {
+            "table": vector.table,
             "name": vector.name,
             "kind": vector.kind,
             "source_column": vector.source_column,
             "analysis": vector.analysis,
             "group": vector.group,
             "label": vector.label,
-            "rows": written_rows,
+            "rows": rows_by_vector[vector.name],
             "file": f"vectors/{safe_name(vector.name)}.csv",
         }
         for vector in vectors
     ]
     write_csv(
         output_dir / "vector_manifest.csv",
-        ["name", "kind", "source_column", "analysis", "group", "label", "rows", "file"],
+        ["table", "name", "kind", "source_column", "analysis", "group", "label", "rows", "file"],
         vector_manifest_rows,
     )
     write_csv(
@@ -605,17 +1001,38 @@ def main() -> None:
 
     (output_dir / "linear_score_model.json").write_text(json.dumps(model, indent=2), encoding="utf-8")
     prep_manifest = {
-        "source": str(input_path),
-        "rows": rows,
-        "written_rows": written_rows,
+        "application_train_source": str(input_path),
+        "previous_application_source": str(previous_path) if previous_path else "",
+        "application_train_rows": rows,
+        "previous_application_rows": previous_rows,
         "row_limit": args.row_limit,
+        "previous_row_limit": args.previous_row_limit,
         "category_config": category_config,
         "selected_categories": selected,
+        "previous_category_config": previous_category_config,
+        "selected_previous_categories": previous_selected,
         "missing_bucket": MISSING_BUCKET,
         "other_bucket": OTHER_BUCKET,
         "amount_columns": amount_columns,
+        "numeric_columns": numeric_columns,
+        "missing_columns": missing_columns,
+        "histogram_columns": histogram_columns,
+        "correlation_pairs": correlation_pairs,
+        "target_lookup_count": len(target_by_curr),
         "vector_count": len(vectors),
         "aggregate_operation_count": len(aggregate_ops),
+        "implemented_criteria": [
+            "missing_data",
+            "target_balance",
+            "application_numeric_summary",
+            "application_category_counts",
+            "application_default_rates",
+            "application_numeric_histograms",
+            "previous_application_category_counts" if previous_path else "previous_application_category_counts skipped",
+            "previous_application_target_rates" if previous_path else "previous_application_target_rates skipped",
+            "selected_correlation_stats",
+            "linear_score_demo",
+        ],
         "model_type": model.get("model_type"),
         "model_trained": model.get("trained", False),
         "note": "Prepared plaintext vectors are local client artifacts. Encrypt before server upload.",
@@ -623,7 +1040,8 @@ def main() -> None:
     (output_dir / "preparation_manifest.json").write_text(json.dumps(prep_manifest, indent=2), encoding="utf-8")
 
     print(f"prepared Home Credit vectors: {output_dir}")
-    print(f"rows: {written_rows}")
+    print(f"application_train rows: {rows}")
+    print(f"previous_application rows: {previous_rows}")
     print(f"vectors: {len(vectors)}")
     print(f"aggregate operations: {len(aggregate_ops)}")
 

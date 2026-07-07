@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .job_types import JOB_TYPES
+from .job_types import JOB_TYPES, visible_job_types
 from .settings import Settings
 
 
@@ -195,7 +195,7 @@ def directory_size(path: Path) -> int:
 def use_case_results(settings: Settings) -> list[dict[str, Any]]:
     jobs = list_jobs(settings, limit=500)
     grouped: dict[str, dict[str, Any]] = {}
-    for job_type, cfg in JOB_TYPES.items():
+    for job_type, cfg in visible_job_types().items():
         grouped[job_type] = {
             "job_type": job_type,
             "label": cfg["label"],
@@ -221,4 +221,3 @@ def use_case_results(settings: Settings) -> list[dict[str, Any]]:
             item["latest_updated_at"] = updated
             item["latest_output_files"] = job.get("output_files", [])
     return list(grouped.values())
-

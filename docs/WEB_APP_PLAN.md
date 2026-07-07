@@ -4,7 +4,7 @@ The web app is a thin receiver for encrypted Home Credit HE jobs.
 
 It should not implement HE math. It should:
 
-- show available Home Credit workflows
+- show available Home Credit notebook EDA criteria
 - show client-side preparation requirements
 - validate required encrypted artifacts before submit
 - store each upload under `server_jobs/web/<job_id>/work`
@@ -12,18 +12,24 @@ It should not implement HE math. It should:
 - expose a one-click encrypted result bundle zip
 - expose job status and encrypted result downloads
 
-## Active Workflows
+## Active EDA Criteria
 
 ```text
-home_credit_numeric_summary
-home_credit_category_eda
-home_credit_bucket_eda
-home_credit_domain_ratio_eda
-home_credit_linear_score
+home_credit_missing_data
+home_credit_target_balance
+home_credit_application_numeric_summary
+home_credit_application_category_counts
+home_credit_application_default_rates
+home_credit_application_numeric_histograms
+home_credit_previous_application_category_counts
+home_credit_previous_application_target_rates
+home_credit_selected_correlation_stats
+home_credit_linear_score_demo
 ```
 
-The page also shows a read-only current result view per use case. It reports
-the latest job id, latest status, and output file count for each workflow.
+The page also shows a read-only current result view per EDA criterion. It
+reports the latest job id, latest status, runtime, and output file count for
+each criterion.
 
 Workflow diagrams:
 
@@ -40,13 +46,24 @@ docs/diagrams/07_async_web_job_architecture.svg
 
 ## Runtime
 
-Manual run:
+Manual async run:
 
 ```bash
-python3 code/server/web/he_job_server.py \
-  --host 100.84.97.118 \
-  --port 8080 \
-  --build-dir build
+export PYTHONPATH="$PWD/code/server/web_async"
+export HE_ASYNC_BUILD_DIR="$PWD/build"
+export HE_ASYNC_JOBS_DIR="$PWD/server_jobs/async"
+export HE_ASYNC_DB_PATH="$PWD/server_jobs/async/jobs.db"
+uvicorn he_async_web.app:app --host 100.84.97.118 --port 8080
+```
+
+Worker:
+
+```bash
+export PYTHONPATH="$PWD/code/server/web_async"
+export HE_ASYNC_BUILD_DIR="$PWD/build"
+export HE_ASYNC_JOBS_DIR="$PWD/server_jobs/async"
+export HE_ASYNC_DB_PATH="$PWD/server_jobs/async/jobs.db"
+python3 -m he_async_web.worker
 ```
 
 Optional web token:
@@ -59,9 +76,9 @@ The token is only web access control. It is not an HE key.
 
 ## Next Web App Direction
 
-The current no-dependency HTTP server is good for proof-of-concept upload and
-execution, but it is not the right long-running job UX. HE jobs can take too
-long for a user to submit a bundle and stare at one page.
+The old no-dependency HTTP server is legacy. The active implementation is the
+FastAPI/RQ async server because HE jobs can take too long for a user to submit a
+bundle and stare at one page.
 
 Move toward a small job platform:
 
@@ -178,7 +195,7 @@ Route:
 
 Purpose:
 
-- choose HE workload
+- choose Home Credit EDA criterion
 - show upload contract
 - upload encrypted bundle
 - create job record
@@ -199,7 +216,7 @@ Routes:
 Purpose:
 
 - list queued/running/done/failed jobs
-- show status, workload type, created time, runtime, worker hostname
+- show status, EDA criterion, created time, runtime, worker hostname
 - show command being executed
 - show last server log lines
 - show output files when done
@@ -269,7 +286,7 @@ Job record:
 ```json
 {
   "job_id": "20260705-120000-abcd1234",
-  "workload": "home_credit_numeric_summary",
+  "job_type": "home_credit_application_default_rates",
   "status": "running",
   "created_at": "...",
   "started_at": "...",

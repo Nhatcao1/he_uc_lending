@@ -13,26 +13,53 @@ import zipfile
 from pathlib import Path
 
 
-WORKLOADS = (
+CANONICAL_WORKLOADS = (
     "all",
-    "numeric_summary",
-    "category_eda",
-    "bucket_eda",
-    "domain_ratio_eda",
-    "linear_score",
+    "missing_data",
+    "target_balance",
+    "application_numeric_summary",
+    "application_category_counts",
+    "application_default_rates",
+    "application_numeric_histograms",
+    "previous_application_category_counts",
+    "previous_application_target_rates",
+    "selected_correlation_stats",
+    "linear_score_demo",
 )
-WORKLOAD_FILE_STEMS = {
-    "all": "home_credit_all",
-    "numeric_summary": "home_credit_numeric_summary",
-    "category_eda": "home_credit_category_eda",
-    "bucket_eda": "home_credit_bucket_eda",
-    "domain_ratio_eda": "home_credit_domain_ratio_eda",
-    "linear_score": "home_credit_linear_score",
+LEGACY_WORKLOAD_ALIASES = {
+    "numeric_summary": "application_numeric_summary",
+    "category_eda": "application_default_rates",
+    "bucket_eda": "application_numeric_histograms",
+    "domain_ratio_eda": "application_numeric_histograms",
+    "linear_score": "linear_score_demo",
 }
+WORKLOADS = CANONICAL_WORKLOADS + tuple(LEGACY_WORKLOAD_ALIASES)
+WORKLOAD_TO_JOB_TYPE = {
+    "all": "auto",
+    "missing_data": "home_credit_missing_data",
+    "target_balance": "home_credit_target_balance",
+    "application_numeric_summary": "home_credit_application_numeric_summary",
+    "application_category_counts": "home_credit_application_category_counts",
+    "application_default_rates": "home_credit_application_default_rates",
+    "application_numeric_histograms": "home_credit_application_numeric_histograms",
+    "previous_application_category_counts": "home_credit_previous_application_category_counts",
+    "previous_application_target_rates": "home_credit_previous_application_target_rates",
+    "selected_correlation_stats": "home_credit_selected_correlation_stats",
+    "linear_score_demo": "home_credit_linear_score_demo",
+}
+WORKLOAD_FILE_STEMS = {
+    workload: f"home_credit_{workload}" for workload in CANONICAL_WORKLOADS if workload != "all"
+}
+WORKLOAD_FILE_STEMS["all"] = "home_credit_all"
 AGGREGATE_ANALYSIS = {
-    "category_eda": "category",
-    "bucket_eda": "bucket",
-    "domain_ratio_eda": "ratio",
+    "missing_data": "missing_data",
+    "target_balance": "target_balance",
+    "application_category_counts": "application_category_counts",
+    "application_default_rates": "application_default_rates",
+    "application_numeric_histograms": "application_numeric_histograms",
+    "previous_application_category_counts": "previous_application_category_counts",
+    "previous_application_target_rates": "previous_application_target_rates",
+    "selected_correlation_stats": "selected_correlation_stats",
 }
 REQUIRED_TOP_LEVEL = (
     "crypto_context.bin",
@@ -77,7 +104,7 @@ def parse_args() -> argparse.Namespace:
         "--workload",
         choices=WORKLOADS,
         default="all",
-        help="Upload bag to create. Use a specific workload for smaller browser uploads.",
+        help="Notebook EDA criterion upload bag to create. Legacy names are accepted and mapped forward.",
     )
     parser.add_argument("--output", type=Path, help="Output zip path. Overrides --output-dir naming.")
     parser.add_argument(
@@ -106,6 +133,10 @@ def parse_args() -> argparse.Namespace:
         help="Do not copy secret_key.bin even when --client-key-dir is provided.",
     )
     return parser.parse_args()
+
+
+def canonical_workload(workload: str) -> str:
+    return LEGACY_WORKLOAD_ALIASES.get(workload, workload)
 
 
 def is_blocked(path: Path) -> bool:
@@ -255,11 +286,11 @@ def collect_linear_score_files(encrypted_dir: Path) -> tuple[list[Path], dict[st
 def collect_files(encrypted_dir: Path, workload: str, include_public_key: bool) -> tuple[list[Path], dict[str, str]]:
     if workload == "all":
         return collect_all_files(encrypted_dir, include_public_key)
-    if workload == "numeric_summary":
+    if workload == "application_numeric_summary":
         files, generated = collect_numeric_summary_files(encrypted_dir)
     elif workload in AGGREGATE_ANALYSIS:
         files, generated = collect_aggregate_files(encrypted_dir, workload)
-    elif workload == "linear_score":
+    elif workload == "linear_score_demo":
         files, generated = collect_linear_score_files(encrypted_dir)
     else:
         raise ValueError(f"unknown workload: {workload}")
@@ -279,11 +310,11 @@ def collect_files(encrypted_dir: Path, workload: str, include_public_key: bool) 
     return safe_files, generated
 
 
-def output_path_for(args: argparse.Namespace, encrypted_dir: Path) -> Path:
+def output_path_for(args: argparse.Namespace, encrypted_dir: Path, workload: str) -> Path:
     if args.output:
         return args.output
     output_dir = args.output_dir or (encrypted_dir / "upload_bags")
-    return output_dir / f"{WORKLOAD_FILE_STEMS[args.workload]}.upload.zip"
+    return output_dir / f"{WORKLOAD_FILE_STEMS[workload]}.upload.zip"
 
 
 def secret_output_dir_for(args: argparse.Namespace, upload_dir: Path) -> Path:
@@ -328,6 +359,7 @@ def write_zip(
         manifest = {
             "artifact_type": "home_credit_encrypted_upload_bag",
             "workload": workload,
+            "job_type": WORKLOAD_TO_JOB_TYPE[workload],
             "source_dir": str(encrypted_dir),
             "file_count": len(files) + len(generated),
             "files": [path.relative_to(encrypted_dir).as_posix() for path in files],
@@ -382,17 +414,22 @@ def copy_client_material(
 
 def main() -> None:
     args = parse_args()
+    requested_workload = args.workload
+    workload = canonical_workload(requested_workload)
     encrypted_dir = args.encrypted_dir.resolve()
     if not encrypted_dir.is_dir():
         raise NotADirectoryError(f"encrypted-dir is not a directory: {encrypted_dir}")
-    files, generated = collect_files(encrypted_dir, args.workload, args.include_public_key)
-    output_path = output_path_for(args, encrypted_dir)
+    files, generated = collect_files(encrypted_dir, workload, args.include_public_key)
+    output_path = output_path_for(args, encrypted_dir, workload)
     material_metadata = client_material_metadata(encrypted_dir, args)
-    write_zip(encrypted_dir, output_path, args.workload, files, generated, material_metadata)
+    write_zip(encrypted_dir, output_path, workload, files, generated, material_metadata)
     copied_secret = copy_client_material(args, encrypted_dir, output_path.parent, material_metadata)
     print(f"upload bag: {output_path}")
     print(f"upload dir: {output_path.parent}")
-    print(f"workload: {args.workload}")
+    print(f"workload: {workload}")
+    if requested_workload != workload:
+        print(f"legacy workload alias: {requested_workload} -> {workload}")
+    print(f"job type: {WORKLOAD_TO_JOB_TYPE[workload]}")
     print(f"client material id: {material_metadata['client_material_id']}")
     print(f"files: {len(files) + len(generated)}")
     print("secret key included: no")

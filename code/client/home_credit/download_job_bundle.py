@@ -18,37 +18,102 @@ from urllib.request import Request, urlopen
 
 
 DECRYPT_CONFIG = {
-    "home_credit_numeric_summary": {
-        "manifest": "numeric_summary/summary_manifest.csv",
-        "input_dir": "numeric_summary",
-        "output_csv": "decrypted_numeric_summary.csv",
+    "home_credit_missing_data": {
+        "manifest": "missing_data/aggregate_summary_manifest.csv",
+        "input_dir": "missing_data",
+        "output_csv": "decrypted_missing_data.csv",
+        "manifest_type": "aggregate",
+    },
+    "home_credit_target_balance": {
+        "manifest": "target_balance/aggregate_summary_manifest.csv",
+        "input_dir": "target_balance",
+        "output_csv": "decrypted_target_balance.csv",
+        "manifest_type": "aggregate",
+    },
+    "home_credit_application_numeric_summary": {
+        "manifest": "application_numeric_summary/summary_manifest.csv",
+        "input_dir": "application_numeric_summary",
+        "output_csv": "decrypted_application_numeric_summary.csv",
         "manifest_type": "numeric",
     },
-    "home_credit_category_eda": {
-        "manifest": "category_eda/aggregate_summary_manifest.csv",
-        "input_dir": "category_eda",
-        "output_csv": "decrypted_category_eda.csv",
+    "home_credit_application_category_counts": {
+        "manifest": "application_category_counts/aggregate_summary_manifest.csv",
+        "input_dir": "application_category_counts",
+        "output_csv": "decrypted_application_category_counts.csv",
         "manifest_type": "aggregate",
     },
-    "home_credit_bucket_eda": {
-        "manifest": "bucket_eda/aggregate_summary_manifest.csv",
-        "input_dir": "bucket_eda",
-        "output_csv": "decrypted_bucket_eda.csv",
+    "home_credit_application_default_rates": {
+        "manifest": "application_default_rates/aggregate_summary_manifest.csv",
+        "input_dir": "application_default_rates",
+        "output_csv": "decrypted_application_default_rates.csv",
         "manifest_type": "aggregate",
     },
-    "home_credit_domain_ratio_eda": {
-        "manifest": "ratio_eda/aggregate_summary_manifest.csv",
-        "input_dir": "ratio_eda",
-        "output_csv": "decrypted_ratio_eda.csv",
+    "home_credit_application_numeric_histograms": {
+        "manifest": "application_numeric_histograms/aggregate_summary_manifest.csv",
+        "input_dir": "application_numeric_histograms",
+        "output_csv": "decrypted_application_numeric_histograms.csv",
         "manifest_type": "aggregate",
     },
-    "home_credit_linear_score": {
-        "manifest": "linear_score/score_summary_manifest.csv",
-        "input_dir": "linear_score",
-        "output_csv": "decrypted_linear_scores.csv",
+    "home_credit_previous_application_category_counts": {
+        "manifest": "previous_application_category_counts/aggregate_summary_manifest.csv",
+        "input_dir": "previous_application_category_counts",
+        "output_csv": "decrypted_previous_application_category_counts.csv",
+        "manifest_type": "aggregate",
+    },
+    "home_credit_previous_application_target_rates": {
+        "manifest": "previous_application_target_rates/aggregate_summary_manifest.csv",
+        "input_dir": "previous_application_target_rates",
+        "output_csv": "decrypted_previous_application_target_rates.csv",
+        "manifest_type": "aggregate",
+    },
+    "home_credit_selected_correlation_stats": {
+        "manifest": "selected_correlation_stats/aggregate_summary_manifest.csv",
+        "input_dir": "selected_correlation_stats",
+        "output_csv": "decrypted_selected_correlation_stats.csv",
+        "manifest_type": "aggregate",
+    },
+    "home_credit_linear_score_demo": {
+        "manifest": "linear_score_demo/score_summary_manifest.csv",
+        "input_dir": "linear_score_demo",
+        "output_csv": "decrypted_linear_score_demo.csv",
         "manifest_type": "score",
     },
 }
+
+DECRYPT_CONFIG.update(
+    {
+        "home_credit_numeric_summary": {
+            "manifest": "numeric_summary/summary_manifest.csv",
+            "input_dir": "numeric_summary",
+            "output_csv": "decrypted_numeric_summary.csv",
+            "manifest_type": "numeric",
+        },
+        "home_credit_category_eda": {
+            "manifest": "category_eda/aggregate_summary_manifest.csv",
+            "input_dir": "category_eda",
+            "output_csv": "decrypted_category_eda.csv",
+            "manifest_type": "aggregate",
+        },
+        "home_credit_bucket_eda": {
+            "manifest": "bucket_eda/aggregate_summary_manifest.csv",
+            "input_dir": "bucket_eda",
+            "output_csv": "decrypted_bucket_eda.csv",
+            "manifest_type": "aggregate",
+        },
+        "home_credit_domain_ratio_eda": {
+            "manifest": "ratio_eda/aggregate_summary_manifest.csv",
+            "input_dir": "ratio_eda",
+            "output_csv": "decrypted_ratio_eda.csv",
+            "manifest_type": "aggregate",
+        },
+        "home_credit_linear_score": {
+            "manifest": "linear_score/score_summary_manifest.csv",
+            "input_dir": "linear_score",
+            "output_csv": "decrypted_linear_scores.csv",
+            "manifest_type": "score",
+        },
+    }
+)
 
 
 def parse_args() -> argparse.Namespace:

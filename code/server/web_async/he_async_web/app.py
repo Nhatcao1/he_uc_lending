@@ -22,7 +22,7 @@ from rq import Queue
 from rq.job import Job
 from starlette.datastructures import UploadFile
 
-from .job_types import JOB_TYPES, public_job_types
+from .job_types import ANALYSIS_TO_JOB_TYPE, JOB_TYPES, canonical_job_type, public_job_types, visible_job_types
 from .runner import create_result_bundle, read_log_tail
 from .security import normalize_upload_path
 from .settings import Settings, get_settings
@@ -43,7 +43,7 @@ from .storage import (
 )
 
 
-app = FastAPI(title="HE UC Credit Async Job Server", version="0.1.0")
+app = FastAPI(title="Home Credit HE EDA Async Job Server", version="0.2.0")
 templates = Environment(loader=BaseLoader(), autoescape=select_autoescape(["html", "xml"]))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("he_async_web")
@@ -288,9 +288,9 @@ def render_page(title: str, active: str, body: str) -> HTMLResponse:
 <body>
 <header>
   <div class="wrap">
-    <h1>HE UC Credit Jobs</h1>
+    <h1>Home Credit HE EDA Jobs</h1>
     <nav>
-      <a href="/jobs/new" class="{{ 'active' if active == 'new' else '' }}">Submit</a>
+      <a href="/jobs/new" class="{{ 'active' if active == 'new' else '' }}">Submit EDA</a>
       <a href="/jobs" class="{{ 'active' if active == 'jobs' else '' }}">Jobs</a>
       <a href="/results" class="{{ 'active' if active == 'results' else '' }}">Results</a>
     </nav>
@@ -379,7 +379,7 @@ def job_table(jobs: list[dict[str, Any]]) -> str:
     if not rows:
         rows.append('<tr><td colspan="8" class="muted">No jobs yet.</td></tr>')
     return (
-        "<table><thead><tr><th>Job</th><th>Workload</th><th>Status</th>"
+        "<table><thead><tr><th>Job</th><th>EDA criterion</th><th>Status</th>"
         "<th>Created</th><th>Finished</th><th>HE runtime</th><th>Total elapsed</th><th>Outputs</th></tr></thead><tbody>"
         + "\n".join(rows)
         + "</tbody></table>"
@@ -397,11 +397,22 @@ def required_files_present(root: Path, job_type: str) -> bool:
 
 
 def detect_job_type(root: Path) -> str:
-    if required_files_present(root, "home_credit_numeric_summary"):
-        return "home_credit_numeric_summary"
-    if required_files_present(root, "home_credit_linear_score"):
-        return "home_credit_linear_score"
-    if required_files_present(root, "home_credit_category_eda"):
+    upload_manifest = root / "upload_bag_manifest.json"
+    if upload_manifest.is_file():
+        try:
+            manifest = json.loads(upload_manifest.read_text(encoding="utf-8"))
+            manifest_job_type = canonical_job_type(str(manifest.get("job_type") or ""))
+            if manifest_job_type in JOB_TYPES and required_files_present(root, manifest_job_type):
+                return manifest_job_type
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    if required_files_present(root, "home_credit_application_numeric_summary"):
+        return "home_credit_application_numeric_summary"
+    if required_files_present(root, "home_credit_linear_score_demo"):
+        return "home_credit_linear_score_demo"
+    aggregate_probe = "home_credit_application_category_counts"
+    if required_files_present(root, aggregate_probe):
         manifest = root / "aggregate_manifest.csv"
         try:
             lines = manifest.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -409,18 +420,15 @@ def detect_job_type(root: Path) -> str:
             lines = []
         for line in lines[1:50]:
             first = line.split(",", 1)[0].strip().lower()
-            if first == "bucket":
-                return "home_credit_bucket_eda"
-            if first == "ratio":
-                return "home_credit_domain_ratio_eda"
-            if first == "category":
-                return "home_credit_category_eda"
-        return "home_credit_category_eda"
+            detected = ANALYSIS_TO_JOB_TYPE.get(first)
+            if detected:
+                return detected
+        return "home_credit_application_category_counts"
     raise HTTPException(
         status_code=400,
         detail=(
-            "could not auto-detect workload from artifact; upload an encrypted bundle "
-            "with numeric, aggregate, or score manifests, or choose the workload explicitly"
+            "could not auto-detect Home Credit EDA criterion from artifact; upload a zip "
+            "made by package_home_credit_upload_bag.py or choose the criterion explicitly"
         ),
     )
 
@@ -448,14 +456,19 @@ def root() -> RedirectResponse:
 def submit_page() -> HTMLResponse:
     cards = []
     options = ['<option value="auto" selected>Auto-detect from artifact</option>']
-    for job_type, cfg in JOB_TYPES.items():
+    for job_type, cfg in visible_job_types().items():
         options.append(f'<option value="{esc(job_type)}">{esc(cfg["label"])}</option>')
         requirements = "".join(f"<li><code>{esc(item)}</code></li>" for item in cfg["required"])
         returns = "".join(f"<li><code>{esc(item)}</code></li>" for item in cfg.get("server_returns", []))
+        client_requirements = "".join(f"<li>{esc(item)}</li>" for item in cfg.get("client_requirements", []))
         cards.append(
             f"""<div class="card">
   <h3>{esc(cfg['label'])}</h3>
   <p class="muted">{esc(cfg['description'])}</p>
+  <p><strong>Notebook cells</strong>: <code>{esc(cfg.get('notebook_cells', ''))}</code></p>
+  <p><strong>HE operation</strong>: <code>{esc(cfg.get('he_operation', ''))}</code></p>
+  <p><strong>Client preparation</strong></p>
+  <ul>{client_requirements}</ul>
   <p><strong>Upload contract</strong></p>
   <ul>{requirements}</ul>
   <p><strong>Encrypted server returns</strong></p>
@@ -465,9 +478,9 @@ def submit_page() -> HTMLResponse:
     body = f"""
 <div class="grid">
   <section>
-    <h2>Submit Encrypted HE Job</h2>
+    <h2>Submit Encrypted Home Credit EDA</h2>
     <form id="submitJobForm" method="post" action="/jobs/new" enctype="multipart/form-data">
-      <label for="job_type">Workload</label>
+      <label for="job_type">Notebook EDA criterion</label>
       <select id="job_type" name="job_type">{"".join(options)}</select>
 
       <label for="access_token">Web token</label>
@@ -475,10 +488,10 @@ def submit_page() -> HTMLResponse:
 
       <label for="artifact">Encrypted upload bag</label>
       <input id="artifact" type="file" name="files" accept=".zip">
-      <p class="muted">Upload a workload zip produced by <code>package_home_credit_upload_bag.py --workload ...</code>. The server extracts it, normalizes the bundle layout, and keeps only encrypted artifacts/manifests.</p>
+      <p class="muted">Upload one criterion zip produced by <code>package_home_credit_upload_bag.py --workload ...</code>. The server extracts it, normalizes the bundle layout, and keeps only encrypted artifacts/manifests.</p>
 
       <label for="note">Client note</label>
-      <textarea id="note" name="note" placeholder="Dataset, row limit, scalar/packed, test name"></textarea>
+      <textarea id="note" name="note" placeholder="Dataset, row limit, criterion, test name"></textarea>
 
       <div class="actions">
         <button id="queueButton" class="primary" type="submit">Queue Job</button>
@@ -489,7 +502,7 @@ def submit_page() -> HTMLResponse:
   </section>
   <section>
     <h2>Server Boundary</h2>
-    <p class="muted">The server stores encrypted artifacts, public/eval keys, job metadata, logs, and encrypted result bundles.</p>
+    <p class="muted">The server stores encrypted artifacts, public/eval keys, job metadata, logs, and encrypted Home Credit EDA result bundles.</p>
     <p><strong>Never upload</strong></p>
     <ul>
       <li>raw Home Credit CSV files</li>
@@ -500,7 +513,7 @@ def submit_page() -> HTMLResponse:
   </section>
 </div>
 <section>
-  <h2>Available Workloads</h2>
+  <h2>Available Notebook Criteria</h2>
   <div class="cards">{"".join(cards)}</div>
 </section>
 <script>
@@ -694,10 +707,10 @@ def results_page(request: Request) -> HTMLResponse:
   <pre>python3 code/client/home_credit/download_job_bundle.py \\
   --server {esc(str(request.base_url).rstrip('/'))} \\
   --job-id latest</pre>
-  <table><thead><tr><th>Job</th><th>Workload</th><th>Finished</th><th>HE runtime</th><th>Output bytes</th><th>Bundle</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
+  <table><thead><tr><th>Job</th><th>EDA criterion</th><th>Finished</th><th>HE runtime</th><th>Output bytes</th><th>Bundle</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
 </section>
 <section>
-  <h2>Use Case Status</h2>
+  <h2>EDA Criterion Status</h2>
   <div class="cards">{"".join(cards)}</div>
 </section>
 """
@@ -724,6 +737,7 @@ async def save_and_enqueue(
     uploads: list[UploadFile] | None,
     json_files: list[dict[str, Any]] | None,
 ) -> dict[str, Any]:
+    job_type = canonical_job_type(job_type)
     explicit_auto = job_type in {"", "auto", "detect"}
     if not explicit_auto and job_type not in JOB_TYPES:
         raise HTTPException(status_code=400, detail=f"unknown job_type: {job_type}")
@@ -940,7 +954,12 @@ def api_results(request: Request, limit: int = 100) -> dict[str, Any]:
     cfg = settings()
     require_auth(request, cfg)
     init_db(cfg)
-    return {"results": add_timing_all(list_completed_jobs(cfg, limit=limit)), "use_cases": use_case_results(cfg)}
+    criteria = use_case_results(cfg)
+    return {
+        "results": add_timing_all(list_completed_jobs(cfg, limit=limit)),
+        "criteria": criteria,
+        "use_cases": criteria,
+    }
 
 
 @app.post("/api/jobs/{job_id}/cancel")

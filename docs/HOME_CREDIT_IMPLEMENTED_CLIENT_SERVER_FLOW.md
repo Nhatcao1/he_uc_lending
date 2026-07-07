@@ -107,6 +107,7 @@ Prepare all basic Home Credit vectors:
 ```bash
 python3 code/client/home_credit/prepare_home_credit_basic_eda.py \
   --input data/home_credit/application_train.csv \
+  --previous-application data/home_credit/previous_application.csv \
   --output-dir prepared_payloads/home_credit_basic \
   --model-json models/home_credit_linear_score_model.json
 ```
@@ -164,12 +165,13 @@ keys/home_credit_basic/secret_key.bin
 
 ## Client Upload Packaging
 
-Create a small upload zip for one workload from the encrypted output folder:
+Create a small upload zip for one notebook EDA criterion from the encrypted
+output folder:
 
 ```bash
 python3 code/client/home_credit/package_home_credit_upload_bag.py \
   --encrypted-dir encrypted_payloads/home_credit_basic \
-  --workload numeric_summary \
+  --workload application_default_rates \
   --output-dir client_runs/home_credit_basic/server_uploads \
   --client-key-dir keys/home_credit_basic
 ```
@@ -177,7 +179,7 @@ python3 code/client/home_credit/package_home_credit_upload_bag.py \
 This writes:
 
 ```text
-client_runs/home_credit_basic/server_uploads/home_credit_numeric_summary.upload.zip
+client_runs/home_credit_basic/server_uploads/home_credit_application_default_rates.upload.zip
 client_runs/home_credit_basic/client_private/<client_material_id>/secret_key.bin
 client_runs/home_credit_basic/client_private/<client_material_id>/crypto_context.bin
 client_runs/home_credit_basic/client_private/<client_material_id>/README_DO_NOT_UPLOAD.txt
@@ -188,28 +190,32 @@ The upload zip contains `upload_bag_manifest.json` with `client_material_id`,
 copies that manifest into the returned result bundle, allowing the client
 download helper to choose the matching local key material for decrypt.
 
-Other workload values:
+Other criterion values:
 
 ```text
-category_eda
-bucket_eda
-domain_ratio_eda
-linear_score
+missing_data
+target_balance
+application_numeric_summary
+application_category_counts
+application_default_rates
+application_numeric_histograms
+previous_application_category_counts
+previous_application_target_rates
+selected_correlation_stats
+linear_score_demo
 all
 ```
 
-The specific workload zips include only the required encrypted artifacts:
+The specific criterion zips include only the required encrypted artifacts:
 
 ```text
-numeric_summary: crypto_context.bin, eval_sum_keys.bin, column_manifest.csv, columns/*.bin referenced by the manifest
-category_eda: crypto_context.bin, eval_sum_keys.bin, eval_mult_keys.bin, filtered aggregate_manifest.csv, referenced vectors/*.bin
-bucket_eda: crypto_context.bin, eval_sum_keys.bin, eval_mult_keys.bin, filtered aggregate_manifest.csv, referenced vectors/*.bin
-domain_ratio_eda: crypto_context.bin, eval_sum_keys.bin, eval_mult_keys.bin, filtered aggregate_manifest.csv, referenced vectors/*.bin
-linear_score: crypto_context.bin, score_manifest.csv, referenced score_features/*.bin
+application_numeric_summary: crypto_context.bin, eval_sum_keys.bin, column_manifest.csv, columns/*.bin referenced by the manifest
+all aggregate criteria: crypto_context.bin, eval_sum_keys.bin, eval_mult_keys.bin, filtered aggregate_manifest.csv, referenced vectors/*.bin
+linear_score_demo: crypto_context.bin, score_manifest.csv, referenced score_features/*.bin
 ```
 
 Use `all` only when you want the larger compatibility bundle for every current
-workload.
+criterion.
 
 ## Client Download Helper
 
@@ -233,14 +239,14 @@ The helper saves:
 client_runs/home_credit_basic/server_returns/<job_id>/he_result_<job_id>.zip
 client_runs/home_credit_basic/server_returns/<job_id>/job_status.json
 client_runs/home_credit_basic/server_returns/<job_id>/server_log.txt
-client_runs/home_credit_basic/server_returns/<job_id>/<workflow output files>
+client_runs/home_credit_basic/server_returns/<job_id>/<criterion output files>
 ```
 
 It also prints the matching `decrypt_ckks_results` command.
 
 ## Server Jobs
 
-Numeric summary:
+Application numeric summary:
 
 ```bash
 ./build/server_numeric_summary \
@@ -248,10 +254,10 @@ Numeric summary:
   --eval-sum-keys encrypted_payloads/home_credit_basic/eval_sum_keys.bin \
   --manifest encrypted_payloads/home_credit_basic/column_manifest.csv \
   --input-dir encrypted_payloads/home_credit_basic/columns \
-  --output-dir server_returns/numeric_summary
+  --output-dir server_returns/application_numeric_summary
 ```
 
-Category default-rate EDA:
+Application category default-rate EDA:
 
 ```bash
 ./build/server_home_credit_aggregate \
@@ -260,11 +266,11 @@ Category default-rate EDA:
   --eval-mult-keys encrypted_payloads/home_credit_basic/eval_mult_keys.bin \
   --manifest encrypted_payloads/home_credit_basic/aggregate_manifest.csv \
   --input-dir encrypted_payloads/home_credit_basic/vectors \
-  --output-dir server_returns/category_eda \
-  --analysis-filter category
+  --output-dir server_returns/application_default_rates \
+  --analysis-filter application_default_rates
 ```
 
-Age / EXT_SOURCE / DAYS_EMPLOYED bucket EDA:
+Application numeric histograms:
 
 ```bash
 ./build/server_home_credit_aggregate \
@@ -273,11 +279,11 @@ Age / EXT_SOURCE / DAYS_EMPLOYED bucket EDA:
   --eval-mult-keys encrypted_payloads/home_credit_basic/eval_mult_keys.bin \
   --manifest encrypted_payloads/home_credit_basic/aggregate_manifest.csv \
   --input-dir encrypted_payloads/home_credit_basic/vectors \
-  --output-dir server_returns/bucket_eda \
-  --analysis-filter bucket
+  --output-dir server_returns/application_numeric_histograms \
+  --analysis-filter application_numeric_histograms
 ```
 
-Domain ratio EDA:
+Selected correlation stats:
 
 ```bash
 ./build/server_home_credit_aggregate \
@@ -286,55 +292,55 @@ Domain ratio EDA:
   --eval-mult-keys encrypted_payloads/home_credit_basic/eval_mult_keys.bin \
   --manifest encrypted_payloads/home_credit_basic/aggregate_manifest.csv \
   --input-dir encrypted_payloads/home_credit_basic/vectors \
-  --output-dir server_returns/ratio_eda \
-  --analysis-filter ratio
+  --output-dir server_returns/selected_correlation_stats \
+  --analysis-filter selected_correlation_stats
 ```
 
-Linear ML score:
+Linear score demo:
 
 ```bash
 ./build/server_linear_score \
   --context encrypted_payloads/home_credit_basic/crypto_context.bin \
   --manifest encrypted_payloads/home_credit_basic/score_manifest.csv \
   --input-dir encrypted_payloads/home_credit_basic/score_features \
-  --output-dir server_returns/linear_score
+  --output-dir server_returns/linear_score_demo
 ```
 
 ## Client Decryption
 
-Decrypt numeric summary:
+Decrypt application numeric summary:
 
 ```bash
 ./build/decrypt_ckks_results \
   --context encrypted_payloads/home_credit_basic/crypto_context.bin \
   --secret-key keys/home_credit_basic/secret_key.bin \
-  --manifest server_returns/numeric_summary/summary_manifest.csv \
-  --input-dir server_returns/numeric_summary \
-  --output-csv server_returns/decrypted_numeric_summary.csv \
+  --manifest server_returns/application_numeric_summary/summary_manifest.csv \
+  --input-dir server_returns/application_numeric_summary \
+  --output-csv server_returns/decrypted_application_numeric_summary.csv \
   --manifest-type numeric
 ```
 
-Decrypt aggregate EDA:
+Decrypt aggregate EDA criterion:
 
 ```bash
 ./build/decrypt_ckks_results \
   --context encrypted_payloads/home_credit_basic/crypto_context.bin \
   --secret-key keys/home_credit_basic/secret_key.bin \
-  --manifest server_returns/category_eda/aggregate_summary_manifest.csv \
-  --input-dir server_returns/category_eda \
-  --output-csv server_returns/decrypted_category_eda.csv \
+  --manifest server_returns/application_default_rates/aggregate_summary_manifest.csv \
+  --input-dir server_returns/application_default_rates \
+  --output-csv server_returns/decrypted_application_default_rates.csv \
   --manifest-type aggregate
 ```
 
-Decrypt linear scores:
+Decrypt linear score demo:
 
 ```bash
 ./build/decrypt_ckks_results \
   --context encrypted_payloads/home_credit_basic/crypto_context.bin \
   --secret-key keys/home_credit_basic/secret_key.bin \
-  --manifest server_returns/linear_score/score_summary_manifest.csv \
-  --input-dir server_returns/linear_score \
-  --output-csv server_returns/decrypted_linear_scores.csv \
+  --manifest server_returns/linear_score_demo/score_summary_manifest.csv \
+  --input-dir server_returns/linear_score_demo \
+  --output-csv server_returns/decrypted_linear_score_demo.csv \
   --manifest-type score
 ```
 
@@ -355,32 +361,48 @@ probability = 1 / (1 + exp(-score))
 
 ## Web Receiver
 
-The web receiver now lists runnable workflows:
+The web receiver now lists runnable EDA criteria:
 
 ```text
-home_credit_numeric_summary
-home_credit_category_eda
-home_credit_bucket_eda
-home_credit_domain_ratio_eda
-home_credit_linear_score
+home_credit_missing_data
+home_credit_target_balance
+home_credit_application_numeric_summary
+home_credit_application_category_counts
+home_credit_application_default_rates
+home_credit_application_numeric_histograms
+home_credit_previous_application_category_counts
+home_credit_previous_application_target_rates
+home_credit_selected_correlation_stats
+home_credit_linear_score_demo
 ```
 
-It also exposes a simple read-only use-case result view:
+It also exposes a simple read-only result view:
 
 ```text
-/api/use-case-results
+/api/results
 ```
 
 Manual run:
 
 ```bash
-python3 code/server/web/he_job_server.py \
-  --host 100.84.97.118 \
-  --port 8080 \
-  --build-dir build
+export PYTHONPATH="$PWD/code/server/web_async"
+export HE_ASYNC_BUILD_DIR="$PWD/build"
+export HE_ASYNC_JOBS_DIR="$PWD/server_jobs/async"
+export HE_ASYNC_DB_PATH="$PWD/server_jobs/async/jobs.db"
+uvicorn he_async_web.app:app --host 100.84.97.118 --port 8080
 ```
 
-Upload a workload zip from `client_runs/home_credit_basic/server_uploads/`, not
+In another terminal:
+
+```bash
+export PYTHONPATH="$PWD/code/server/web_async"
+export HE_ASYNC_BUILD_DIR="$PWD/build"
+export HE_ASYNC_JOBS_DIR="$PWD/server_jobs/async"
+export HE_ASYNC_DB_PATH="$PWD/server_jobs/async/jobs.db"
+python3 -m he_async_web.worker
+```
+
+Upload a criterion zip from `client_runs/home_credit_basic/server_uploads/`, not
 the plaintext prepared files or `client_private/`.
 
 Completed jobs can be downloaded as one zip from:

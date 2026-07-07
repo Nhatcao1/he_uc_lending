@@ -25,7 +25,7 @@ Client does:
 - define null, category, bucket, top-K, and join policies
 - transform dates/numbers/categories into numeric vectors and 0/1 masks
 - encrypt vectors and masks
-- upload encrypted workload bags
+- upload encrypted criterion bags
 - download encrypted result bundles
 - decrypt final numeric tables/rates
 
@@ -73,30 +73,41 @@ The web UI can show job status and result bundles. The client-side dashboard can
 pull encrypted results. Final readable numbers are produced only after client
 decryption.
 
-## Current Code Names To Notebook Names
+## Implemented Criterion Names
 
-Our current workload names should be understood as notebook EDA tasks:
+The user-facing names now follow notebook EDA criteria. The C++ binary names are
+implementation details.
 
-| Current name | Better notebook-oriented meaning |
-| --- | --- |
-| `home_credit_numeric_summary` | Distribution support for numeric columns via encrypted sums/counts |
-| `home_credit_category_eda` | Application categorical value counts and target-conditioned category EDA |
-| `home_credit_bucket_eda` | Bucketed numeric/default-rate EDA for age and `EXT_SOURCE_*` |
-| `home_credit_domain_ratio_eda` | Bucketed domain ratio EDA such as credit/income and annuity/income |
-| `home_credit_linear_score` | Not notebook EDA; demo encrypted linear inference plumbing |
+| Criterion id | UI label | Server HE operation |
+| --- | --- | --- |
+| `home_credit_missing_data` | Missing Data Counts | `sum(is_null_mask)` |
+| `home_credit_target_balance` | Target Balance | `sum(target_default)`, `sum(target_repaid)` |
+| `home_credit_application_numeric_summary` | Application Numeric Summary | `EvalSum(numeric_vector)` |
+| `home_credit_application_category_counts` | Application Category Counts | `sum(category_mask)` |
+| `home_credit_application_default_rates` | Application Category Default Rates | `sum(mask)`, `sum(mask * TARGET)`, `sum(mask * amount)` |
+| `home_credit_application_numeric_histograms` | Application Numeric Histograms | `sum(bin_mask)`, `sum(bin_mask * TARGET)` |
+| `home_credit_previous_application_category_counts` | Previous Application Category Counts | `sum(previous_category_mask)` |
+| `home_credit_previous_application_target_rates` | Previous Application Target-Conditioned EDA | `sum(joined_mask)`, `sum(joined_mask * TARGET)` |
+| `home_credit_selected_correlation_stats` | Selected Numeric Correlation Stats | selected encrypted pairwise sums |
+| `home_credit_linear_score_demo` | Linear Score Demo | optional CKKS weighted sum; not RandomForest |
 
-Recommended UI/output labels:
+Client package names:
 
 ```text
-Application Numeric Summary
-Application Category Counts
-Application Category Default Rates
-Application Numeric Histogram Counts
-Previous Application Category Counts
-Previous Application Target-Conditioned Counts
-Selected Correlation Stats
-Linear Score Demo
+missing_data
+target_balance
+application_numeric_summary
+application_category_counts
+application_default_rates
+application_numeric_histograms
+previous_application_category_counts
+previous_application_target_rates
+selected_correlation_stats
+linear_score_demo
 ```
+
+Legacy package names (`numeric_summary`, `category_eda`, `bucket_eda`,
+`domain_ratio_eda`, `linear_score`) are accepted as aliases only.
 
 ## Data Loading And Glimpse
 
@@ -227,9 +238,10 @@ What cannot be HE-server-side:
 
 Current coverage:
 
-- `server_numeric_summary` supports encrypted sums for selected numeric columns.
-- Histogram bins are the next natural extension using the same mask aggregate
-  pattern.
+- `home_credit_application_numeric_summary` supports encrypted sums for selected
+  numeric columns.
+- `home_credit_application_numeric_histograms` uses encrypted client-created bin
+  masks for AMT, age, `EXT_SOURCE_*`, and ratio buckets.
 
 ## Simple Categorical Value Counts
 
@@ -287,8 +299,10 @@ Recommended category policy:
 
 Current coverage:
 
-- `home_credit_category_eda` already follows this pattern for selected
+- `home_credit_application_category_counts` follows this pattern for selected
   application columns.
+- `home_credit_application_default_rates` adds target-conditioned and amount-sum
+  operations over the same encrypted masks.
 
 ## Target Balance
 
@@ -574,22 +588,22 @@ Recommendation:
 
 ## Implementation Order By Notebook Section
 
-The already-built dynamic server/client flow should be reused for each row:
+The dynamic server/client flow is reused for each row:
 
 ```text
-client package workload -> server job queue -> client result dashboard/download -> client decrypt table
+client package criterion -> server job queue -> client result dashboard/download -> client decrypt table
 ```
 
-| Priority | Notebook section | HE workload | Numeric output table | Use current flow? |
+| Priority | Notebook section | HE criterion | Numeric output table | Use current flow? |
 | --- | --- | --- | --- | --- |
-| 1 | 5.5 Target balance | Target count | `target_label,count,percent` | Yes, aggregate mask path |
-| 2 | 5.1-5.3 Numeric distributions | Numeric summary | `column,total_rows,sum,mean` | Yes, numeric summary path |
-| 3 | 5.4-5.13 Application category counts | Category counts | `column,label,count,percent` | Yes, aggregate mask path |
-| 4 | 5.14 Category by target | Category default-rate EDA | `column,label,count,default_count,default_rate` | Yes, aggregate mask path |
-| 5 | 5.1-5.3 Histograms | Numeric histogram counts | `column,bin,count,percent` | Yes, same mask path after client binning |
-| 6 | 5.15 Previous application counts | Previous application category counts | `table,column,label,count,percent` | Yes, after client prepares previous table masks |
-| 7 | 5.15 Previous application vs target | Joined historical risk counts | `joined_feature,label,count,default_count,default_rate` | Yes, after client-side join/aggregation |
-| 8 | 6 Correlation heatmap | Selected pairwise stats | `feature_x,feature_y,n,sum_x,sum_y,sum_xy,...` | Later; selected columns only |
+| 1 | 5.5 Target balance | `target_balance` | `target_label,count,percent` | Yes |
+| 2 | 5.1-5.3 Numeric distributions | `application_numeric_summary` | `column,total_rows,sum,mean` | Yes |
+| 3 | 5.4-5.13 Application category counts | `application_category_counts` | `column,label,count,percent` | Yes |
+| 4 | 5.14 Category by target | `application_default_rates` | `column,label,count,default_count,default_rate` | Yes |
+| 5 | 5.1-5.3 Histograms | `application_numeric_histograms` | `column,bin,count,percent` | Yes |
+| 6 | 5.15 Previous application counts | `previous_application_category_counts` | `table,column,label,count,percent` | Yes, if `previous_application.csv` is provided |
+| 7 | 5.15 Previous application vs target | `previous_application_target_rates` | `joined_feature,label,count,default_count,default_rate` | Yes, after client-side join |
+| 8 | 6 Correlation heatmap | `selected_correlation_stats` | `feature_x,feature_y,n,sum_x,sum_y,sum_xy,...` | Yes, selected pairs only |
 | 9 | 7 RandomForest importance | Non-HE modeling | `feature,importance` | No HE server; client/trusted only |
 
 ## Brief Per Notebook Output
@@ -615,20 +629,5 @@ client package workload -> server job queue -> client result dashboard/download 
 
 ## Naming Recommendation
 
-Use notebook-facing names in UI/docs and client dashboard:
-
-```text
-Target Balance
-Application Numeric Summary
-Application Category Counts
-Application Category Default Rates
-Application Numeric Histograms
-Previous Application Category Counts
-Previous Application Target-Conditioned EDA
-Selected Numeric Correlation Stats
-Linear Score Demo
-```
-
 Avoid vague names such as only `bucket_eda` or `category_eda` in user-facing
-text. Keep internal ids if useful, but labels should say which notebook section
-they correspond to.
+text. Keep C++ binary names only as implementation details.

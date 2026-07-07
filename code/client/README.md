@@ -15,24 +15,32 @@ Ignored by git:
 - secret keys under `keys/`
 - returned encrypted results under `server_returns/`
 
-## Next Home Credit Payload
+## Home Credit Notebook EDA Payload
 
-The active target is `data/home_credit/application_train.csv`.
+The active target is the Home Credit Default Risk Kaggle data. At minimum the
+client needs:
 
-Basic categorical EDA is mostly client-side because the client must choose and
-document the category policy before encryption. The first slice keeps all values
-for `NAME_INCOME_TYPE` and `NAME_EDUCATION_TYPE`; later high-cardinality columns
-should use top-K plus an `__OTHER__` bucket.
+```text
+data/home_credit/application_train.csv
+```
 
-Planned client outputs:
+For previous-application notebook criteria, also pass:
 
-- category masks for `NAME_INCOME_TYPE`, `OCCUPATION_TYPE`,
-  `NAME_EDUCATION_TYPE`, and `ORGANIZATION_TYPE`
-- bucket masks for age, `EXT_SOURCE_*`, and `DAYS_EMPLOYED` anomaly
-- encrypted `TARGET` mask
-- encrypted amount vectors for `AMT_CREDIT`, `AMT_INCOME_TOTAL`, and
-  `AMT_ANNUITY`
-- manifests describing encrypted chunks
+```text
+data/home_credit/previous_application.csv
+```
+
+The client prepares all raw-data-dependent context before encryption:
+
+- missing-value masks
+- target default/repaid masks
+- application category one-hot masks
+- numeric summary vectors
+- histogram/bin masks
+- previous_application category masks
+- client-side joined previous_application/TARGET masks
+- selected correlation pair helper vectors
+- optional linear-score demo vectors
 
 These outputs are local artifacts and are ignored by git.
 
@@ -54,16 +62,16 @@ Full client/server command flow:
 docs/HOME_CREDIT_IMPLEMENTED_CLIENT_SERVER_FLOW.md
 ```
 
-## Small Upload Bags
+## Small Criterion Upload Bags
 
-After preparing and encrypting the payload, create one zip per workload for the
-web submit page. The packager reads the encrypted output folder and copies only
-the ciphertexts/manifests needed by that workload.
+After preparing and encrypting the payload, create one zip per notebook EDA
+criterion for the web submit page. The packager reads the encrypted output
+folder and copies only the ciphertexts/manifests needed by that criterion.
 
 ```bash
 python3 code/client/home_credit/package_home_credit_upload_bag.py \
   --encrypted-dir encrypted_payloads/home_credit_basic \
-  --workload numeric_summary \
+  --workload application_default_rates \
   --output-dir client_runs/home_credit_basic/server_uploads \
   --client-key-dir keys/home_credit_basic
 ```
@@ -74,20 +82,29 @@ Upload this zip at:
 /jobs/new
 ```
 
-Useful workload names:
+Useful criterion names:
 
 ```text
-numeric_summary
-category_eda
-bucket_eda
-domain_ratio_eda
-linear_score
+missing_data
+target_balance
+application_numeric_summary
+application_category_counts
+application_default_rates
+application_numeric_histograms
+previous_application_category_counts
+previous_application_target_rates
+selected_correlation_stats
+linear_score_demo
 all
 ```
 
 The zip contains server-safe encrypted artifacts and manifests only. It blocks
 raw Home Credit CSV names and secret/private key-looking paths. Use `all` only
-when you deliberately want the bigger bundle for every workload.
+when you deliberately want the bigger bundle for every criterion.
+
+Legacy names such as `numeric_summary`, `category_eda`, `bucket_eda`,
+`domain_ratio_eda`, and `linear_score` are accepted as aliases, but new bags are
+named with the notebook criterion.
 
 Clean local layout after packaging:
 
@@ -118,7 +135,7 @@ http://127.0.0.1:8090
 ```
 
 The page reads only the server result index, shows the newest completed job for
-each use case, and can pull one workload or all latest encrypted result bundles
+each EDA criterion, and can pull one criterion or all latest encrypted result bundles
 into:
 
 ```text

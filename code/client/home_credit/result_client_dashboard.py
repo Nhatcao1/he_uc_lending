@@ -23,11 +23,16 @@ from download_job_bundle import (
 
 
 JOB_LABELS = {
-    "home_credit_numeric_summary": "Numeric Summary",
-    "home_credit_category_eda": "Category Default-Rate EDA",
-    "home_credit_bucket_eda": "Age / EXT_SOURCE Bucket EDA",
-    "home_credit_domain_ratio_eda": "Domain Ratio EDA",
-    "home_credit_linear_score": "Linear ML Score",
+    "home_credit_missing_data": "Missing Data Counts",
+    "home_credit_target_balance": "Target Balance",
+    "home_credit_application_numeric_summary": "Application Numeric Summary",
+    "home_credit_application_category_counts": "Application Category Counts",
+    "home_credit_application_default_rates": "Application Category Default Rates",
+    "home_credit_application_numeric_histograms": "Application Numeric Histograms",
+    "home_credit_previous_application_category_counts": "Previous Application Category Counts",
+    "home_credit_previous_application_target_rates": "Previous Application Target-Conditioned EDA",
+    "home_credit_selected_correlation_stats": "Selected Numeric Correlation Stats",
+    "home_credit_linear_score_demo": "Linear Score Demo",
 }
 
 
@@ -211,8 +216,8 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
 </head>
 <body>
   <header>
-    <h1>HE Client Results</h1>
-    <p style="color:#d0d5dd; margin: 6px 0 0;">Local client view. It reads server results and stores encrypted bundles on this machine.</p>
+    <h1>Home Credit HE Client Results</h1>
+    <p style="color:#d0d5dd; margin: 6px 0 0;">Local client view. It reads server results and stores encrypted notebook-EDA bundles on this machine.</p>
   </header>
   <main>{content}</main>
 </body>
@@ -311,12 +316,12 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
             )
         return f"""
 <section>
-  <h2>Latest Result Per Use Case</h2>
+  <h2>Latest Result Per EDA Criterion</h2>
   <p>Server: <code>{esc(self.args.server)}</code></p>
   <p>Local output: <code>{esc(self.args.output_dir)}</code></p>
   <p><a class="button primary" href="/download-all">Pull all latest bundles</a></p>
   <table>
-    <thead><tr><th>Use case</th><th>Latest completed job</th><th>HE runtime</th><th>Output bytes</th><th>Action</th></tr></thead>
+    <thead><tr><th>EDA criterion</th><th>Latest completed job</th><th>HE runtime</th><th>Output bytes</th><th>Action</th></tr></thead>
     <tbody>{"".join(rows)}</tbody>
   </table>
 </section>

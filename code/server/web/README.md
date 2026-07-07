@@ -1,9 +1,9 @@
-# HE Job Web Receiver
+# Legacy HE Job Web Receiver
 
 Tiny no-dependency web interface for submitting encrypted HE jobs to the server.
 
-This is the proof-of-concept receiver. The async FastAPI/RQ server for slow HE
-jobs lives here:
+This is the older proof-of-concept receiver. The active Home Credit notebook EDA
+UI is the async FastAPI/RQ server for slow HE jobs:
 
 ```text
 code/server/web_async/README.md
@@ -13,12 +13,12 @@ The receiver does not do HE math itself. It stores encrypted artifacts under
 `server_jobs/web/<job_id>/work`, invokes the existing C++ server executable, and
 shows status/output files.
 
-The page is organized as:
+The legacy page is organized as:
 
-- job catalog for Home Credit workflows
-- selected workflow requirements
+- job catalog for older Home Credit prototype jobs
+- selected job requirements
 - encrypted artifact upload validation
-- read-only use-case result summary
+- read-only result summary
 - one-click encrypted result bundle download
 - server job status and encrypted result downloads
 
