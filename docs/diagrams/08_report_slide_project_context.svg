@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="900" viewBox="0 0 1500 900" role="img" aria-labelledby="title desc">
+  <title id="title">Home Credit HE Prototype Project Context</title>
+  <desc id="desc">A presentation diagram showing the Home Credit notebook mapped to trusted client preparation, encrypted OpenFHE jobs, async server execution, encrypted results, and client-decrypted report tables.</desc>
+  <defs>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#0f172a" flood-opacity=".13"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="5" orient="auto">
+      <path d="M0,0 L11,5 L0,10 Z" fill="#475569"/>
+    </marker>
+    <style>
+      .title{font:800 36px ui-sans-serif,system-ui;fill:#172033}
+      .sub{font:400 17px ui-sans-serif,system-ui;fill:#64748b}
+      .h{font:800 18px ui-sans-serif,system-ui;fill:#111827}
+      .t{font:500 14px ui-sans-serif,system-ui;fill:#475569}
+      .small{font:800 12px ui-sans-serif,system-ui;letter-spacing:.08em;fill:#64748b}
+      .line{stroke:#64748b;stroke-width:2.5;fill:none;marker-end:url(#arrow)}
+      .dash{stroke:#0f766e;stroke-width:2.2;stroke-dasharray:7 7;fill:none;marker-end:url(#arrow)}
+      .note{font:700 15px ui-sans-serif,system-ui;fill:#0f766e}
+    </style>
+  </defs>
+
+  <rect width="1500" height="900" fill="#f5f7fb"/>
+  <text class="title" x="70" y="70">Home Credit HE Prototype: Report Context</text>
+  <text class="sub" x="70" y="102">Notebook EDA stays recognizable; computation moves into encrypted aggregate jobs where HE makes sense.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="170" width="240" height="112" rx="8" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="small" x="92" y="202">SOURCE</text>
+    <text class="h" x="92" y="232">Home Credit notebook</text>
+    <text class="t" x="92" y="257">Complete EDA + feature importance</text>
+
+    <rect x="382" y="170" width="240" height="112" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="small" x="404" y="202">CATALOG</text>
+    <text class="h" x="404" y="232">39 notebook jobs</text>
+    <text class="t" x="404" y="257">4.x, 5.1-5.15, 6, 7</text>
+
+    <rect x="694" y="170" width="260" height="112" rx="8" fill="#ecfdf5" stroke="#86efac"/>
+    <text class="small" x="716" y="202">TRUSTED CLIENT</text>
+    <text class="h" x="716" y="232">Prepare and encrypt</text>
+    <text class="t" x="716" y="257">raw CSV, null policy, one-hot, keys</text>
+
+    <rect x="1026" y="170" width="250" height="112" rx="8" fill="#eef2ff" stroke="#c4b5fd"/>
+    <text class="small" x="1048" y="202">UPLOAD</text>
+    <text class="h" x="1048" y="232">Small criterion bag</text>
+    <text class="t" x="1048" y="257">encrypted artifacts + manifest</text>
+  </g>
+
+  <path class="line" d="M310 226 H374"/>
+  <path class="line" d="M622 226 H686"/>
+  <path class="line" d="M954 226 H1018"/>
+
+  <g filter="url(#shadow)">
+    <rect x="185" y="400" width="285" height="126" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="small" x="207" y="432">ASYNC SERVER</text>
+    <text class="h" x="207" y="462">FastAPI + Redis/RQ</text>
+    <text class="t" x="207" y="488">job submit, monitor, delete</text>
+    <text class="t" x="207" y="510">server stores encrypted artifacts only</text>
+
+    <rect x="608" y="400" width="285" height="126" rx="8" fill="#eff6ff" stroke="#93c5fd"/>
+    <text class="small" x="630" y="432">HE CORE</text>
+    <text class="h" x="630" y="462">C++ OpenFHE kernels</text>
+    <text class="t" x="630" y="488">EvalSum, mask sums</text>
+    <text class="t" x="630" y="510">simple linear weighted sum</text>
+
+    <rect x="1030" y="400" width="285" height="126" rx="8" fill="#ffffff" stroke="#d6deea"/>
+    <text class="small" x="1052" y="432">SERVER OUTPUT</text>
+    <text class="h" x="1052" y="462">Encrypted result bundle</text>
+    <text class="t" x="1052" y="488">result manifest, ciphertexts, logs</text>
+    <text class="t" x="1052" y="510">no plaintext report on server</text>
+  </g>
+
+  <path class="line" d="M1151 282 C1151 342 328 338 328 392"/>
+  <path class="line" d="M470 463 H600"/>
+  <path class="line" d="M893 463 H1022"/>
+
+  <g filter="url(#shadow)">
+    <rect x="280" y="660" width="330" height="118" rx="8" fill="#ecfdf5" stroke="#86efac"/>
+    <text class="small" x="302" y="692">TRUSTED CLIENT</text>
+    <text class="h" x="302" y="722">Decrypt numeric tables</text>
+    <text class="t" x="302" y="748">counts, means, rates, correlation support</text>
+
+    <rect x="750" y="660" width="330" height="118" rx="8" fill="#fff7ed" stroke="#fdba74"/>
+    <text class="small" x="772" y="692">REPORT / SALES</text>
+    <text class="h" x="772" y="722">Notebook-aligned story</text>
+    <text class="t" x="772" y="748">chart intent becomes HE result tables</text>
+  </g>
+
+  <path class="line" d="M1172 526 C1172 600 445 594 445 652"/>
+  <path class="line" d="M610 719 H742"/>
+
+  <path class="dash" d="M445 660 C375 580 736 366 824 284"/>
+  <text class="note" x="490" y="598">client owns secret key</text>
+
+  <rect x="112" y="820" width="1276" height="48" rx="8" fill="#ffffff" stroke="#d6deea"/>
+  <text class="h" x="140" y="850">Boundary message: client owns raw data, keys, and final plaintext; server owns encrypted execution only.</text>
+</svg>
