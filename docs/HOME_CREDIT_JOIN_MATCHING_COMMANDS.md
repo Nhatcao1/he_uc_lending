@@ -42,9 +42,17 @@ source .venv-psi/bin/activate
 python -m pip install --upgrade pip
 python -m pip install openmined-psi
 python - <<'PY'
-import psi
-print("openmined-psi import ok", psi.__file__)
+import private_set_intersection.python as psi
+print("openmined-psi import ok")
+print(psi.__file__)
+print([name for name in ("client", "server", "psi", "Request", "Response", "ServerSetup") if hasattr(psi, name)])
 PY
+```
+
+The PyPI package name is `openmined-psi`, but the import path is:
+
+```python
+import private_set_intersection.python as psi
 ```
 
 Heavier upstream C++ benchmark path, only if needed:
