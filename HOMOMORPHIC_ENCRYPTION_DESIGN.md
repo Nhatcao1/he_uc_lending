@@ -184,9 +184,9 @@ uc_credit_rating/
       web/                              # upload receiver and job UI
   docs/
     HOME_CREDIT_HE_PLAN.md
-    SERVER_SIDE_EDA_PLAN.md
-    HE_EDA_DATA_PREPARATION_LIMITS.md
-    WEB_APP_PLAN.md
+    HOME_CREDIT_COMPLETE_EDA_HE_MAPPING.md
+    HOME_CREDIT_IMPLEMENTED_CLIENT_SERVER_FLOW.md
+    HOME_CREDIT_JOIN_MATCHING_COMMANDS.md
   data/                                 # local only, ignored
   keys/                                 # local only, ignored
   encrypted_payloads/                   # local only, ignored

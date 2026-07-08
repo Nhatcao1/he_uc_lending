@@ -15,11 +15,11 @@ Key planning notes:
 
 - `HE_USE_CASES_AND_NOTEBOOK_CONTEXT.md`
 - `HOMOMORPHIC_ENCRYPTION_DESIGN.md`
+- `docs/HOME_CREDIT_HE_PLAN.md`
 - `docs/HOME_CREDIT_COMPLETE_EDA_HE_MAPPING.md`
-- `docs/HOME_CREDIT_BASIC_EDA_IMPLEMENTATION_MAP.md`
 - `docs/HOME_CREDIT_IMPLEMENTED_CLIENT_SERVER_FLOW.md`
+- `docs/HOME_CREDIT_JOIN_MATCHING_COMMANDS.md`
 - `docs/diagrams/README.md`
-- `docs/SERVER_SIDE_EDA_PLAN.md`
 
 Tracked code lives under `code/client/` and `code/server/`.
 
@@ -31,10 +31,6 @@ Local-only paths are ignored by git:
 - `encrypted_payloads/`
 - `server_returns/`
 - `server_jobs/`
-
-Web app planning:
-
-- `docs/WEB_APP_PLAN.md`
 
 Web receiver:
 

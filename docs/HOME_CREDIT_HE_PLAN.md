@@ -96,7 +96,6 @@ Detailed mapping from original notebook EDA to the HE implementation choices:
 
 ```text
 docs/HOME_CREDIT_COMPLETE_EDA_HE_MAPPING.md
-docs/HOME_CREDIT_BASIC_EDA_IMPLEMENTATION_MAP.md
 ```
 
 Implemented client/server flow and run commands:
