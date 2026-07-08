@@ -185,6 +185,11 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--require-psi-matched-token-file",
+        action="store_true",
+        help="Fail if --psi-matched-token-file is omitted. Use this for real PSI runs instead of local fixtures.",
+    )
+    parser.add_argument(
         "--amount-columns",
         default=",".join(DEFAULT_AMOUNT_COLUMNS),
         help="Comma-separated amount columns to include in masked sums.",
@@ -968,6 +973,19 @@ def write_token_file(path: Path, tokens: Iterable[str]) -> int:
     return count
 
 
+def write_match_mask_file(path: Path, right_tokens: list[str], matched_tokens: set[str]) -> dict[str, int]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    matched_count = 0
+    with path.open("w", encoding="utf-8", newline="") as output:
+        writer = csv.writer(output)
+        writer.writerow(["row_index", "matched"])
+        for index, token in enumerate(right_tokens):
+            matched = int(bool(token) and token in matched_tokens)
+            matched_count += matched
+            writer.writerow([index, matched])
+    return {"rows": len(right_tokens), "matched_rows": matched_count}
+
+
 def token_prefix_int(token: str, bits: int = 32) -> int:
     if not token:
         return 0
@@ -1015,8 +1033,8 @@ def write_join_token_artifacts(
     hmac_right_count = write_token_file(hmac_dir / "right_tokens.csv", previous_tokens)
 
     psi_tokens = psi_matched_tokens if psi_matched_tokens else application_token_set
-    psi_left_count = write_token_file(psi_dir / "left_tokens.csv", sorted(psi_tokens))
-    psi_right_count = write_token_file(psi_dir / "right_tokens.csv", previous_tokens)
+    psi_mask_stats = write_match_mask_file(psi_dir / "match_mask.csv", previous_tokens, psi_tokens)
+    psi_token_count = write_token_file(psi_dir / "matched_tokens.client_reference.csv", sorted(psi_tokens))
 
     metadata = {
         "hmac": {
@@ -1027,11 +1045,13 @@ def write_join_token_artifacts(
             "match_source": "local_hmac_token_set",
         },
         "psi": {
-            "left_tokens": "join/psi/left_tokens.csv",
-            "right_tokens": "join/psi/right_tokens.csv",
-            "left_token_count": psi_left_count,
-            "right_token_count": psi_right_count,
+            "match_mask": "join/psi/match_mask.csv",
+            "matched_tokens_client_reference": "join/psi/matched_tokens.client_reference.csv",
+            "matched_token_count": psi_token_count,
+            "mask_rows": psi_mask_stats["rows"],
+            "matched_rows": psi_mask_stats["matched_rows"],
             "match_source": "psi_matched_token_file" if psi_matched_tokens else "local_fixture_until_psi_output_is_supplied",
+            "server_receives_tokens": False,
         },
         "token_type": "HMAC-SHA256(SK_ID_CURR)",
         "raw_ids_included": False,
@@ -1134,6 +1154,8 @@ def main() -> None:
     if previous_path:
         previous_tokens = collect_previous_tokens(previous_path, args.previous_row_limit, args.join_secret)
         psi_tokens = read_token_file(args.psi_matched_token_file)
+        if args.require_psi_matched_token_file and not psi_tokens:
+            raise ValueError("--require-psi-matched-token-file was set but no PSI matched tokens were loaded")
         join_metadata = write_join_token_artifacts(
             output_dir,
             application_tokens,

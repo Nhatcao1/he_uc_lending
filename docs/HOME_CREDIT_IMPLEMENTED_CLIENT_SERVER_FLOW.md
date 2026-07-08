@@ -270,17 +270,17 @@ Both run the same CKKS server binary:
 server_home_credit_token_join_aggregate
 ```
 
-The difference is the source of the matched token set:
+The difference is how the selection mask is produced:
 
 | Workload | Match source | Server sees | HE operation |
 | --- | --- | --- | --- |
 | `join_hmac_prev_contract_status` | Local HMAC tokens from `SK_ID_CURR` | deterministic HMAC tokens, encrypted status masks | plaintext token selection mask times encrypted one-hot status mask, then `EvalSum` |
-| `join_psi_prev_contract_status` | PSI output token file when supplied; local fixture otherwise | PSI-matched tokens, encrypted status masks | same CKKS work as HMAC path for fair timing |
+| `join_psi_prev_contract_status` | PSI output token file converted during prepare | row-aligned `match_mask.csv`, encrypted status masks | plaintext PSI mask times encrypted one-hot status mask, then `EvalSum` |
 
-Production PSI should create the matched token file before `prepare`. For
-workflow testing without PSI installed, omit `--psi-matched-token-file`; the
-prepare script writes a same-size local fixture and marks that in
-`join/join_manifest.json`.
+Production PSI should create the matched token file before `prepare`; `prepare`
+converts it to `join/psi/match_mask.csv`. For workflow testing without PSI
+installed, omit `--psi-matched-token-file`; the prepare script writes a same-size
+local fixture and marks that in `join/join_manifest.json`.
 
 Use `all` only when you want the larger compatibility bundle for every current
 criterion.

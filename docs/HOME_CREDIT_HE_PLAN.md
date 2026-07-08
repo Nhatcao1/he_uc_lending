@@ -39,7 +39,7 @@ separate bucket/domain use-case names.
 | 7 | `app_selected_correlation_stats` | Select small numeric pairs and valid masks | Sum x, y, xy, x2, y2 support values | Client computes selected correlations |
 | 8 | `linear_score_demo` | Optional scaled numeric feature vectors | CKKS weighted sum | Encrypted inference smoke test |
 | 9 | `join_hmac_prev_contract_status` | HMAC-tokenized `SK_ID_CURR`, encrypted previous status masks | Token-match plaintext mask times encrypted mask, then sum | Joined previous-status count table |
-| 10 | `join_psi_prev_contract_status` | PSI-matched token set when available, encrypted previous status masks | Same CKKS join aggregate as HMAC path | PSI-ready joined status count table |
+| 10 | `join_psi_prev_contract_status` | PSI/trusted step creates row-aligned match mask, encrypted previous status masks | CKKS mask times encrypted status mask, then sum | PSI joined status count table |
 | 11 | `join_fhew_prev_contract_status` | HMAC-derived token-prefix integers encrypted bit-by-bit | FHEW encrypted equality gates over a capped sample | Encrypted match flags for timing comparison |
 
 ## Merge-Aware Extension Plan
@@ -79,7 +79,7 @@ Privacy/HE design:
   such as `HMAC(join_secret, SK_ID_CURR)` and `HMAC(join_secret, SK_ID_PREV)`.
 - Server may group or join on tokens, but never sees raw IDs.
 - Sensitive numeric values and 0/1 masks remain CKKS encrypted.
-- Server computes encrypted sums and masked sums per joined/grouped token set.
+- Server computes encrypted sums and masked sums from the PSI row mask.
 - Client decrypts the final per-client aggregate feature table or final score.
 - FHEW can compare encrypted ID bits, but it is pairwise and gate-heavy. Keep it
   as a small benchmark unless a later design adds a scalable private matching

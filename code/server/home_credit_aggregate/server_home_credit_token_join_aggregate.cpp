@@ -29,6 +29,7 @@ struct Options {
     std::filesystem::path inputDir;
     std::filesystem::path leftTokensPath;
     std::filesystem::path rightTokensPath;
+    std::filesystem::path matchMaskPath;
     std::filesystem::path outputDir;
     std::string analysisFilter;
 };
@@ -74,6 +75,7 @@ using AggregateKey = std::tuple<std::string, std::string, std::string, std::stri
         << "    --input-dir <encrypted_vectors_dir> \\\n"
         << "    --left-tokens <join/left_tokens.csv> \\\n"
         << "    --right-tokens <join/right_tokens.csv> \\\n"
+        << "    [--match-mask <join/psi/match_mask.csv>] \\\n"
         << "    --output-dir <server_returns_dir> \\\n"
         << "    --analysis-filter <analysis>\n";
     std::exit(error.empty() ? 0 : 2);
@@ -110,6 +112,9 @@ Options parseArgs(int argc, char** argv) {
         else if (arg == "--right-tokens") {
             options.rightTokensPath = needValue(arg);
         }
+        else if (arg == "--match-mask") {
+            options.matchMaskPath = needValue(arg);
+        }
         else if (arg == "--output-dir") {
             options.outputDir = needValue(arg);
         }
@@ -124,9 +129,12 @@ Options parseArgs(int argc, char** argv) {
         }
     }
     if (options.contextPath.empty() || options.evalSumKeysPath.empty() || options.evalMultKeysPath.empty() ||
-        options.manifestPath.empty() || options.inputDir.empty() || options.leftTokensPath.empty() ||
-        options.rightTokensPath.empty() || options.outputDir.empty() || options.analysisFilter.empty()) {
-        usage("all arguments are required");
+        options.manifestPath.empty() || options.inputDir.empty() || options.outputDir.empty() ||
+        options.analysisFilter.empty()) {
+        usage("context, eval keys, manifest, input-dir, output-dir, and analysis-filter are required");
+    }
+    if (options.matchMaskPath.empty() && (options.leftTokensPath.empty() || options.rightTokensPath.empty())) {
+        usage("provide either --match-mask or both --left-tokens and --right-tokens");
     }
     return options;
 }
@@ -247,6 +255,41 @@ std::vector<std::string> readTokenVector(const std::filesystem::path& path) {
     return tokens;
 }
 
+std::vector<double> readMatchMask(const std::filesystem::path& path) {
+    std::ifstream input(path);
+    if (!input.is_open()) {
+        throw std::runtime_error("cannot open match mask file: " + path.string());
+    }
+    std::vector<double> values;
+    std::string line;
+    bool first = true;
+    while (std::getline(input, line)) {
+        if (trim(line).empty()) {
+            continue;
+        }
+        const auto fields = splitCsvLine(line);
+        if (fields.empty()) {
+            continue;
+        }
+        if (first) {
+            first = false;
+            const auto header = trim(fields[0]);
+            if (header == "matched" || header == "row_index") {
+                continue;
+            }
+        }
+        const auto value = fields.size() == 1 ? trim(fields[0]) : trim(fields[1]);
+        if (value != "0" && value != "1") {
+            throw std::runtime_error("match mask values must be 0 or 1");
+        }
+        values.push_back(value == "1" ? 1.0 : 0.0);
+    }
+    if (values.empty()) {
+        throw std::runtime_error("match mask is empty");
+    }
+    return values;
+}
+
 std::vector<AggregateRow> readManifest(const std::filesystem::path& path, const std::string& analysisFilter) {
     std::ifstream input(path);
     if (!input.is_open()) {
@@ -352,23 +395,31 @@ uint32_t maxChunkRows(const std::vector<AggregateRow>& rows) {
 
 Plaintext makeJoinPlaintext(const CryptoContext<DCRTPoly>& cc, const AggregateRow& row, uint32_t chunkRows,
                             const std::set<std::string>& leftTokens,
-                            const std::vector<std::string>& rightTokens) {
+                            const std::vector<std::string>& rightTokens,
+                            const std::vector<double>& matchMask) {
     std::vector<double> values;
     values.reserve(row.slots);
     const uint64_t offset = static_cast<uint64_t>(row.chunk) * static_cast<uint64_t>(chunkRows);
     for (uint32_t i = 0; i < row.slots; ++i) {
         const uint64_t index = offset + i;
-        const bool matched = index < rightTokens.size() && leftTokens.count(rightTokens[static_cast<size_t>(index)]) > 0;
-        values.push_back(matched ? 1.0 : 0.0);
+        if (!matchMask.empty()) {
+            values.push_back(index < matchMask.size() ? matchMask[static_cast<size_t>(index)] : 0.0);
+        }
+        else {
+            const bool matched =
+                index < rightTokens.size() && leftTokens.count(rightTokens[static_cast<size_t>(index)]) > 0;
+            values.push_back(matched ? 1.0 : 0.0);
+        }
     }
     return cc->MakeCKKSPackedPlaintext(values);
 }
 
 Ciphertext<DCRTPoly> computeChunk(const Options& options, const CryptoContext<DCRTPoly>& cc, const AggregateRow& row,
                                   uint32_t chunkRows, const std::set<std::string>& leftTokens,
-                                  const std::vector<std::string>& rightTokens) {
+                                  const std::vector<std::string>& rightTokens,
+                                  const std::vector<double>& matchMask) {
     auto mask = deserializeCiphertext(options.inputDir / row.maskCiphertext);
-    auto joinMask = makeJoinPlaintext(cc, row, chunkRows, leftTokens, rightTokens);
+    auto joinMask = makeJoinPlaintext(cc, row, chunkRows, leftTokens, rightTokens, matchMask);
     auto joinedMask = cc->EvalMult(mask, joinMask);
     if (row.operation == "count") {
         return cc->EvalSum(joinedMask, row.slots);
@@ -389,7 +440,8 @@ Ciphertext<DCRTPoly> computeChunk(const Options& options, const CryptoContext<DC
 std::vector<AggregateResult> runAggregates(const Options& options, const CryptoContext<DCRTPoly>& cc,
                                            const std::map<AggregateKey, std::vector<AggregateRow>>& grouped,
                                            uint32_t chunkRows, const std::set<std::string>& leftTokens,
-                                           const std::vector<std::string>& rightTokens) {
+                                           const std::vector<std::string>& rightTokens,
+                                           const std::vector<double>& matchMask) {
     std::filesystem::create_directories(options.outputDir / "aggregates");
     std::vector<AggregateResult> results;
 
@@ -399,7 +451,7 @@ std::vector<AggregateResult> runAggregates(const Options& options, const CryptoC
         std::tie(result.analysis, result.group, result.label, result.operation, result.valueName) = key;
 
         for (const auto& row : rows) {
-            auto chunkValue = computeChunk(options, cc, row, chunkRows, leftTokens, rightTokens);
+            auto chunkValue = computeChunk(options, cc, row, chunkRows, leftTokens, rightTokens, matchMask);
             if (!total) {
                 total = chunkValue;
             }
@@ -443,21 +495,34 @@ int main(int argc, char** argv) {
         const auto rows = readManifest(options.manifestPath, options.analysisFilter);
         const auto grouped = groupRows(rows);
         const auto chunkRows = maxChunkRows(rows);
-        const auto leftTokens = readTokenSet(options.leftTokensPath);
-        const auto rightTokens = readTokenVector(options.rightTokensPath);
+        std::set<std::string> leftTokens;
+        std::vector<std::string> rightTokens;
+        std::vector<double> matchMask;
+        if (!options.matchMaskPath.empty()) {
+            matchMask = readMatchMask(options.matchMaskPath);
+        }
+        else {
+            leftTokens = readTokenSet(options.leftTokensPath);
+            rightTokens = readTokenVector(options.rightTokensPath);
+        }
 
         CryptoContext<DCRTPoly> cc;
         deserializeContext(options.contextPath, cc);
         deserializeEvalSumKeys(cc, options.evalSumKeysPath);
         deserializeEvalMultKeys(cc, options.evalMultKeysPath);
 
-        const auto results = runAggregates(options, cc, grouped, chunkRows, leftTokens, rightTokens);
+        const auto results = runAggregates(options, cc, grouped, chunkRows, leftTokens, rightTokens, matchMask);
         writeOutputManifest(options.outputDir, results);
 
         std::cout << "server_home_credit_token_join_aggregate complete\n";
         std::cout << "analysis: " << options.analysisFilter << "\n";
-        std::cout << "matched-token candidates: " << leftTokens.size() << "\n";
-        std::cout << "right-token rows: " << rightTokens.size() << "\n";
+        if (!matchMask.empty()) {
+            std::cout << "match-mask rows: " << matchMask.size() << "\n";
+        }
+        else {
+            std::cout << "matched-token candidates: " << leftTokens.size() << "\n";
+            std::cout << "right-token rows: " << rightTokens.size() << "\n";
+        }
         std::cout << "aggregates: " << results.size() << "\n";
         std::cout << "output: " << (options.outputDir / "aggregate_summary_manifest.csv") << "\n";
         return 0;

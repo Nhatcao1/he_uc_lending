@@ -136,6 +136,7 @@ AGGREGATE_WORKLOADS = {
         "analysis": "previous_application_token_join_psi",
         "groups": ("NAME_CONTRACT_STATUS",),
         "join_dir": "join/psi",
+        "match_mask": "join/psi/match_mask.csv",
     },
     "application_numeric_histograms": {
         "job_type": "home_credit_application_numeric_histograms",
@@ -483,7 +484,11 @@ def collect_aggregate_files(encrypted_dir: Path, workload: str) -> tuple[list[Pa
         require_file(path)
         files.append(path)
     join_dir = str(workload_cfg.get("join_dir") or "")
-    if join_dir:
+    match_mask = str(workload_cfg.get("match_mask") or "")
+    if match_mask:
+        add_required_file(files, encrypted_dir, match_mask)
+        add_optional_file(files, encrypted_dir, "join/join_manifest.json")
+    elif join_dir:
         for name in ("left_tokens.csv", "right_tokens.csv"):
             add_required_file(files, encrypted_dir, f"{join_dir}/{name}")
         add_optional_file(files, encrypted_dir, "join/join_manifest.json")

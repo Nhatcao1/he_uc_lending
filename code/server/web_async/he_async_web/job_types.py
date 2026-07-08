@@ -98,7 +98,34 @@ def token_join_job(
     output_dir: str,
     token_dir: str,
     client_requirements: list[str],
+    match_mask: str = "",
 ) -> dict[str, Any]:
+    required = [
+        "crypto_context.bin",
+        "eval_sum_keys.bin",
+        "eval_mult_keys.bin",
+        "aggregate_manifest.csv",
+        "vectors/",
+    ]
+    command = [
+        "--context",
+        "crypto_context.bin",
+        "--eval-sum-keys",
+        "eval_sum_keys.bin",
+        "--eval-mult-keys",
+        "eval_mult_keys.bin",
+        "--manifest",
+        "aggregate_manifest.csv",
+        "--input-dir",
+        "vectors",
+    ]
+    if match_mask:
+        required.append(match_mask)
+        command.extend(["--match-mask", match_mask])
+    else:
+        required.extend([f"{token_dir}/left_tokens.csv", f"{token_dir}/right_tokens.csv"])
+        command.extend(["--left-tokens", f"{token_dir}/left_tokens.csv", "--right-tokens", f"{token_dir}/right_tokens.csv"])
+    command.extend(["--output-dir", f"output/{output_dir}", "--analysis-filter", f"literal:{analysis}"])
     return {
         "label": label,
         "family": "Home Credit Manual Feature Engineering",
@@ -108,37 +135,10 @@ def token_join_job(
         "description": description,
         "notebook_cells": "manual feature engineering notebooks: groupby/merge pattern",
         "he_operation": "plaintext token match mask * encrypted category mask, then EvalSum",
-        "required": [
-            "crypto_context.bin",
-            "eval_sum_keys.bin",
-            "eval_mult_keys.bin",
-            "aggregate_manifest.csv",
-            "vectors/",
-            f"{token_dir}/left_tokens.csv",
-            f"{token_dir}/right_tokens.csv",
-        ],
+        "required": required,
         "client_requirements": client_requirements,
         "server_returns": aggregate_returns(output_dir),
-        "command": [
-            "--context",
-            "crypto_context.bin",
-            "--eval-sum-keys",
-            "eval_sum_keys.bin",
-            "--eval-mult-keys",
-            "eval_mult_keys.bin",
-            "--manifest",
-            "aggregate_manifest.csv",
-            "--input-dir",
-            "vectors",
-            "--left-tokens",
-            f"{token_dir}/left_tokens.csv",
-            "--right-tokens",
-            f"{token_dir}/right_tokens.csv",
-            "--output-dir",
-            f"output/{output_dir}",
-            "--analysis-filter",
-            f"literal:{analysis}",
-        ],
+        "command": command,
     }
 
 
@@ -330,14 +330,15 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
     "home_credit_join_psi_prev_contract_status": token_join_job(
         label="Manual FE: PSI-Ready Join Previous Status",
         stage="Manual FE PSI join proof",
-        description="Same encrypted join aggregate as the HMAC path, but the matched token set is supplied from a PSI output file when available.",
+        description="PSI/trusted matching produces a row-aligned match mask; the server applies that plaintext mask to encrypted previous_application status vectors.",
         analysis="previous_application_token_join_psi",
         output_dir="join_psi_prev_contract_status",
         token_dir="join/psi",
+        match_mask="join/psi/match_mask.csv",
         client_requirements=[
             "Client or trusted matching service runs PSI and writes matched HMAC tokens to the prepare step.",
-            "Until PSI output is supplied, the prepare script creates a same-size local fixture for workflow testing.",
-            "Server runs the same encrypted aggregate as the HMAC path so job timings are comparable.",
+            "Prepare converts the PSI matched-token set into row-aligned join/psi/match_mask.csv.",
+            "Server receives the 0/1 mask and encrypted status masks; it does not need raw IDs or PSI token lists.",
         ],
     ),
     "home_credit_join_fhew_prev_contract_status": fhew_match_job(),

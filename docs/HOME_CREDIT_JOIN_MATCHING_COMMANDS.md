@@ -101,11 +101,20 @@ python3 code/client/home_credit/prepare_home_credit_basic_eda.py \
   --row-limit 1000 \
   --previous-row-limit 1000 \
   --join-secret "replace-this-demo-join-secret" \
-  --psi-matched-token-file client_runs/home_credit_basic/psi/matched_tokens.csv
+  --psi-matched-token-file client_runs/home_credit_basic/psi/matched_tokens.csv \
+  --require-psi-matched-token-file
 ```
 
 The matched token file is newline or CSV format with one HMAC token per row.
-Do not put raw `SK_ID_CURR` values in it.
+Do not put raw `SK_ID_CURR` values in it. The prepare step converts this token
+set into:
+
+```text
+prepared_payloads/home_credit_basic/join/psi/match_mask.csv
+```
+
+That mask is row-aligned to `previous_application.csv`. The server consumes the
+mask, not the PSI token list.
 
 ## Client Encrypt Once
 
@@ -137,6 +146,18 @@ For a slower but less toy-like setting, change `--security TOY` to
 small.
 
 ## Package Join Jobs
+
+PSI-only package:
+
+```bash
+python3 code/client/home_credit/package_home_credit_upload_bag.py \
+  --encrypted-dir encrypted_payloads/home_credit_basic \
+  --workload join_psi_prev_contract_status \
+  --output-dir client_runs/home_credit_basic/server_uploads \
+  --client-key-dir keys/home_credit_basic
+```
+
+Optional comparison packages:
 
 ```bash
 for workload in \

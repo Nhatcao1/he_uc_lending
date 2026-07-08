@@ -136,7 +136,7 @@ The join workloads compare matching approaches over the same encrypted
 
 ```text
 join_hmac_prev_contract_status  # matched by local HMAC-SHA256 SK_ID_CURR tokens
-join_psi_prev_contract_status   # same HE job, matched-token set can come from PSI output
+join_psi_prev_contract_status   # PSI output becomes row-aligned match_mask.csv
 join_fhew_prev_contract_status  # tiny BinFHE/FHEW encrypted equality benchmark
 ```
 

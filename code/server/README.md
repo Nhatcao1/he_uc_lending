@@ -42,7 +42,7 @@ Aggregate executable:
 Token join aggregate executable:
 
 - `home_credit_aggregate/server_home_credit_token_join_aggregate.cpp`
-- applies HMAC/PSI matched-token selection masks to encrypted
+- applies HMAC token or PSI row-mask selection masks to encrypted
   previous_application vectors
 - supports merge-aware Home Credit manual feature engineering timing jobs
 

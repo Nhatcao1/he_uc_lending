@@ -159,7 +159,7 @@ use `server_numeric_summary`, categorical/target/correlation jobs use
 | `app_selected_correlation_stats` | 6 Pearson Correlation Support | encrypted selected pairwise sums |
 | `linear_score_demo` | 7 Linear Score Demo | optional CKKS weighted sum; not RandomForest |
 | `join_hmac_prev_contract_status` | Manual FE HMAC previous-status join | HMAC-token match mask times encrypted previous status mask, then sum |
-| `join_psi_prev_contract_status` | Manual FE PSI-ready previous-status join | PSI-matched token mask times encrypted previous status mask, then sum |
+| `join_psi_prev_contract_status` | Manual FE PSI previous-status join | PSI row-aligned plaintext match mask times encrypted previous status mask, then sum |
 
 Legacy package names (`target_balance`, `numeric_summary`, `category_eda`,
 `bucket_eda`, `domain_ratio_eda`, `linear_score`) are accepted as aliases only.
