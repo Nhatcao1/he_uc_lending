@@ -18,6 +18,7 @@ from download_job_bundle import (
     DECRYPT_CONFIG,
     download,
     download_json,
+    infer_fhew_client_material,
     infer_client_material,
     safe_extract,
     safe_job_id,
@@ -66,6 +67,7 @@ JOB_LABELS = {
     "home_credit_linear_score_demo": "7 Linear Score Demo",
     "home_credit_join_hmac_prev_contract_status": "Manual FE: HMAC Token Join Previous Status",
     "home_credit_join_psi_prev_contract_status": "Manual FE: PSI-Ready Join Previous Status",
+    "home_credit_join_fhew_prev_contract_status": "Manual FE: FHEW Encrypted Join Match",
 }
 
 
@@ -78,6 +80,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default="client_runs/home_credit_basic/server_returns")
     parser.add_argument("--client-private-root", default="client_runs/home_credit_basic/client_private")
     parser.add_argument("--decrypt-bin", default="./build/decrypt_ckks_results")
+    parser.add_argument("--fhew-decrypt-bin", default="./build/decrypt_home_credit_fhew_match")
     return parser.parse_args()
 
 
@@ -115,10 +118,21 @@ def decrypt_command_for(args: argparse.Namespace, job_dir: Path) -> str:
         secret_key="",
         client_private_root=args.client_private_root,
     )
-    context, secret_key, material_source = infer_client_material(helper_args, job_dir)
     manifest = job_dir / cfg["manifest"]
     input_dir = job_dir / cfg["input_dir"]
     output_csv = job_dir / cfg["output_csv"]
+    if cfg["manifest_type"] == "fhew_match":
+        context, secret_key, material_source = infer_fhew_client_material(helper_args, job_dir)
+        return (
+            f"# key material: {material_source}\n"
+            f"{args.fhew_decrypt_bin} \\\n"
+            f"  --context {context} \\\n"
+            f"  --secret-key {secret_key} \\\n"
+            f"  --manifest {manifest} \\\n"
+            f"  --input-dir {input_dir} \\\n"
+            f"  --output-csv {output_csv}"
+        )
+    context, secret_key, material_source = infer_client_material(helper_args, job_dir)
     return (
         f"# key material: {material_source}\n"
         f"{args.decrypt_bin} \\\n"
@@ -146,26 +160,42 @@ def decrypt_job(args: argparse.Namespace, job_dir: Path) -> tuple[Path, str, lis
         secret_key="",
         client_private_root=args.client_private_root,
     )
-    context, secret_key, material_source = infer_client_material(helper_args, job_dir)
     manifest = job_dir / cfg["manifest"]
     input_dir = job_dir / cfg["input_dir"]
     output_csv = job_dir / cfg["output_csv"]
 
-    command = [
-        args.decrypt_bin,
-        "--context",
-        str(context),
-        "--secret-key",
-        str(secret_key),
-        "--manifest",
-        str(manifest),
-        "--input-dir",
-        str(input_dir),
-        "--output-csv",
-        str(output_csv),
-        "--manifest-type",
-        str(cfg["manifest_type"]),
-    ]
+    if cfg["manifest_type"] == "fhew_match":
+        context, secret_key, material_source = infer_fhew_client_material(helper_args, job_dir)
+        command = [
+            args.fhew_decrypt_bin,
+            "--context",
+            str(context),
+            "--secret-key",
+            str(secret_key),
+            "--manifest",
+            str(manifest),
+            "--input-dir",
+            str(input_dir),
+            "--output-csv",
+            str(output_csv),
+        ]
+    else:
+        context, secret_key, material_source = infer_client_material(helper_args, job_dir)
+        command = [
+            args.decrypt_bin,
+            "--context",
+            str(context),
+            "--secret-key",
+            str(secret_key),
+            "--manifest",
+            str(manifest),
+            "--input-dir",
+            str(input_dir),
+            "--output-csv",
+            str(output_csv),
+            "--manifest-type",
+            str(cfg["manifest_type"]),
+        ]
     completed = subprocess.run(command, check=True, text=True, capture_output=True)  # noqa: S603 - local configured binary
     headers, rows = read_csv_preview(output_csv)
     log = "\n".join(part for part in (completed.stdout.strip(), completed.stderr.strip()) if part)

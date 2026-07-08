@@ -142,6 +142,53 @@ def token_join_job(
     }
 
 
+def fhew_match_job() -> dict[str, Any]:
+    return {
+        "label": "Manual FE: FHEW Encrypted Join Match",
+        "family": "Home Credit Manual Feature Engineering",
+        "stage": "Manual FE encrypted equality benchmark",
+        "scheme": "BinFHE/FHEW",
+        "binary": "server_home_credit_fhew_match",
+        "description": (
+            "Tiny encrypted equality comparison for application_train vs previous_application SK_ID_CURR tokens. "
+            "This is for timing/feasibility comparison with HMAC and PSI-ready join paths."
+        ),
+        "notebook_cells": "manual feature engineering notebooks: merge/join pattern",
+        "he_operation": "XNOR encrypted ID bits, AND-reduce equality, OR-reduce matches",
+        "required": [
+            "join/fhew/cryptoContext.bin",
+            "join/fhew/refreshKey.bin",
+            "join/fhew/ksKey.bin",
+            "join/fhew/fhew_match_manifest.csv",
+            "join/fhew/left_bits/",
+            "join/fhew/right_bits/",
+        ],
+        "client_requirements": [
+            "Client prepares HMAC-derived token-prefix integers locally, then encrypts each bit with BinFHE/FHEW.",
+            "Upload contains encrypted bit ciphertexts and FHEW bootstrapping keys, not raw IDs or HMAC tokens.",
+            "Keep this capped. Pairwise gates scale as left_rows * right_rows * id_bits.",
+        ],
+        "server_returns": [
+            "join_fhew_prev_contract_status/fhew_match_summary_manifest.csv",
+            "join_fhew_prev_contract_status/matches/*.bin",
+        ],
+        "command": [
+            "--context",
+            "join/fhew/cryptoContext.bin",
+            "--refresh-key",
+            "join/fhew/refreshKey.bin",
+            "--switch-key",
+            "join/fhew/ksKey.bin",
+            "--manifest",
+            "join/fhew/fhew_match_manifest.csv",
+            "--input-dir",
+            "join/fhew",
+            "--output-dir",
+            "output/join_fhew_prev_contract_status",
+        ],
+    }
+
+
 COMMON_CATEGORY_CLIENT_REQS = [
     "Client normalizes strings, applies __MISSING__, and uses top-K plus __OTHER__ where needed.",
     "Client one-hot encodes category labels into encrypted 0/1 masks.",
@@ -293,6 +340,7 @@ JOB_TYPES: dict[str, dict[str, Any]] = {
             "Server runs the same encrypted aggregate as the HMAC path so job timings are comparable.",
         ],
     ),
+    "home_credit_join_fhew_prev_contract_status": fhew_match_job(),
 }
 
 
@@ -562,6 +610,7 @@ NOTEBOOK_JOB_ORDER = [
     "home_credit_linear_score_demo",
     "home_credit_join_hmac_prev_contract_status",
     "home_credit_join_psi_prev_contract_status",
+    "home_credit_join_fhew_prev_contract_status",
 ]
 JOB_TYPES = {
     **{job_type: JOB_TYPES[job_type] for job_type in NOTEBOOK_JOB_ORDER if job_type in JOB_TYPES},

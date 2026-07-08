@@ -126,6 +126,7 @@ prev_insured_on_approval
 app_selected_correlation_stats
 join_hmac_prev_contract_status
 join_psi_prev_contract_status
+join_fhew_prev_contract_status
 linear_score_demo
 all
 ```
@@ -136,6 +137,7 @@ The join workloads compare matching approaches over the same encrypted
 ```text
 join_hmac_prev_contract_status  # matched by local HMAC-SHA256 SK_ID_CURR tokens
 join_psi_prev_contract_status   # same HE job, matched-token set can come from PSI output
+join_fhew_prev_contract_status  # tiny BinFHE/FHEW encrypted equality benchmark
 ```
 
 The zip contains server-safe encrypted artifacts and manifests only. It blocks

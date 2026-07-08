@@ -44,6 +44,12 @@ DECRYPT_CONFIG = {
     "home_credit_app_selected_correlation_stats": aggregate_decrypt_config("app_selected_correlation_stats"),
     "home_credit_join_hmac_prev_contract_status": aggregate_decrypt_config("join_hmac_prev_contract_status"),
     "home_credit_join_psi_prev_contract_status": aggregate_decrypt_config("join_psi_prev_contract_status"),
+    "home_credit_join_fhew_prev_contract_status": {
+        "manifest": "join_fhew_prev_contract_status/fhew_match_summary_manifest.csv",
+        "input_dir": "join_fhew_prev_contract_status",
+        "output_csv": "decrypted_join_fhew_prev_contract_status.csv",
+        "manifest_type": "fhew_match",
+    },
     "home_credit_linear_score_demo": {
         "manifest": "linear_score_demo/score_summary_manifest.csv",
         "input_dir": "linear_score_demo",
@@ -147,6 +153,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--context", default="", help="Override crypto_context.bin path. Normally inferred from job manifest.")
     parser.add_argument("--secret-key", default="", help="Override secret_key.bin path. Normally inferred from job manifest.")
     parser.add_argument("--decrypt-bin", default="./build/decrypt_ckks_results")
+    parser.add_argument("--fhew-decrypt-bin", default="./build/decrypt_home_credit_fhew_match")
     return parser.parse_args()
 
 
@@ -225,6 +232,23 @@ def infer_client_material(args: argparse.Namespace, job_dir: Path) -> tuple[Path
     return fallback_context, fallback_secret, "legacy fallback; result bundle has no upload_bag_manifest.json"
 
 
+def infer_fhew_client_material(args: argparse.Namespace, job_dir: Path) -> tuple[Path, Path, str]:
+    upload_manifest = load_json_if_exists(job_dir / "upload_bag_manifest.json")
+    material_id = str(upload_manifest.get("client_material_id") or "").strip()
+    if material_id:
+        material_dir = Path(args.client_private_root) / material_id
+        return (
+            material_dir / "fhew_crypto_context.bin",
+            material_dir / "fhew_secret_key.bin",
+            f"client_material_id={material_id}",
+        )
+    return (
+        Path("keys/home_credit_basic/fhew_crypto_context.bin"),
+        Path("keys/home_credit_basic/fhew_secret_key.bin"),
+        "legacy fallback; result bundle has no upload_bag_manifest.json",
+    )
+
+
 def print_decrypt_command(args: argparse.Namespace, job_dir: Path) -> None:
     status_path = job_dir / "job_status.json"
     if not status_path.exists():
@@ -241,6 +265,19 @@ def print_decrypt_command(args: argparse.Namespace, job_dir: Path) -> None:
     manifest = job_dir / cfg["manifest"]
     input_dir = job_dir / cfg["input_dir"]
     output_csv = job_dir / cfg["output_csv"]
+    if cfg["manifest_type"] == "fhew_match":
+        context, secret_key, material_source = infer_fhew_client_material(args, job_dir)
+        print("\nDecrypt command:")
+        print(f"# key material: {material_source}")
+        print(
+            f"{args.fhew_decrypt_bin} \\\n"
+            f"  --context {context} \\\n"
+            f"  --secret-key {secret_key} \\\n"
+            f"  --manifest {manifest} \\\n"
+            f"  --input-dir {input_dir} \\\n"
+            f"  --output-csv {output_csv}"
+        )
+        return
     context, secret_key, material_source = infer_client_material(args, job_dir)
     print("\nDecrypt command:")
     print(f"# key material: {material_source}")

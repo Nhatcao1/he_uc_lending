@@ -5,10 +5,13 @@ This covers the merge-aware timing jobs:
 ```text
 join_hmac_prev_contract_status
 join_psi_prev_contract_status
+join_fhew_prev_contract_status
 ```
 
-Both jobs use the same encrypted previous-application status masks. The
-difference is how the matched `SK_ID_CURR` token set is produced.
+The HMAC and PSI-ready jobs use the same encrypted previous-application status
+masks. The difference is how the matched `SK_ID_CURR` token set is produced.
+The FHEW job is separate: it is a tiny encrypted equality benchmark over
+encrypted token-prefix bits so we can compare feasibility and runtime.
 
 ## Server Pull, Build, Run
 
@@ -17,7 +20,7 @@ cd ~/he_uc_lending
 git pull
 
 cmake -S . -B build -DOpenFHE_DIR=$HOME/openfhe-development/build
-cmake --build build --target server_home_credit_token_join_aggregate server_home_credit_aggregate server_numeric_summary server_linear_score
+cmake --build build --target server_home_credit_token_join_aggregate server_home_credit_fhew_match server_home_credit_aggregate server_numeric_summary server_linear_score
 
 docker compose -f deploy/docker/docker-compose.async.yml up --build -d
 ```
@@ -106,6 +109,8 @@ Do not put raw `SK_ID_CURR` values in it.
 
 ## Client Encrypt Once
 
+CKKS aggregate/token-mask jobs:
+
 ```bash
 ./build/encrypt_home_credit_payload \
   --prepared-dir prepared_payloads/home_credit_basic \
@@ -114,12 +119,30 @@ Do not put raw `SK_ID_CURR` values in it.
   --slots 4096
 ```
 
-## Package Both Join Jobs
+Tiny FHEW encrypted equality benchmark:
+
+```bash
+./build/encrypt_home_credit_fhew_match \
+  --prepared-dir prepared_payloads/home_credit_basic \
+  --server-output-dir encrypted_payloads/home_credit_basic \
+  --client-key-dir keys/home_credit_basic \
+  --id-bits 12 \
+  --max-left 8 \
+  --max-right 8 \
+  --security TOY
+```
+
+For a slower but less toy-like setting, change `--security TOY` to
+`--security STD128` and keep `--max-left`, `--max-right`, and `--id-bits`
+small.
+
+## Package Join Jobs
 
 ```bash
 for workload in \
   join_hmac_prev_contract_status \
-  join_psi_prev_contract_status
+  join_psi_prev_contract_status \
+  join_fhew_prev_contract_status
 do
   python3 code/client/home_credit/package_home_credit_upload_bag.py \
     --encrypted-dir encrypted_payloads/home_credit_basic \
@@ -134,6 +157,7 @@ Upload these two zip files through the server web UI:
 ```text
 client_runs/home_credit_basic/server_uploads/home_credit_join_hmac_prev_contract_status.upload.zip
 client_runs/home_credit_basic/server_uploads/home_credit_join_psi_prev_contract_status.upload.zip
+client_runs/home_credit_basic/server_uploads/home_credit_join_fhew_prev_contract_status.upload.zip
 ```
 
 ## Client Result Dashboard
@@ -150,6 +174,7 @@ Open:
 http://127.0.0.1:8090
 ```
 
-Use the server job runtime columns to compare the two matching paths. The HE
-operation is intentionally the same, so any extra PSI timing should be recorded
-as PSI preparation time, not CKKS evaluation time.
+Use the server job runtime columns to compare the three matching paths. HMAC and
+PSI-ready intentionally use the same CKKS operation, so PSI protocol time should
+be recorded as preparation time. FHEW runtime measures encrypted equality gates
+and will grow roughly with `left_rows * right_rows * id_bits`.

@@ -23,6 +23,10 @@ add_executable(server_home_credit_token_join_aggregate
     code/server/home_credit_aggregate/server_home_credit_token_join_aggregate.cpp
 )
 
+add_executable(server_home_credit_fhew_match
+    code/server/fhew_match/server_home_credit_fhew_match.cpp
+)
+
 add_executable(server_linear_score
     code/server/linear_score/server_linear_score.cpp
 )
@@ -35,13 +39,24 @@ add_executable(decrypt_ckks_results
     code/client/ckks_tools/decrypt_ckks_results.cpp
 )
 
+add_executable(encrypt_home_credit_fhew_match
+    code/client/fhew_tools/encrypt_home_credit_fhew_match.cpp
+)
+
+add_executable(decrypt_home_credit_fhew_match
+    code/client/fhew_tools/decrypt_home_credit_fhew_match.cpp
+)
+
 set(HE_UC_OPENFHE_TARGETS
     server_numeric_summary
     server_home_credit_aggregate
     server_home_credit_token_join_aggregate
+    server_home_credit_fhew_match
     server_linear_score
     encrypt_home_credit_payload
     decrypt_ckks_results
+    encrypt_home_credit_fhew_match
+    decrypt_home_credit_fhew_match
 )
 
 foreach(target_name IN LISTS HE_UC_OPENFHE_TARGETS)

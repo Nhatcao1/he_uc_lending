@@ -167,6 +167,13 @@ AGGREGATE_WORKLOADS = {
     },
 }
 
+FHEW_WORKLOADS = {
+    "join_fhew_prev_contract_status": {
+        "job_type": "home_credit_join_fhew_prev_contract_status",
+        "base_dir": "join/fhew",
+    },
+}
+
 PREVIOUS_COLUMNS = {
     "prev_contract_type": "NAME_CONTRACT_TYPE",
     "prev_weekday_process_start": "WEEKDAY_APPR_PROCESS_START",
@@ -220,6 +227,7 @@ CANONICAL_WORKLOADS = (
     "app_selected_correlation_stats",
     "join_hmac_prev_contract_status",
     "join_psi_prev_contract_status",
+    "join_fhew_prev_contract_status",
     "linear_score_demo",
 )
 LEGACY_WORKLOAD_ALIASES = {
@@ -242,6 +250,7 @@ WORKLOADS = CANONICAL_WORKLOADS + (
 WORKLOAD_TO_JOB_TYPE = {"all": "auto", "linear_score_demo": "home_credit_linear_score_demo"}
 WORKLOAD_TO_JOB_TYPE.update({key: str(value["job_type"]) for key, value in NUMERIC_WORKLOADS.items()})
 WORKLOAD_TO_JOB_TYPE.update({key: str(value["job_type"]) for key, value in AGGREGATE_WORKLOADS.items()})
+WORKLOAD_TO_JOB_TYPE.update({key: str(value["job_type"]) for key, value in FHEW_WORKLOADS.items()})
 WORKLOAD_FILE_STEMS = {
     workload: f"home_credit_{workload}" for workload in CANONICAL_WORKLOADS if workload != "all"
 }
@@ -496,6 +505,31 @@ def collect_linear_score_files(encrypted_dir: Path) -> tuple[list[Path], dict[st
     return files, generated
 
 
+def collect_fhew_match_files(encrypted_dir: Path, workload: str) -> tuple[list[Path], dict[str, str]]:
+    base_dir = encrypted_dir / str(FHEW_WORKLOADS[workload]["base_dir"])
+    required = (
+        "cryptoContext.bin",
+        "refreshKey.bin",
+        "ksKey.bin",
+        "fhew_match_manifest.csv",
+    )
+    files: list[Path] = []
+    for name in required:
+        path = base_dir / name
+        require_file(path)
+        files.append(path)
+    metadata = base_dir / "fhew_match_metadata.json"
+    if metadata.is_file():
+        files.append(metadata)
+    for dirname in ("left_bits", "right_bits"):
+        root = base_dir / dirname
+        if not root.is_dir():
+            raise FileNotFoundError(f"missing FHEW ciphertext directory: {root}")
+        for path in sorted(root.rglob("*.bin")):
+            files.append(path)
+    return files, {}
+
+
 def collect_files(encrypted_dir: Path, workload: str, include_public_key: bool) -> tuple[list[Path], dict[str, str]]:
     if workload == "all":
         return collect_all_files(encrypted_dir, include_public_key)
@@ -503,6 +537,8 @@ def collect_files(encrypted_dir: Path, workload: str, include_public_key: bool) 
         files, generated = collect_numeric_summary_files(encrypted_dir, NUMERIC_WORKLOADS[workload]["column"])
     elif workload in AGGREGATE_WORKLOADS:
         files, generated = collect_aggregate_files(encrypted_dir, workload)
+    elif workload in FHEW_WORKLOADS:
+        files, generated = collect_fhew_match_files(encrypted_dir, workload)
     elif workload == "linear_score_demo":
         files, generated = collect_linear_score_files(encrypted_dir)
     else:
@@ -538,10 +574,17 @@ def secret_output_dir_for(args: argparse.Namespace, upload_dir: Path) -> Path:
 
 def client_material_metadata(encrypted_dir: Path, args: argparse.Namespace) -> dict[str, str]:
     context_path = encrypted_dir / "crypto_context.bin"
-    require_file(context_path)
-    metadata = {
-        "crypto_context_sha256": file_sha256(context_path),
-    }
+    fhew_context_path = encrypted_dir / "join" / "fhew" / "cryptoContext.bin"
+    if context_path.is_file():
+        metadata = {
+            "crypto_context_sha256": file_sha256(context_path),
+        }
+    elif fhew_context_path.is_file():
+        metadata = {
+            "fhew_crypto_context_sha256": file_sha256(fhew_context_path),
+        }
+    else:
+        require_file(context_path)
     public_key_path = encrypted_dir / "public_key.bin"
     if public_key_path.is_file():
         metadata["public_key_sha256"] = file_sha256(public_key_path)
@@ -549,8 +592,15 @@ def client_material_metadata(encrypted_dir: Path, args: argparse.Namespace) -> d
     elif args.client_key_dir and (args.client_key_dir / "secret_key.bin").is_file():
         metadata["secret_key_sha256"] = file_sha256(args.client_key_dir / "secret_key.bin")
         material_basis = metadata["secret_key_sha256"]
+    elif args.client_key_dir and (args.client_key_dir / "fhew_secret_key.bin").is_file():
+        metadata["fhew_secret_key_sha256"] = file_sha256(args.client_key_dir / "fhew_secret_key.bin")
+        material_basis = metadata["fhew_secret_key_sha256"]
     else:
-        material_basis = metadata["crypto_context_sha256"]
+        material_basis = metadata.get("crypto_context_sha256") or metadata["fhew_crypto_context_sha256"]
+    if args.client_key_dir and (args.client_key_dir / "fhew_secret_key.bin").is_file():
+        metadata["fhew_secret_key_sha256"] = file_sha256(args.client_key_dir / "fhew_secret_key.bin")
+    if fhew_context_path.is_file():
+        metadata["fhew_crypto_context_sha256"] = file_sha256(fhew_context_path)
     metadata["client_material_id"] = material_basis[:16]
     return metadata
 
@@ -592,7 +642,9 @@ def copy_client_material(
     if args.no_copy_secret or not args.client_key_dir:
         return None
     source = args.client_key_dir / "secret_key.bin"
-    require_file(source)
+    fhew_source = args.client_key_dir / "fhew_secret_key.bin"
+    if not source.is_file() and not fhew_source.is_file():
+        require_file(source)
     material_id = material_metadata["client_material_id"]
     secret_dir = secret_output_dir_for(args, upload_dir) / material_id
     upload_dir_resolved = upload_dir.resolve()
@@ -600,15 +652,24 @@ def copy_client_material(
     if secret_dir_resolved == upload_dir_resolved or upload_dir_resolved in secret_dir_resolved.parents:
         raise ValueError("secret-output-dir must not be inside the upload output dir")
     secret_dir.mkdir(parents=True, exist_ok=True)
-    destination = secret_dir / "secret_key.bin"
-    shutil.copy2(source, destination)
-    context_destination = secret_dir / "crypto_context.bin"
-    shutil.copy2(encrypted_dir / "crypto_context.bin", context_destination)
+    destination: Path | None = None
+    if source.is_file():
+        destination = secret_dir / "secret_key.bin"
+        shutil.copy2(source, destination)
+    if (encrypted_dir / "crypto_context.bin").is_file():
+        shutil.copy2(encrypted_dir / "crypto_context.bin", secret_dir / "crypto_context.bin")
+    if fhew_source.is_file():
+        shutil.copy2(fhew_source, secret_dir / "fhew_secret_key.bin")
+    fhew_context_source = args.client_key_dir / "fhew_crypto_context.bin"
+    if fhew_context_source.is_file():
+        shutil.copy2(fhew_context_source, secret_dir / "fhew_crypto_context.bin")
     material_manifest = {
         "artifact_type": "home_credit_client_material",
         **material_metadata,
-        "secret_key": "secret_key.bin",
-        "crypto_context": "crypto_context.bin",
+        "secret_key": "secret_key.bin" if (secret_dir / "secret_key.bin").is_file() else "",
+        "crypto_context": "crypto_context.bin" if (secret_dir / "crypto_context.bin").is_file() else "",
+        "fhew_secret_key": "fhew_secret_key.bin" if (secret_dir / "fhew_secret_key.bin").is_file() else "",
+        "fhew_crypto_context": "fhew_crypto_context.bin" if (secret_dir / "fhew_crypto_context.bin").is_file() else "",
     }
     (secret_dir / "client_material_manifest.json").write_text(
         json.dumps(material_manifest, indent=2) + "\n",
@@ -622,7 +683,7 @@ def copy_client_material(
         "Use this key material only on the trusted client side to decrypt matching result bundles.\n",
         encoding="utf-8",
     )
-    return destination
+    return destination or (secret_dir / "fhew_secret_key.bin")
 
 
 def main() -> None:

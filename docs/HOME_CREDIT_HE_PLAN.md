@@ -40,6 +40,7 @@ separate bucket/domain use-case names.
 | 8 | `linear_score_demo` | Optional scaled numeric feature vectors | CKKS weighted sum | Encrypted inference smoke test |
 | 9 | `join_hmac_prev_contract_status` | HMAC-tokenized `SK_ID_CURR`, encrypted previous status masks | Token-match plaintext mask times encrypted mask, then sum | Joined previous-status count table |
 | 10 | `join_psi_prev_contract_status` | PSI-matched token set when available, encrypted previous status masks | Same CKKS join aggregate as HMAC path | PSI-ready joined status count table |
+| 11 | `join_fhew_prev_contract_status` | HMAC-derived token-prefix integers encrypted bit-by-bit | FHEW encrypted equality gates over a capped sample | Encrypted match flags for timing comparison |
 
 ## Merge-Aware Extension Plan
 
@@ -61,7 +62,8 @@ Recommended implementation order:
 
 1. Keep current EDA upload jobs unchanged for presentation stability.
 2. Add one merge-aware proof of concept over current available prep:
-   `join_hmac_prev_contract_status` and `join_psi_prev_contract_status`.
+   `join_hmac_prev_contract_status`, `join_psi_prev_contract_status`, and
+   the capped `join_fhew_prev_contract_status` encrypted equality benchmark.
 3. Add one bureau proof of concept:
    `bureau_previous_loan_counts_by_applicant`.
 4. Add one two-hop proof of concept:
@@ -79,6 +81,9 @@ Privacy/HE design:
 - Sensitive numeric values and 0/1 masks remain CKKS encrypted.
 - Server computes encrypted sums and masked sums per joined/grouped token set.
 - Client decrypts the final per-client aggregate feature table or final score.
+- FHEW can compare encrypted ID bits, but it is pairwise and gate-heavy. Keep it
+  as a small benchmark unless a later design adds a scalable private matching
+  protocol.
 
 What we should not promise yet:
 

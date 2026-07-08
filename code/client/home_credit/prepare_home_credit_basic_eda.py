@@ -115,6 +115,7 @@ DEFAULT_MODEL_FEATURES = [
 JOIN_STATUS_COLUMN = "NAME_CONTRACT_STATUS"
 JOIN_HMAC_ANALYSIS = "previous_application_token_join_hmac"
 JOIN_PSI_ANALYSIS = "previous_application_token_join_psi"
+FHEW_MATCH_INPUT_FILE = "fhew_match_inputs.csv"
 
 
 @dataclass
@@ -967,6 +968,39 @@ def write_token_file(path: Path, tokens: Iterable[str]) -> int:
     return count
 
 
+def token_prefix_int(token: str, bits: int = 32) -> int:
+    if not token:
+        return 0
+    hex_chars = max(1, math.ceil(bits / 4))
+    value = int(token[:hex_chars], 16)
+    return value & ((1 << bits) - 1)
+
+
+def write_fhew_match_inputs(
+    output_dir: Path,
+    application_token_set: set[str],
+    previous_tokens: list[str],
+) -> dict[str, object]:
+    path = output_dir / FHEW_MATCH_INPUT_FILE
+    left_tokens = sorted(token for token in application_token_set if token)
+    right_tokens = [token for token in previous_tokens if token]
+    with path.open("w", encoding="utf-8", newline="") as output:
+        writer = csv.DictWriter(output, fieldnames=["side", "row_index", "token_prefix_u32"])
+        writer.writeheader()
+        for index, token in enumerate(left_tokens):
+            writer.writerow({"side": "left", "row_index": index, "token_prefix_u32": token_prefix_int(token)})
+        for index, token in enumerate(right_tokens):
+            writer.writerow({"side": "right", "row_index": index, "token_prefix_u32": token_prefix_int(token)})
+    return {
+        "input_file": FHEW_MATCH_INPUT_FILE,
+        "left_rows": len(left_tokens),
+        "right_rows": len(right_tokens),
+        "token_bits_available": 32,
+        "raw_ids_included": False,
+        "note": "Client-local BinFHE equality input. Encrypt with encrypt_home_credit_fhew_match before upload.",
+    }
+
+
 def write_join_token_artifacts(
     output_dir: Path,
     application_tokens: list[str],
@@ -1096,6 +1130,7 @@ def main() -> None:
     previous_tokens: list[str] = []
     psi_tokens: set[str] = set()
     join_metadata: dict[str, object] = {}
+    fhew_metadata: dict[str, object] = {}
     if previous_path:
         previous_tokens = collect_previous_tokens(previous_path, args.previous_row_limit, args.join_secret)
         psi_tokens = read_token_file(args.psi_matched_token_file)
@@ -1106,6 +1141,7 @@ def main() -> None:
             previous_tokens,
             psi_tokens,
         )
+        fhew_metadata = write_fhew_match_inputs(output_dir, application_token_set, previous_tokens)
 
     vector_manifest_rows = [
         {
@@ -1156,6 +1192,7 @@ def main() -> None:
         "target_lookup_count": len(target_by_curr),
         "join_token_count": len(application_token_set),
         "join_token_artifacts": join_metadata,
+        "fhew_match_inputs": fhew_metadata,
         "vector_count": len(vectors),
         "aggregate_operation_count": len(aggregate_ops),
         "implemented_criteria": [
