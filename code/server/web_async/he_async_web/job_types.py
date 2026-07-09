@@ -89,6 +89,31 @@ def aggregate_returns(output_dir: str) -> list[str]:
     return [f"{output_dir}/aggregate_summary_manifest.csv", f"{output_dir}/aggregates/*.bin"]
 
 
+def grouped_aggregate_job(
+    *,
+    label: str,
+    stage: str,
+    description: str,
+    output_dir: str,
+    notebook_cells: str,
+    he_operation: str,
+    client_requirements: list[str],
+) -> dict[str, Any]:
+    config = aggregate_job(
+        label=label,
+        stage=stage,
+        description=description,
+        analysis="",
+        output_dir=output_dir,
+        notebook_cells=notebook_cells,
+        he_operation=he_operation,
+        client_requirements=client_requirements,
+        server_returns=aggregate_returns(output_dir),
+    )
+    config["command"] = config["command"][:-2]
+    return config
+
+
 def token_join_job(
     *,
     label: str,
@@ -430,6 +455,92 @@ for job_type, label, column_label, cells in PREVIOUS_APPLICATION_JOBS:
         server_returns=aggregate_returns(output_dir),
     )
 
+for old_job_type in list(JOB_TYPES):
+    if old_job_type.startswith("home_credit_app_") or old_job_type.startswith("home_credit_prev_"):
+        JOB_TYPES[old_job_type]["hidden"] = True
+JOB_TYPES["home_credit_missing_data"]["hidden"] = True
+JOB_TYPES["home_credit_linear_score_demo"]["hidden"] = True
+
+JOB_TYPES.update(
+    {
+        "home_credit_eda_application_overview": grouped_aggregate_job(
+            label="EDA 1: Application Overview",
+            stage="Grouped notebook EDA",
+            description="Missingness, target balance, application categories, and encrypted numeric-bin counts.",
+            output_dir="eda_application_overview",
+            notebook_cells="Complete EDA sections 4.x and 5.1-5.13",
+            he_operation="encrypted mask multiplication and EvalSum",
+            client_requirements=[
+                "Client prepares null, target, category, and numeric-bin masks.",
+                "Server returns encrypted counts; percentages and presentation tables are client-side.",
+            ],
+        ),
+        "home_credit_eda_default_segments": grouped_aggregate_job(
+            label="EDA 2: Default Segments",
+            stage="Grouped notebook EDA",
+            description="Default counts by income, family, occupation, education, housing, organization, and suite.",
+            output_dir="eda_default_segments",
+            notebook_cells="Complete EDA section 5.14",
+            he_operation="sum(group_mask), sum(group_mask * TARGET)",
+            client_requirements=COMMON_TARGET_CLIENT_REQS,
+        ),
+        "home_credit_eda_previous_history": grouped_aggregate_job(
+            label="EDA 3: Previous Loan History",
+            stage="Grouped notebook EDA",
+            description="Previous-application distributions and target-conditioned history summaries.",
+            output_dir="eda_previous_history",
+            notebook_cells="Complete EDA section 5.15 and manual feature engineering",
+            he_operation="encrypted previous-category counts and target-conditioned sums",
+            client_requirements=COMMON_PREVIOUS_CLIENT_REQS,
+        ),
+        "home_credit_eda_correlation": grouped_aggregate_job(
+            label="EDA 4: Selected Correlations",
+            stage="Grouped notebook EDA",
+            description="Selected encrypted pairwise sufficient statistics for client-side Pearson correlation.",
+            output_dir="eda_correlation",
+            notebook_cells="Complete EDA section 6",
+            he_operation="sum(valid), sum(x), sum(y), sum(x*y), sum(x^2), sum(y^2)",
+            client_requirements=[
+                "Client chooses bounded numeric pairs and prepares aligned valid-value masks.",
+                "Final division and square root happen after decryption.",
+            ],
+        ),
+        "home_credit_risk_scoring": {
+            "label": "Home Credit Risk Scoring",
+            "family": "Home Credit Credit Rating",
+            "stage": "Unified applicant-level inference",
+            "scheme": "CKKS",
+            "binary": "server_linear_score",
+            "description": (
+                "Encrypted logistic-regression logit using features derived from application, bureau, bureau balance, "
+                "previous applications, POS cash, credit card, and installment tables."
+            ),
+            "notebook_cells": "All Home Credit notebooks: application and relational feature engineering",
+            "he_operation": "sum(encrypted_feature_i * plaintext_weight_i) + bias",
+            "required": ["crypto_context.bin", "score_manifest.csv", "score_features/"],
+            "client_requirements": [
+                "Trusted client builds applicant-level features and keeps SK_ID_CURR in a private row map.",
+                "Trusted client applies model imputation/scaling and encrypts only selected model feature vectors.",
+                "Server returns encrypted logits; client decrypts, applies sigmoid, and restores applicant references.",
+            ],
+            "server_returns": [
+                "credit_risk_scoring/score_summary_manifest.csv",
+                "credit_risk_scoring/scores/*.bin",
+            ],
+            "command": [
+                "--context",
+                "crypto_context.bin",
+                "--manifest",
+                "score_manifest.csv",
+                "--input-dir",
+                "score_features",
+                "--output-dir",
+                "output/credit_risk_scoring",
+            ],
+        },
+    }
+)
+
 
 HIDDEN_LEGACY_JOBS = {
     "home_credit_target_balance": aggregate_job(
@@ -570,6 +681,11 @@ JOB_TYPES["home_credit_linear_score"]["server_returns"] = [
 JOB_TYPES["home_credit_linear_score"]["command"][-1] = "output/linear_score"
 
 NOTEBOOK_JOB_ORDER = [
+    "home_credit_risk_scoring",
+    "home_credit_eda_application_overview",
+    "home_credit_eda_default_segments",
+    "home_credit_eda_previous_history",
+    "home_credit_eda_correlation",
     "home_credit_missing_data",
     "home_credit_app_dist_amt_credit",
     "home_credit_app_dist_amt_income_total",

@@ -19,6 +19,7 @@ server UI.
 | Notebook 7 linear score demo | [06 Linear Score Demo](06_linear_score_demo.md) | [SVG](06_linear_score_demo.svg) |
 | Async web job architecture | [07 Async Web Job Architecture](07_async_web_job_architecture.md) | [SVG](07_async_web_job_architecture.svg) |
 | Report slide project context | [08 Report Slide Context](08_report_slide_project_context.md) | [SVG](08_report_slide_project_context.svg) |
+| Unified credit-scoring workload | [09 Credit Scoring Workflow](09_credit_scoring_workflow.md) | Mermaid |
 
 Core boundary:
 

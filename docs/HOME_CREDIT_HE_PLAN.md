@@ -1,5 +1,8 @@
 # Home Credit HE Plan
 
+> Current primary direction: [Home Credit HE Credit-Scoring Workload](HOME_CREDIT_CREDIT_SCORING.md).
+> Fine-grained notebook EDA is now a supporting validation layer, not the main product workflow.
+
 Active notebook context:
 
 ```text

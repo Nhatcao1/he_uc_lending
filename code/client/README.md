@@ -1,5 +1,10 @@
 # Client Code
 
+The primary Home Credit path is applicant-level encrypted risk scoring. See
+[`docs/HOME_CREDIT_CREDIT_SCORING.md`](../../docs/HOME_CREDIT_CREDIT_SCORING.md)
+for the all-notebook feature pipeline and commands. Existing fine-grained EDA
+commands remain available for compatibility.
+
 Client code runs where the raw Home Credit data and secret key live.
 
 Tracked here:

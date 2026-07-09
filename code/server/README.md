@@ -1,5 +1,9 @@
 # Server Code
 
+The primary web workload is `home_credit_risk_scoring`. It reuses
+`server_linear_score` to evaluate an encrypted logistic-regression logit over
+applicant-level features created from all Home Credit notebook data families.
+
 This folder is the tracked server-side runtime area for the Home Credit HE use
 case.
 

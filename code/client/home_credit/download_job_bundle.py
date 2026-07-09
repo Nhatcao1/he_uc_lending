@@ -36,6 +36,16 @@ def aggregate_decrypt_config(output_dir: str) -> dict[str, str]:
 
 
 DECRYPT_CONFIG = {
+    "home_credit_eda_application_overview": aggregate_decrypt_config("eda_application_overview"),
+    "home_credit_eda_default_segments": aggregate_decrypt_config("eda_default_segments"),
+    "home_credit_eda_previous_history": aggregate_decrypt_config("eda_previous_history"),
+    "home_credit_eda_correlation": aggregate_decrypt_config("eda_correlation"),
+    "home_credit_risk_scoring": {
+        "manifest": "credit_risk_scoring/score_summary_manifest.csv",
+        "input_dir": "credit_risk_scoring",
+        "output_csv": "decrypted_credit_risk_scoring.csv",
+        "manifest_type": "score",
+    },
     "home_credit_missing_data": aggregate_decrypt_config("missing_data"),
     "home_credit_app_dist_amt_credit": numeric_decrypt_config("app_dist_amt_credit"),
     "home_credit_app_dist_amt_income_total": numeric_decrypt_config("app_dist_amt_income_total"),

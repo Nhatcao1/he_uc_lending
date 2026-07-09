@@ -1,5 +1,9 @@
 # Home Credit Complete EDA HE Mapping
 
+> Detailed compatibility map. The primary workflow now groups these checks and
+> runs applicant-level scoring; see
+> [HOME_CREDIT_CREDIT_SCORING.md](HOME_CREDIT_CREDIT_SCORING.md).
+
 Source notebook:
 
 ```text

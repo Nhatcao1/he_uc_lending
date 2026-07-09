@@ -1,5 +1,9 @@
 # Home Credit Implemented Client/Server Flow
 
+> The current primary workflow is
+> [Home Credit HE Credit Scoring](HOME_CREDIT_CREDIT_SCORING.md). The detailed
+> EDA commands below remain available as supporting and compatibility paths.
+
 This is the implementation map for the current Home Credit HE prototype.
 
 Visual diagrams:

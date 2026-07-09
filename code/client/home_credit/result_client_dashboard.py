@@ -7,6 +7,7 @@ import argparse
 import csv
 import html
 import json
+import math
 import subprocess
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -26,6 +27,11 @@ from download_job_bundle import (
 
 
 JOB_LABELS = {
+    "home_credit_risk_scoring": "Home Credit Risk Scoring",
+    "home_credit_eda_application_overview": "EDA 1: Application Overview",
+    "home_credit_eda_default_segments": "EDA 2: Default Segments",
+    "home_credit_eda_previous_history": "EDA 3: Previous Loan History",
+    "home_credit_eda_correlation": "EDA 4: Selected Correlations",
     "home_credit_missing_data": "4.x Missing Data Checks",
     "home_credit_app_dist_amt_credit": "5.1 Distribution of AMT_CREDIT",
     "home_credit_app_dist_amt_income_total": "5.2 Distribution of AMT_INCOME_TOTAL",
@@ -221,6 +227,43 @@ def read_csv_preview(path: Path, limit: int = 200) -> tuple[list[str], list[list
     return headers, rows
 
 
+def enrich_credit_scores(
+    args: argparse.Namespace,
+    job_dir: Path,
+    score_rows: list[list[str]],
+) -> tuple[list[str], list[list[str]]]:
+    upload_manifest = json.loads((job_dir / "upload_bag_manifest.json").read_text(encoding="utf-8"))
+    material_id = str(upload_manifest.get("client_material_id") or "")
+    row_map_path = Path(args.client_private_root) / material_id / "scoring_row_map.client.csv"
+    if not row_map_path.is_file():
+        raise FileNotFoundError(f"client scoring row map not found: {row_map_path}")
+    with row_map_path.open("r", encoding="utf-8-sig", newline="") as input_file:
+        applicant_rows = list(csv.DictReader(input_file))
+
+    enriched: list[list[str]] = []
+    for index, score_row in enumerate(score_rows):
+        if index >= len(applicant_rows):
+            break
+        logit = float(score_row[2])
+        if logit >= 0:
+            probability = 1.0 / (1.0 + math.exp(-logit))
+        else:
+            exp_value = math.exp(logit)
+            probability = exp_value / (1.0 + exp_value)
+        risk_band = "Low" if probability < 0.20 else ("Medium" if probability < 0.50 else "High")
+        applicant = applicant_rows[index]
+        enriched.append(
+            [
+                applicant.get("SK_ID_CURR", ""),
+                f"{logit:.8f}",
+                f"{probability:.8f}",
+                risk_band,
+                applicant.get("TARGET", ""),
+            ]
+        )
+    return ["SK_ID_CURR", "logit", "default_probability", "risk_band", "known_TARGET"], enriched
+
+
 def render_csv_table(headers: list[str], rows: list[list[str]]) -> str:
     if not headers:
         return '<p class="muted">Decrypted CSV is empty.</p>'
@@ -362,7 +405,7 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
 <body>
   <header>
     <h1>Home Credit HE Client Results</h1>
-    <p style="color:#d0d5dd; margin: 6px 0 0;">Local client view. It reads server results and stores encrypted notebook-EDA bundles on this machine.</p>
+    <p style="color:#d0d5dd; margin: 6px 0 0;">Trusted client view for decrypting applicant risk scores and supporting HE reports.</p>
   </header>
   <main>{content}</main>
 </body>
@@ -421,7 +464,10 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
             zip_path, job_dir, _command = download_job(self.args, job_id)
             output_csv, decrypt_log, headers, rows = decrypt_job(self.args, job_dir)
             status = json.loads((job_dir / "job_status.json").read_text(encoding="utf-8"))
-            label = JOB_LABELS.get(str(status.get("job_type") or ""), str(status.get("label") or "HE result"))
+            job_type = str(status.get("job_type") or "")
+            if job_type == "home_credit_risk_scoring":
+                headers, rows = enrich_credit_scores(self.args, job_dir, rows)
+            label = JOB_LABELS.get(job_type, str(status.get("label") or "HE result"))
             body = f"""
 <section>
   <div class="actions" style="justify-content: space-between;">
@@ -510,7 +556,7 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
   <p>Local output: <code>{esc(self.args.output_dir)}</code></p>
   <p><a class="button primary" href="/download-all">Pull all latest bundles</a></p>
   <table>
-    <thead><tr><th>EDA criterion</th><th>Latest completed job</th><th>HE runtime</th><th>Output bytes</th><th>Action</th></tr></thead>
+    <thead><tr><th>Credit workload</th><th>Latest completed job</th><th>HE runtime</th><th>Output bytes</th><th>Action</th></tr></thead>
     <tbody>{"".join(rows)}</tbody>
   </table>
 </section>

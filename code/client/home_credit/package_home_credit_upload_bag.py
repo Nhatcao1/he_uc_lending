@@ -33,6 +33,30 @@ NUMERIC_WORKLOADS = {
 }
 
 AGGREGATE_WORKLOADS = {
+    "eda_application_overview": {
+        "job_type": "home_credit_eda_application_overview",
+        "analyses": (
+            "missing_data",
+            "target_balance",
+            "application_category_counts",
+            "application_numeric_histograms",
+        ),
+    },
+    "eda_default_segments": {
+        "job_type": "home_credit_eda_default_segments",
+        "analysis": "application_default_rates",
+    },
+    "eda_previous_history": {
+        "job_type": "home_credit_eda_previous_history",
+        "analyses": (
+            "previous_application_category_counts",
+            "previous_application_target_rates",
+        ),
+    },
+    "eda_correlation": {
+        "job_type": "home_credit_eda_correlation",
+        "analysis": "selected_correlation_stats",
+    },
     "missing_data": {
         "job_type": "home_credit_missing_data",
         "analysis": "missing_data",
@@ -203,6 +227,10 @@ for workload, column in PREVIOUS_COLUMNS.items():
 
 CANONICAL_WORKLOADS = (
     "all",
+    "eda_application_overview",
+    "eda_default_segments",
+    "eda_previous_history",
+    "eda_correlation",
     "missing_data",
     "app_dist_amt_credit",
     "app_dist_amt_income_total",
@@ -230,6 +258,7 @@ CANONICAL_WORKLOADS = (
     "join_psi_prev_contract_status",
     "join_fhew_prev_contract_status",
     "linear_score_demo",
+    "credit_risk_scoring",
 )
 LEGACY_WORKLOAD_ALIASES = {
     "numeric_summary": "application_numeric_summary",
@@ -248,13 +277,18 @@ WORKLOADS = CANONICAL_WORKLOADS + (
     "previous_application_category_counts",
     "selected_correlation_stats",
 ) + tuple(LEGACY_WORKLOAD_ALIASES)
-WORKLOAD_TO_JOB_TYPE = {"all": "auto", "linear_score_demo": "home_credit_linear_score_demo"}
+WORKLOAD_TO_JOB_TYPE = {
+    "all": "auto",
+    "linear_score_demo": "home_credit_linear_score_demo",
+    "credit_risk_scoring": "home_credit_risk_scoring",
+}
 WORKLOAD_TO_JOB_TYPE.update({key: str(value["job_type"]) for key, value in NUMERIC_WORKLOADS.items()})
 WORKLOAD_TO_JOB_TYPE.update({key: str(value["job_type"]) for key, value in AGGREGATE_WORKLOADS.items()})
 WORKLOAD_TO_JOB_TYPE.update({key: str(value["job_type"]) for key, value in FHEW_WORKLOADS.items()})
 WORKLOAD_FILE_STEMS = {
     workload: f"home_credit_{workload}" for workload in CANONICAL_WORKLOADS if workload != "all"
 }
+WORKLOAD_FILE_STEMS["credit_risk_scoring"] = "home_credit_risk_scoring"
 WORKLOAD_FILE_STEMS["application_numeric_summary"] = "home_credit_application_numeric_summary"
 WORKLOAD_FILE_STEMS["application_numeric_histograms"] = "home_credit_application_numeric_histograms"
 WORKLOAD_FILE_STEMS["previous_application_target_rates"] = "home_credit_previous_application_target_rates"
@@ -457,7 +491,8 @@ def collect_numeric_summary_files(encrypted_dir: Path, column: str | None = None
 
 def collect_aggregate_files(encrypted_dir: Path, workload: str) -> tuple[list[Path], dict[str, str]]:
     workload_cfg = AGGREGATE_WORKLOADS[workload]
-    analysis = str(workload_cfg["analysis"])
+    analyses = set(workload_cfg.get("analyses") or [workload_cfg.get("analysis")])
+    analyses.discard(None)
     groups = set(workload_cfg.get("groups") or [])
     files: list[Path] = []
     generated: dict[str, str] = {}
@@ -471,12 +506,12 @@ def collect_aggregate_files(encrypted_dir: Path, workload: str) -> tuple[list[Pa
     filtered_rows = [
         row
         for row in rows
-        if (row.get("analysis") or "").strip() == analysis
+        if (row.get("analysis") or "").strip() in analyses
         and (not groups or (row.get("group") or "").strip() in groups)
     ]
     if not filtered_rows:
         group_text = f" groups={sorted(groups)}" if groups else ""
-        raise ValueError(f"aggregate_manifest.csv has no rows for analysis={analysis}{group_text}")
+        raise ValueError(f"aggregate_manifest.csv has no rows for analyses={sorted(analyses)}{group_text}")
     generated["aggregate_manifest.csv"] = write_manifest_text(fieldnames, filtered_rows)
 
     for rel in sorted(referenced_paths(filtered_rows, ("mask_ciphertext", "value_ciphertext"))):
@@ -544,7 +579,7 @@ def collect_files(encrypted_dir: Path, workload: str, include_public_key: bool) 
         files, generated = collect_aggregate_files(encrypted_dir, workload)
     elif workload in FHEW_WORKLOADS:
         files, generated = collect_fhew_match_files(encrypted_dir, workload)
-    elif workload == "linear_score_demo":
+    elif workload in {"linear_score_demo", "credit_risk_scoring"}:
         files, generated = collect_linear_score_files(encrypted_dir)
     else:
         raise ValueError(f"unknown workload: {workload}")
@@ -668,6 +703,10 @@ def copy_client_material(
     fhew_context_source = args.client_key_dir / "fhew_crypto_context.bin"
     if fhew_context_source.is_file():
         shutil.copy2(fhew_context_source, secret_dir / "fhew_crypto_context.bin")
+    for name in ("scoring_row_map.client.csv", "credit_scoring_model.client.json"):
+        local_source = args.client_key_dir / name
+        if local_source.is_file():
+            shutil.copy2(local_source, secret_dir / name)
     material_manifest = {
         "artifact_type": "home_credit_client_material",
         **material_metadata,
@@ -675,6 +714,14 @@ def copy_client_material(
         "crypto_context": "crypto_context.bin" if (secret_dir / "crypto_context.bin").is_file() else "",
         "fhew_secret_key": "fhew_secret_key.bin" if (secret_dir / "fhew_secret_key.bin").is_file() else "",
         "fhew_crypto_context": "fhew_crypto_context.bin" if (secret_dir / "fhew_crypto_context.bin").is_file() else "",
+        "scoring_row_map": (
+            "scoring_row_map.client.csv" if (secret_dir / "scoring_row_map.client.csv").is_file() else ""
+        ),
+        "credit_scoring_model": (
+            "credit_scoring_model.client.json"
+            if (secret_dir / "credit_scoring_model.client.json").is_file()
+            else ""
+        ),
     }
     (secret_dir / "client_material_manifest.json").write_text(
         json.dumps(material_manifest, indent=2) + "\n",

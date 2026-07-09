@@ -466,6 +466,16 @@ void copyJoinArtifacts(const Options& options) {
                           std::filesystem::copy_options::recursive | std::filesystem::copy_options::overwrite_existing);
 }
 
+void copyClientScoringArtifacts(const Options& options) {
+    for (const auto& name : {"scoring_row_map.client.csv", "credit_scoring_model.client.json"}) {
+        const auto source = options.preparedDir / name;
+        if (std::filesystem::is_regular_file(source)) {
+            std::filesystem::copy_file(source, options.clientKeyDir / name,
+                                       std::filesystem::copy_options::overwrite_existing);
+        }
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -485,6 +495,7 @@ int main(int argc, char** argv) {
         writeAggregateManifest(options, chunksByVector);
         writeScoreManifest(options, chunksByVector);
         copyJoinArtifacts(options);
+        copyClientScoringArtifacts(options);
         writeBundleManifest(options, specs);
 
         std::cout << "encrypt_home_credit_payload complete\n";

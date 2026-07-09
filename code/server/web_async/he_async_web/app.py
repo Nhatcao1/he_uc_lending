@@ -389,7 +389,7 @@ def job_table(jobs: list[dict[str, Any]]) -> str:
     if not rows:
         rows.append('<tr><td colspan="9" class="muted">No jobs yet.</td></tr>')
     return (
-        "<table><thead><tr><th>Job</th><th>EDA criterion</th><th>Status</th>"
+        "<table><thead><tr><th>Job</th><th>Credit workload</th><th>Status</th>"
         "<th>Created</th><th>Finished</th><th>HE runtime</th><th>Total elapsed</th><th>Outputs</th><th>Actions</th></tr></thead><tbody>"
         + "\n".join(rows)
         + "</tbody></table>"
@@ -437,7 +437,7 @@ def detect_job_type(root: Path) -> str:
     raise HTTPException(
         status_code=400,
         detail=(
-            "could not auto-detect Home Credit EDA criterion from artifact; upload a zip "
+            "could not auto-detect Home Credit workload from artifact; upload a zip "
             "made by package_home_credit_upload_bag.py or choose the criterion explicitly"
         ),
     )
@@ -472,9 +472,9 @@ def submit_page() -> HTMLResponse:
     body = f"""
 <div class="grid">
   <section>
-    <h2>Submit Encrypted Home Credit EDA</h2>
+    <h2>Submit Encrypted Home Credit Workload</h2>
     <form id="submitJobForm" method="post" action="/jobs/new" enctype="multipart/form-data">
-      <label for="job_type">Notebook EDA criterion</label>
+      <label for="job_type">Credit workload</label>
       <select id="job_type" name="job_type">{"".join(options)}</select>
 
       <label for="access_token">Web token</label>
@@ -496,7 +496,7 @@ def submit_page() -> HTMLResponse:
   </section>
   <section>
     <h2 id="guidanceTitle">Criterion Guidance</h2>
-    <p id="guidanceDescription" class="muted">Select a notebook EDA criterion to see exactly what the client must prepare, what the upload bag contains, and what encrypted files the server returns.</p>
+    <p id="guidanceDescription" class="muted">Select credit scoring or a grouped EDA check to see the client preparation, upload contract, and encrypted server outputs.</p>
     <div id="guidanceMeta" class="muted"></div>
     <h3>Client preparation</h3>
     <ul id="guidanceClient"><li class="muted">Auto-detect uses the <code>upload_bag_manifest.json</code> inside the zip.</li></ul>
@@ -772,7 +772,7 @@ def results_page(request: Request) -> HTMLResponse:
   <pre>python3 code/client/home_credit/download_job_bundle.py \\
   --server {esc(str(request.base_url).rstrip('/'))} \\
   --job-id latest</pre>
-  <table><thead><tr><th>Job</th><th>EDA criterion</th><th>Finished</th><th>HE runtime</th><th>Output bytes</th><th>Bundle</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
+  <table><thead><tr><th>Job</th><th>Credit workload</th><th>Finished</th><th>HE runtime</th><th>Output bytes</th><th>Bundle</th></tr></thead><tbody>{"".join(rows)}</tbody></table>
 </section>
 <section>
   <h2>EDA Criterion Status</h2>
