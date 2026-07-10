@@ -496,7 +496,7 @@ def submit_page() -> HTMLResponse:
   </section>
   <section>
     <h2 id="guidanceTitle">Criterion Guidance</h2>
-    <p id="guidanceDescription" class="muted">Select credit scoring or a grouped EDA check to see the client preparation, upload contract, and encrypted server outputs.</p>
+    <p id="guidanceDescription" class="muted">Select credit scoring or a notebook EDA criterion to see the HE client preparation, upload contract, and encrypted server outputs.</p>
     <div id="guidanceMeta" class="muted"></div>
     <h3>Client preparation</h3>
     <ul id="guidanceClient"><li class="muted">Auto-detect uses the <code>upload_bag_manifest.json</code> inside the zip.</li></ul>

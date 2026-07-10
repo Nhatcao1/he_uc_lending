@@ -455,12 +455,6 @@ for job_type, label, column_label, cells in PREVIOUS_APPLICATION_JOBS:
         server_returns=aggregate_returns(output_dir),
     )
 
-for old_job_type in list(JOB_TYPES):
-    if old_job_type.startswith("home_credit_app_") or old_job_type.startswith("home_credit_prev_"):
-        JOB_TYPES[old_job_type]["hidden"] = True
-JOB_TYPES["home_credit_missing_data"]["hidden"] = True
-JOB_TYPES["home_credit_linear_score_demo"]["hidden"] = True
-
 JOB_TYPES.update(
     {
         "home_credit_eda_application_overview": grouped_aggregate_job(
@@ -540,6 +534,14 @@ JOB_TYPES.update(
         },
     }
 )
+
+for grouped_job_type in (
+    "home_credit_eda_application_overview",
+    "home_credit_eda_default_segments",
+    "home_credit_eda_previous_history",
+    "home_credit_eda_correlation",
+):
+    JOB_TYPES[grouped_job_type]["hidden"] = True
 
 
 HIDDEN_LEGACY_JOBS = {
@@ -733,6 +735,13 @@ JOB_TYPES = {
     **{job_type: JOB_TYPES[job_type] for job_type in NOTEBOOK_JOB_ORDER if job_type in JOB_TYPES},
     **{job_type: cfg for job_type, cfg in JOB_TYPES.items() if job_type not in NOTEBOOK_JOB_ORDER},
 }
+
+for job_type in NOTEBOOK_JOB_ORDER:
+    cfg = JOB_TYPES.get(job_type)
+    if not cfg or cfg.get("hidden") or job_type == "home_credit_risk_scoring":
+        continue
+    if not cfg["label"].startswith("HE "):
+        cfg["label"] = f"HE {cfg['label']}"
 
 
 ANALYSIS_TO_JOB_TYPE = {

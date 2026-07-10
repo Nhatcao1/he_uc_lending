@@ -264,6 +264,97 @@ def enrich_credit_scores(
     return ["SK_ID_CURR", "logit", "default_probability", "risk_band", "known_TARGET"], enriched
 
 
+def parse_result_number(value: object) -> float:
+    try:
+        parsed = float(str(value).strip())
+    except ValueError:
+        return 0.0
+    if math.isnan(parsed) or math.isinf(parsed):
+        return 0.0
+    return parsed
+
+
+def format_count(value: float) -> str:
+    rounded = round(value)
+    if abs(value - rounded) < 1e-4:
+        return str(int(rounded))
+    return f"{value:.4f}"
+
+
+def format_percent(value: float) -> str:
+    return f"{value * 100.0:.2f}%"
+
+
+def dict_rows(headers: list[str], rows: list[list[str]]) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for row in rows:
+        padded = row + [""] * max(0, len(headers) - len(row))
+        normalized.append({headers[index]: padded[index] for index in range(len(headers))})
+    return normalized
+
+
+def category_count_report(headers: list[str], rows: list[list[str]]) -> tuple[list[str], list[list[str]], str]:
+    records = [row for row in dict_rows(headers, rows) if row.get("operation") == "count"]
+    total = sum(parse_result_number(row.get("value", "")) for row in records)
+    report_rows = []
+    for row in sorted(records, key=lambda item: parse_result_number(item.get("value", "")), reverse=True):
+        count = parse_result_number(row.get("value", ""))
+        share = count / total if total else 0.0
+        report_rows.append([row.get("group", ""), row.get("label", ""), format_count(count), format_percent(share)])
+    return ["Column", "Segment", "Count", "Percent"], report_rows, f"Total decrypted count: {format_count(total)}"
+
+
+def target_by_category_report(headers: list[str], rows: list[list[str]]) -> tuple[list[str], list[list[str]], str]:
+    grouped: dict[tuple[str, str], dict[str, float]] = {}
+    for row in dict_rows(headers, rows):
+        key = (row.get("group", ""), row.get("label", ""))
+        bucket = grouped.setdefault(key, {})
+        operation = row.get("operation", "")
+        value_name = row.get("value_name", "")
+        value = parse_result_number(row.get("value", ""))
+        if operation == "count":
+            bucket["count"] = value
+        elif operation == "default_count":
+            bucket["default"] = value
+        elif operation == "masked_sum" and value_name:
+            bucket[f"sum_{value_name}"] = value
+
+    total = sum(bucket.get("count", 0.0) for bucket in grouped.values())
+    report_rows = []
+    for (group, label), values in sorted(grouped.items(), key=lambda item: item[1].get("count", 0.0), reverse=True):
+        count = values.get("count", 0.0)
+        defaults = values.get("default", 0.0)
+        default_rate = defaults / count if count else 0.0
+        share = count / total if total else 0.0
+        report_rows.append(
+            [
+                group,
+                label,
+                format_count(count),
+                format_percent(share),
+                format_count(defaults),
+                format_percent(default_rate),
+            ]
+        )
+    return ["Column", "Segment", "Count", "Percent", "Default count", "Default rate"], report_rows, f"Total decrypted count: {format_count(total)}"
+
+
+def present_decrypted_result(job_type: str, headers: list[str], rows: list[list[str]]) -> tuple[list[str], list[list[str]], str]:
+    if not {"analysis", "group", "label", "operation", "value_name", "value"}.issubset(set(headers)):
+        return headers, rows, ""
+    if job_type.startswith("home_credit_app_target_by_"):
+        return target_by_category_report(headers, rows)
+    if job_type.startswith("home_credit_app_") and job_type not in {
+        "home_credit_app_dist_amt_credit",
+        "home_credit_app_dist_amt_income_total",
+        "home_credit_app_dist_amt_goods_price",
+        "home_credit_app_target_balance",
+        "home_credit_app_selected_correlation_stats",
+    }:
+        return category_count_report(headers, rows)
+    return headers, rows, ""
+
+
 def render_csv_table(headers: list[str], rows: list[list[str]]) -> str:
     if not headers:
         return '<p class="muted">Decrypted CSV is empty.</p>'
@@ -467,7 +558,11 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
             job_type = str(status.get("job_type") or "")
             if job_type == "home_credit_risk_scoring":
                 headers, rows = enrich_credit_scores(self.args, job_dir, rows)
+                result_note = "Sigmoid probability and risk band are computed locally after decrypting the HE score."
+            else:
+                headers, rows, result_note = present_decrypted_result(job_type, headers, rows)
             label = JOB_LABELS.get(job_type, str(status.get("label") or "HE result"))
+            note_html = f'<p class="muted">{esc(result_note)}</p>' if result_note else '<p class="muted">Showing up to first 200 rows.</p>'
             body = f"""
 <section>
   <div class="actions" style="justify-content: space-between;">
@@ -479,7 +574,7 @@ class ResultDashboardHandler(BaseHTTPRequestHandler):
   </div>
   <p>Bundle: <code>{esc(zip_path)}</code></p>
   <p>Decrypted CSV: <code>{esc(output_csv)}</code></p>
-  <p class="muted">Showing up to first 200 rows.</p>
+  {note_html}
   {render_csv_table(headers, rows)}
 </section>
 <section>
