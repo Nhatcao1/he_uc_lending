@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -19,6 +20,16 @@
 using namespace lbcrypto;
 
 namespace {
+
+using Clock = std::chrono::steady_clock;
+
+double secondsSince(const Clock::time_point& start) {
+    return std::chrono::duration<double>(Clock::now() - start).count();
+}
+
+void printTiming(const std::string& name, double seconds) {
+    std::cout << "TIMING " << name << " " << seconds << "\n";
+}
 
 struct Options {
     std::filesystem::path preparedDir;
@@ -476,32 +487,64 @@ void copyClientScoringArtifacts(const Options& options) {
     }
 }
 
+uint64_t countChunks(const std::unordered_map<std::string, std::vector<ChunkInfo>>& chunksByVector) {
+    uint64_t total = 0;
+    for (const auto& [_, chunks] : chunksByVector) {
+        total += chunks.size();
+    }
+    return total;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
     try {
+        const auto totalStarted = Clock::now();
         const auto options = parseArgs(argc, argv);
+
+        const auto readStarted = Clock::now();
         const auto specs = readVectorManifest(options.preparedDir);
+        printTiming("read_vector_manifest_seconds", secondsSince(readStarted));
 
+        const auto contextStarted = Clock::now();
         auto cc = makeContext(options);
+        printTiming("make_context_seconds", secondsSince(contextStarted));
+
+        const auto keygenStarted = Clock::now();
         const auto keys = cc->KeyGen();
+        printTiming("keygen_seconds", secondsSince(keygenStarted));
+
+        const auto evalMultStarted = Clock::now();
         cc->EvalMultKeyGen(keys.secretKey);
+        printTiming("eval_mult_keygen_seconds", secondsSince(evalMultStarted));
+
+        const auto evalSumStarted = Clock::now();
         cc->EvalSumKeyGen(keys.secretKey);
+        printTiming("eval_sum_keygen_seconds", secondsSince(evalSumStarted));
 
+        const auto serializeKeysStarted = Clock::now();
         serializeContextAndKeys(options, cc, keys);
-        const auto chunksByVector = encryptVectors(options, cc, keys.publicKey, specs);
+        printTiming("serialize_context_keys_seconds", secondsSince(serializeKeysStarted));
 
+        const auto encryptStarted = Clock::now();
+        const auto chunksByVector = encryptVectors(options, cc, keys.publicKey, specs);
+        printTiming("encrypt_vectors_seconds", secondsSince(encryptStarted));
+
+        const auto manifestStarted = Clock::now();
         writeColumnManifest(options, chunksByVector);
         writeAggregateManifest(options, chunksByVector);
         writeScoreManifest(options, chunksByVector);
         copyJoinArtifacts(options);
         copyClientScoringArtifacts(options);
         writeBundleManifest(options, specs);
+        printTiming("write_manifests_seconds", secondsSince(manifestStarted));
+        printTiming("total_seconds", secondsSince(totalStarted));
 
         std::cout << "encrypt_home_credit_payload complete\n";
         std::cout << "server bundle: " << options.serverOutputDir << "\n";
         std::cout << "client key: " << (options.clientKeyDir / "secret_key.bin") << "\n";
         std::cout << "vectors: " << specs.size() << "\n";
+        std::cout << "ciphertext_chunks: " << countChunks(chunksByVector) << "\n";
         return 0;
     }
     catch (const std::exception& ex) {

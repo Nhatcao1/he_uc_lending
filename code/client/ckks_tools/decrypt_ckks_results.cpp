@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <complex>
 #include <filesystem>
 #include <fstream>
@@ -18,6 +19,16 @@
 using namespace lbcrypto;
 
 namespace {
+
+using Clock = std::chrono::steady_clock;
+
+double secondsSince(const Clock::time_point& start) {
+    return std::chrono::duration<double>(Clock::now() - start).count();
+}
+
+void printTiming(const std::string& name, double seconds) {
+    std::cout << "TIMING " << name << " " << seconds << "\n";
+}
 
 struct Options {
     std::filesystem::path contextPath;
@@ -232,12 +243,17 @@ void decryptScore(const Options& options, const CryptoContext<DCRTPoly>& cc, con
 
 int main(int argc, char** argv) {
     try {
+        const auto totalStarted = Clock::now();
         const auto options = parseArgs(argc, argv);
+
+        const auto deserializeStarted = Clock::now();
         CryptoContext<DCRTPoly> cc;
         PrivateKey<DCRTPoly> secretKey;
         deserializeContext(options.contextPath, cc);
         deserializeSecretKey(options.secretKeyPath, secretKey);
+        printTiming("deserialize_context_secret_seconds", secondsSince(deserializeStarted));
 
+        const auto decryptStarted = Clock::now();
         std::ifstream manifest(options.manifestPath);
         if (!manifest.is_open()) {
             throw std::runtime_error("cannot open result manifest: " + options.manifestPath.string());
@@ -267,6 +283,8 @@ int main(int argc, char** argv) {
         else {
             throw std::runtime_error("unknown manifest type: " + options.manifestType);
         }
+        printTiming("decrypt_rows_seconds", secondsSince(decryptStarted));
+        printTiming("total_seconds", secondsSince(totalStarted));
 
         std::cout << "decrypt_ckks_results complete\n";
         std::cout << "output: " << options.outputCsv << "\n";

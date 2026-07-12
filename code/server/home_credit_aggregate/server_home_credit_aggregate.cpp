@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -19,6 +20,16 @@
 using namespace lbcrypto;
 
 namespace {
+
+using Clock = std::chrono::steady_clock;
+
+double secondsSince(const Clock::time_point& start) {
+    return std::chrono::duration<double>(Clock::now() - start).count();
+}
+
+void printTiming(const std::string& name, double seconds) {
+    std::cout << "TIMING " << name << " " << seconds << "\n";
+}
 
 struct Options {
     std::filesystem::path contextPath;
@@ -361,19 +372,32 @@ void writeOutputManifest(const std::filesystem::path& outputDir, const std::vect
 
 int main(int argc, char** argv) {
     try {
+        const auto totalStarted = Clock::now();
         const auto options = parseArgs(argc, argv);
+
+        const auto readStarted = Clock::now();
         const auto rows = readManifest(options.manifestPath, options.analysisFilter);
         const auto grouped = groupRows(rows);
+        printTiming("read_manifest_seconds", secondsSince(readStarted));
 
+        const auto deserializeStarted = Clock::now();
         CryptoContext<DCRTPoly> cc;
         deserializeContext(options.contextPath, cc);
         deserializeEvalSumKeys(cc, options.evalSumKeysPath);
         deserializeEvalMultKeys(cc, options.evalMultKeysPath);
+        printTiming("deserialize_context_keys_seconds", secondsSince(deserializeStarted));
 
+        const auto computeStarted = Clock::now();
         const auto results = runAggregates(options, cc, grouped);
+        printTiming("aggregate_compute_seconds", secondsSince(computeStarted));
+
+        const auto manifestStarted = Clock::now();
         writeOutputManifest(options.outputDir, results);
+        printTiming("write_result_manifest_seconds", secondsSince(manifestStarted));
+        printTiming("total_seconds", secondsSince(totalStarted));
 
         std::cout << "server_home_credit_aggregate complete\n";
+        std::cout << "manifest_rows: " << rows.size() << "\n";
         std::cout << "aggregates: " << results.size() << "\n";
         std::cout << "output: " << (options.outputDir / "aggregate_summary_manifest.csv") << "\n";
         return 0;

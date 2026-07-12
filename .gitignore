@@ -17,6 +17,7 @@ prepared_payloads/
 server_returns/
 server_jobs/
 client_runs/
+benchmark_runs/
 
 build/
 build_docker/

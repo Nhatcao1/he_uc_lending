@@ -1,5 +1,9 @@
 # Home Credit HE Plan
 
+> Current working focus: core HE EDA performance and implementation tracking in
+> [HOME_CREDIT_CORE_HE_EDA_PROGRESS.md](HOME_CREDIT_CORE_HE_EDA_PROGRESS.md).
+> Web/UI work is paused unless explicitly reopened.
+
 > Current primary direction: [Home Credit HE Credit-Scoring Workload](HOME_CREDIT_CREDIT_SCORING.md).
 > Fine-grained notebook EDA is now a supporting validation layer, not the main product workflow.
 
