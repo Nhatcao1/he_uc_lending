@@ -218,6 +218,140 @@ def write_reference(path: Path, rows: list[dict[str, object]]) -> None:
         writer.writerows(rows)
 
 
+def format_seconds(value: object) -> str:
+    try:
+        return f"{float(value):.6f}"
+    except (TypeError, ValueError):
+        return ""
+
+
+def markdown_table(headers: list[str], rows: list[list[object]]) -> str:
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    for row in rows:
+        lines.append("| " + " | ".join(str(item) for item in row) + " |")
+    return "\n".join(lines)
+
+
+def write_markdown_report(path: Path, summary: dict[str, object], reference: list[dict[str, object]]) -> None:
+    timings = summary["timings_seconds"]
+    assert isinstance(timings, dict)
+    artifacts = summary["artifacts"]
+    assert isinstance(artifacts, dict)
+
+    result_rows = []
+    for row in reference[:20]:
+        count = int(row["count"])
+        default_count = int(row["default_count"])
+        result_rows.append(
+            [
+                row["label"],
+                count,
+                f"{float(row['percent']) * 100:.2f}%",
+                default_count,
+                f"{float(row['default_rate']) * 100:.2f}%",
+            ]
+        )
+
+    timing_rows = []
+    for key in (
+        "python_reference_seconds",
+        "prepare_wall_seconds",
+        "encrypt.make_context_seconds",
+        "encrypt.keygen_seconds",
+        "encrypt.eval_mult_keygen_seconds",
+        "encrypt.eval_sum_keygen_seconds",
+        "encrypt.encrypt_vectors_seconds",
+        "encrypt.total_seconds",
+        "he_server.aggregate_compute_seconds",
+        "he_server.total_seconds",
+        "decrypt.decrypt_rows_seconds",
+        "decrypt.total_seconds",
+    ):
+        if key in timings:
+            timing_rows.append([key, format_seconds(timings[key])])
+
+    report = f"""# Home Credit HE EDA Benchmark Report
+
+## Case
+
+| Field | Value |
+| --- | --- |
+| Workload | `{summary['workload']}` |
+| Input | `{summary['input']}` |
+| Rows | `{summary['row_limit']}` |
+| Group column | `{summary['selected_group']}` |
+| CKKS slots | `{summary['slots']}` |
+| Correctness | **{summary['correctness']}** |
+
+## What This EDA Computes
+
+This case computes the default count and default rate for each selected group.
+The plaintext Python result is used only as a local benchmark reference.
+
+## Data Preparation Before Encryption
+
+The trusted side reads the raw Home Credit application table, normalizes the
+group column, creates one 0/1 mask per group label, creates a `TARGET=1` mask,
+and writes vector manifests for encryption.
+
+## HE Operation Path
+
+Client/trusted side:
+
+```text
+MakeCKKSPackedPlaintext(group_mask)
+MakeCKKSPackedPlaintext(target_mask)
+Encrypt(public_key, packed_mask)
+EvalSumKeyGen(secret_key)
+EvalMultKeyGen(secret_key)
+```
+
+HE compute side:
+
+```text
+group_count = EvalSum(encrypted_group_mask)
+default_count = EvalSum(EvalMultAndRelinearize(encrypted_group_mask, encrypted_target_mask))
+```
+
+Trusted result side:
+
+```text
+Decrypt(group_count)
+Decrypt(default_count)
+default_rate = default_count / group_count
+```
+
+## Timing Summary
+
+{markdown_table(["Metric", "Seconds"], timing_rows)}
+
+## Result Preview
+
+{markdown_table(["Segment", "Count", "Percent", "Default count", "Default rate"], result_rows)}
+
+## Artifacts
+
+| Artifact | Path |
+| --- | --- |
+| JSON summary | `{path.parent / 'benchmark_summary.json'}` |
+| Plaintext reference | `{artifacts['plaintext_reference']}` |
+| Decrypted HE result | `{artifacts['decrypted_csv']}` |
+| Prepared vectors | `{artifacts['prepared_dir']}` |
+| Encrypted bundle | `{artifacts['encrypted_dir']}` |
+| HE server output | `{artifacts['server_output_dir']}` |
+
+## Notes
+
+- This report is generated under `benchmark_runs/`, which is ignored by git.
+- Use it as an external slide/report input. It is not intended as permanent
+  planning context unless explicitly referenced.
+"""
+    path.write_text(report, encoding="utf-8")
+
+
 def main() -> None:
     args = parse_args()
     repo = Path.cwd()
@@ -236,6 +370,7 @@ def main() -> None:
     filtered_manifest = run_dir / "aggregate_manifest.filtered.csv"
     decrypted_csv = run_dir / "decrypted.csv"
     reference_csv = run_dir / "plaintext_reference.csv"
+    markdown_report = run_dir / f"{args.workload}_report.md"
 
     timings: dict[str, float] = {}
     reference, timings["python_reference_seconds"] = plaintext_reference(input_path, args.row_limit, cfg)
@@ -331,12 +466,14 @@ def main() -> None:
         "artifacts": {
             "plaintext_reference": str(reference_csv),
             "decrypted_csv": str(decrypted_csv),
+            "markdown_report": str(markdown_report),
             "prepared_dir": str(prepared_dir),
             "encrypted_dir": str(encrypted_dir),
             "server_output_dir": str(server_dir),
         },
     }
     (run_dir / "benchmark_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    write_markdown_report(markdown_report, summary, reference)
 
     print(json.dumps(summary, indent=2))
     if not passed:
