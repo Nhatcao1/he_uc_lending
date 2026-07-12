@@ -225,6 +225,50 @@ def format_seconds(value: object) -> str:
         return ""
 
 
+def path_size_bytes(path: Path) -> int:
+    if path.is_file():
+        return path.stat().st_size
+    if path.is_dir():
+        total = 0
+        for child in path.rglob("*"):
+            if child.is_file():
+                total += child.stat().st_size
+        return total
+    return 0
+
+
+def human_bytes(value: object) -> str:
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return ""
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
+    unit = 0
+    while size >= 1024 and unit < len(units) - 1:
+        size /= 1024
+        unit += 1
+    if unit == 0:
+        return f"{int(size)} {units[unit]}"
+    return f"{size:.2f} {units[unit]}"
+
+
+def collect_artifact_sizes(run_dir: Path, prepared_dir: Path, encrypted_dir: Path, key_dir: Path, server_dir: Path) -> dict[str, int]:
+    return {
+        "run_dir_total": path_size_bytes(run_dir),
+        "prepared_dir": path_size_bytes(prepared_dir),
+        "encrypted_dir_server_upload_total": path_size_bytes(encrypted_dir),
+        "encrypted_vectors_dir": path_size_bytes(encrypted_dir / "vectors"),
+        "crypto_context": path_size_bytes(encrypted_dir / "crypto_context.bin"),
+        "public_key": path_size_bytes(encrypted_dir / "public_key.bin"),
+        "eval_sum_keys": path_size_bytes(encrypted_dir / "eval_sum_keys.bin"),
+        "eval_mult_keys": path_size_bytes(encrypted_dir / "eval_mult_keys.bin"),
+        "aggregate_manifest": path_size_bytes(encrypted_dir / "aggregate_manifest.csv"),
+        "client_secret_key": path_size_bytes(key_dir / "secret_key.bin"),
+        "client_key_dir_total": path_size_bytes(key_dir),
+        "server_output_dir": path_size_bytes(server_dir),
+    }
+
+
 def markdown_table(headers: list[str], rows: list[list[object]]) -> str:
     lines = [
         "| " + " | ".join(headers) + " |",
@@ -240,6 +284,8 @@ def write_markdown_report(path: Path, summary: dict[str, object], reference: lis
     assert isinstance(timings, dict)
     artifacts = summary["artifacts"]
     assert isinstance(artifacts, dict)
+    artifact_sizes = summary.get("artifact_sizes_bytes", {})
+    assert isinstance(artifact_sizes, dict)
 
     result_rows = []
     for row in reference[:20]:
@@ -272,6 +318,24 @@ def write_markdown_report(path: Path, summary: dict[str, object], reference: lis
     ):
         if key in timings:
             timing_rows.append([key, format_seconds(timings[key])])
+
+    size_rows = []
+    for key, label in (
+        ("encrypted_dir_server_upload_total", "Server upload material total"),
+        ("encrypted_vectors_dir", "Encrypted vectors"),
+        ("crypto_context", "Crypto context"),
+        ("public_key", "Public key"),
+        ("eval_sum_keys", "Eval sum keys"),
+        ("eval_mult_keys", "Eval mult keys"),
+        ("aggregate_manifest", "Aggregate manifest"),
+        ("server_output_dir", "Encrypted HE result"),
+        ("client_secret_key", "Client secret key"),
+        ("client_key_dir_total", "Client key directory total"),
+        ("prepared_dir", "Prepared plaintext vectors"),
+        ("run_dir_total", "Whole benchmark run directory"),
+    ):
+        if key in artifact_sizes:
+            size_rows.append([label, key, human_bytes(artifact_sizes[key]), artifact_sizes[key]])
 
     report = f"""# Home Credit HE EDA Benchmark Report
 
@@ -327,6 +391,18 @@ default_rate = default_count / group_count
 ## Timing Summary
 
 {markdown_table(["Metric", "Seconds"], timing_rows)}
+
+## Artifact Size Summary
+
+{markdown_table(["Artifact", "Key", "Size", "Bytes"], size_rows)}
+
+Important deployment boundary:
+
+- Server-upload material includes `crypto_context.bin`, public/evaluation keys,
+  encrypted vectors, and manifests.
+- Client-only material includes the secret key and decrypted/reference reports.
+- Prepared plaintext vectors are benchmark artifacts only; they must not be sent
+  to the untrusted HE server in a real deployment.
 
 ## Result Preview
 
@@ -463,6 +539,7 @@ def main() -> None:
         "correctness": "passed" if passed else "failed",
         "failures": failures[:20],
         "timings_seconds": timings,
+        "artifact_sizes_bytes": collect_artifact_sizes(run_dir, prepared_dir, encrypted_dir, key_dir, server_dir),
         "artifacts": {
             "plaintext_reference": str(reference_csv),
             "decrypted_csv": str(decrypted_csv),
