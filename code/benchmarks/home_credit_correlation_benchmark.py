@@ -219,7 +219,14 @@ def plaintext_reference(input_path: Path, row_limit: int, pairs: list[tuple[str,
 
 def run_command(command: list[str], cwd: Path) -> tuple[float, str]:
     started = time.perf_counter()
-    completed = subprocess.run(command, cwd=cwd, check=True, text=True, capture_output=True)  # noqa: S603
+    try:
+        completed = subprocess.run(command, cwd=cwd, check=True, text=True, capture_output=True)  # noqa: S603
+    except subprocess.CalledProcessError as exc:
+        output = "\n".join(part for part in ((exc.stdout or "").strip(), (exc.stderr or "").strip()) if part)
+        command_text = " ".join(command)
+        raise RuntimeError(
+            f"command failed with exit code {exc.returncode}: {command_text}\n{output}"
+        ) from exc
     elapsed = time.perf_counter() - started
     output = "\n".join(part for part in (completed.stdout.strip(), completed.stderr.strip()) if part)
     return elapsed, output
