@@ -119,6 +119,24 @@ build/server_home_credit_fhew_amt_bins
 build/decrypt_home_credit_fhew_amt_bins
 ```
 
+Benchmark wrapper:
+
+```text
+code/benchmarks/home_credit_fhew_amt_bins_benchmark.py
+```
+
+Preferred benchmark command:
+
+```bash
+python3 code/benchmarks/home_credit_fhew_amt_bins_benchmark.py \
+  --input data/home_credit/application_train.csv \
+  --column AMT_CREDIT \
+  --row-limit 5 \
+  --bin-count 5 \
+  --build-dir build \
+  --run-name fhew_amt_credit_5_rows
+```
+
 Minimal AMT_CREDIT FHEW flow:
 
 ```bash
