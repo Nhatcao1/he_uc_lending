@@ -292,12 +292,24 @@ encrypts only the selected correlation artifacts plus small shared boilerplate,
 runs `server_home_credit_aggregate`, decrypts the result, compares sufficient
 statistics, and writes `selected_correlation_stats_report.md`.
 
+Notebook-inspired pair presets:
+
+| Preset | Purpose |
+| --- | --- |
+| `notebook_core` | default: amount, external-source, target, and domain-ratio relationships |
+| `amounts` | amount-to-income/annuity/goods-price relationships |
+| `ext_sources` | `EXT_SOURCE_1/2/3`, age, and target relationships from the gentle-introduction flow |
+| `domain_ratios` | derived features such as `CREDIT_INCOME_PERCENT`, `CREDIT_TERM`, and `DAYS_EMPLOYED_PERCENT` |
+
+Derived features are prepared inside the benchmark/prep code before encryption;
+their preparation is part of data setup, not the HE calculation being measured.
+
 Preferred full-table command:
 
 ```bash
 python3 code/benchmarks/home_credit_correlation_benchmark.py \
   --input data/home_credit/application_train.csv \
-  --pairs "AMT_CREDIT:AMT_INCOME_TOTAL" \
+  --pair-preset notebook_core \
   --row-limit 0 \
   --slots 8192 \
   --build-dir build \

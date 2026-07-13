@@ -19,18 +19,57 @@ import time
 from pathlib import Path
 
 
-DEFAULT_PAIRS = [
-    ("AMT_CREDIT", "AMT_INCOME_TOTAL"),
-    ("CREDIT_INCOME_PERCENT", "ANNUITY_INCOME_PERCENT"),
-]
+PAIR_PRESETS = {
+    "notebook_core": [
+        ("AMT_CREDIT", "AMT_INCOME_TOTAL"),
+        ("AMT_CREDIT", "AMT_ANNUITY"),
+        ("AMT_CREDIT", "AMT_GOODS_PRICE"),
+        ("EXT_SOURCE_1", "EXT_SOURCE_2"),
+        ("EXT_SOURCE_2", "EXT_SOURCE_3"),
+        ("EXT_SOURCE_1", "AGE_YEARS"),
+        ("EXT_SOURCE_2", "TARGET"),
+        ("EXT_SOURCE_3", "TARGET"),
+        ("CREDIT_INCOME_PERCENT", "ANNUITY_INCOME_PERCENT"),
+        ("CREDIT_INCOME_PERCENT", "CREDIT_TERM"),
+        ("DAYS_EMPLOYED_PERCENT", "TARGET"),
+    ],
+    "amounts": [
+        ("AMT_CREDIT", "AMT_INCOME_TOTAL"),
+        ("AMT_CREDIT", "AMT_ANNUITY"),
+        ("AMT_CREDIT", "AMT_GOODS_PRICE"),
+        ("AMT_ANNUITY", "AMT_INCOME_TOTAL"),
+        ("AMT_GOODS_PRICE", "AMT_INCOME_TOTAL"),
+    ],
+    "ext_sources": [
+        ("EXT_SOURCE_1", "EXT_SOURCE_2"),
+        ("EXT_SOURCE_1", "EXT_SOURCE_3"),
+        ("EXT_SOURCE_2", "EXT_SOURCE_3"),
+        ("EXT_SOURCE_1", "AGE_YEARS"),
+        ("EXT_SOURCE_2", "TARGET"),
+        ("EXT_SOURCE_3", "TARGET"),
+    ],
+    "domain_ratios": [
+        ("CREDIT_INCOME_PERCENT", "ANNUITY_INCOME_PERCENT"),
+        ("CREDIT_INCOME_PERCENT", "CREDIT_TERM"),
+        ("ANNUITY_INCOME_PERCENT", "CREDIT_TERM"),
+        ("DAYS_EMPLOYED_PERCENT", "AGE_YEARS"),
+        ("DAYS_EMPLOYED_PERCENT", "TARGET"),
+    ],
+}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Benchmark Home Credit selected correlation stats with CKKS HE.")
     parser.add_argument("--input", default="data/home_credit/application_train.csv")
     parser.add_argument(
+        "--pair-preset",
+        default="notebook_core",
+        choices=sorted(PAIR_PRESETS),
+        help="Notebook-inspired pair preset used when --pairs is omitted.",
+    )
+    parser.add_argument(
         "--pairs",
-        default=";".join(f"{left}:{right}" for left, right in DEFAULT_PAIRS),
+        default="",
         help="Semicolon-separated selected pairs, e.g. AMT_CREDIT:AMT_INCOME_TOTAL;AMT_CREDIT:AMT_GOODS_PRICE.",
     )
     parser.add_argument("--row-limit", type=int, default=0, help="0 means all rows.")
@@ -58,6 +97,12 @@ def parse_pairs(value: str) -> list[tuple[str, str]]:
     if not pairs:
         raise ValueError("at least one correlation pair is required")
     return pairs
+
+
+def selected_pairs(args: argparse.Namespace) -> list[tuple[str, str]]:
+    if args.pairs.strip():
+        return parse_pairs(args.pairs)
+    return list(PAIR_PRESETS[args.pair_preset])
 
 
 def parse_float(value: str | None) -> float | None:
@@ -401,6 +446,7 @@ def write_markdown_report(path: Path, summary: dict[str, object], reference: lis
 | Workload | `selected_correlation_stats` |
 | Input | `{summary['input']}` |
 | Rows | `{summary['row_limit']}` |
+| Pair preset | `{summary['pair_preset']}` |
 | Pairs | `{summary['pairs']}` |
 | CKKS slots | `{summary['slots']}` |
 | Correctness | **{summary['correctness']}** |
@@ -410,6 +456,12 @@ def write_markdown_report(path: Path, summary: dict[str, object], reference: lis
 This benchmark reproduces the sufficient statistics needed for selected
 Pearson-correlation pairs. The final division and square root are done after
 decryption.
+
+The selected default preset follows the notebook flow: amount relationships,
+`EXT_SOURCE` relationships, target relationships, and domain-ratio features.
+Derived values such as `AGE_YEARS`, `CREDIT_INCOME_PERCENT`,
+`ANNUITY_INCOME_PERCENT`, `CREDIT_TERM`, and `DAYS_EMPLOYED_PERCENT` are
+prepared inside the benchmark/prep code before encryption.
 
 ## Python Reference First
 
@@ -478,7 +530,7 @@ def main() -> None:
     args = parse_args()
     repo = Path.cwd()
     input_path = Path(args.input)
-    pairs = parse_pairs(args.pairs)
+    pairs = selected_pairs(args)
     pair_arg = ";".join(f"{left}:{right}" for left, right in pairs)
     run_name = args.run_name or f"correlation_{args.row_limit or 'all'}_{int(time.time())}"
     run_dir = Path(args.output_root) / run_name
@@ -594,6 +646,7 @@ def main() -> None:
         "input": str(input_path),
         "row_limit": args.row_limit,
         "slots": args.slots,
+        "pair_preset": args.pair_preset if not args.pairs.strip() else "custom",
         "pairs": pair_arg,
         "run_dir": str(run_dir),
         "reference_rows": len(reference),
