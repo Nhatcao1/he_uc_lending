@@ -9,6 +9,19 @@ what still needs improvement.
 
 ## Execution Boundary
 
+There are now two separate scopes:
+
+| Scope | Goal | What we allow |
+| --- | --- | --- |
+| Benchmark / notebook replication | Prove the notebook calculation can be reproduced with HE and compare against Python | Trusted benchmark code may split rows into the needed group/vector before encryption |
+| Product architecture | Decide how a real data source, HE server, and analysis side exchange encrypted data | Source/client boundaries, metadata policy, key handling, PSI/FHEW/CKKS design |
+
+Current focus is the first scope. For each notebook EDA, we care about the
+encrypted calculation itself: what vector is encrypted, what OpenFHE operation
+runs, whether decrypted output matches Python, runtime, and artifact size. We
+do not need every benchmark to solve how the HE server discovers categories from
+raw mixed data.
+
 | Side | Responsibilities |
 | --- | --- |
 | Client / trusted data side | Read raw CSV, clean/normalize values, decide null policy, decide category/top-K/bin policy, create numeric vectors and 0/1 masks, encrypt with OpenFHE CKKS, keep secret key, decrypt aggregate results |
@@ -75,6 +88,20 @@ benchmark_runs/home_credit_core_eda/<run-name>/
 
 These are the currently clean benchmark workloads. They map to notebook section
 `5.14.x`, where the notebook compares categories against `TARGET`.
+
+Benchmark interpretation: a group such as `Working`, `Family`, or
+`Unaccompanied` can be represented as its own encrypted vector/mask for the
+purpose of testing HE. The benchmark compares:
+
+```text
+Python calculation on the same selected rows/vector
+vs.
+OpenFHE encrypted calculation on encrypted rows/vector
+```
+
+This is intentionally simpler than the final product architecture. It answers
+the immediate research question: can this notebook calculation be performed on
+ciphertext, with what latency and artifact size?
 
 | Workload | Notebook intent | Source table | Client preparation | Encrypted artifacts needed | HE server calculation | Output table | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -251,8 +278,31 @@ natural bridge to future join/matching work.
 
 | Notebook area | HE interpretation | Status |
 | --- | --- | --- |
-| Pearson correlation heatmap | compute selected sufficient statistics: `sum(x)`, `sum(y)`, `sum(x*y)`, `sum(x^2)`, `sum(y^2)`; client decrypts and computes correlation | path exists, needs focused validation |
+| Pearson correlation heatmap | compute selected sufficient statistics: `sum(x)`, `sum(y)`, `sum(x*y)`, `sum(x^2)`, `sum(y^2)`; client decrypts and computes correlation | clean benchmark wrapper added |
 | RandomForest feature importance | not a direct HE target in this prototype; use trusted training and optional HE linear scoring demo | separate ML/scoring track |
+
+Clean correlation benchmark wrapper:
+
+```text
+code/benchmarks/home_credit_correlation_benchmark.py
+```
+
+The wrapper computes the Python reference first, prepares pair-valid vectors,
+encrypts only the selected correlation artifacts plus small shared boilerplate,
+runs `server_home_credit_aggregate`, decrypts the result, compares sufficient
+statistics, and writes `selected_correlation_stats_report.md`.
+
+Preferred full-table command:
+
+```bash
+python3 code/benchmarks/home_credit_correlation_benchmark.py \
+  --input data/home_credit/application_train.csv \
+  --pairs "AMT_CREDIT:AMT_INCOME_TOTAL" \
+  --row-limit 0 \
+  --slots 8192 \
+  --build-dir build \
+  --run-name corr_amt_credit_income_all
+```
 
 ## Required Improvements
 

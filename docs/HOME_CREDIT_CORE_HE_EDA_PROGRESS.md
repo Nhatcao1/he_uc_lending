@@ -25,17 +25,57 @@ docs/HOME_CREDIT_HE_EDA_IMPLEMENTATION_TRACKER.md
 
 ## Current Direction
 
-We are treating EDA as encrypted aggregate analytics:
+We are treating the current work as **benchmark / notebook replication first**.
+The immediate goal is not to perfect the client/server data-product boundary;
+it is to reproduce each notebook EDA calculation under HE and compare it with
+the equivalent Python calculation.
+
+Benchmark flow:
 
 ```text
-raw Home Credit table
--> trusted preparation creates numeric vectors and 0/1 masks
+raw Home Credit table in trusted benchmark environment
+-> select the notebook EDA case and the needed subset/vector
+-> trusted preparation creates numeric vectors and/or 0/1 masks
 -> CKKS encrypts packed vectors
 -> HE server computes sums/masked sums on ciphertext
 -> trusted side decrypts aggregate values and computes final rates/percentages
+-> benchmark report compares Python vs HE, with timing and artifact size
 ```
 
+This means we can test one group at a time, or pass separate prepared vectors
+such as `Family`, `Unaccompanied`, `Working`, and `Pensioner`, instead of
+requiring the HE server to discover those groups from raw strings. Product
+questions such as source metadata, key management, PSI, and FHEW category
+discovery remain important, but they are not blocking the benchmark phase.
+
 Do not spend new effort on web UX until this tracker says otherwise.
+
+## Compute-Focused Filter
+
+For the benchmark phase, ignore notebook cells that are only display wrappers
+around a single `sns.*` or `plt.*` call. Keep only EDA that exposes a reusable
+calculation kernel we can run on ciphertext and compare with Python.
+
+| Priority | Keep? | Notebook pattern | HE benchmark meaning |
+| --- | --- | --- | --- |
+| High | Yes | conditional default rate by group | `sum(group_mask)`, `sum(group_mask * TARGET)` |
+| High | Yes | numeric aggregate / distribution table | encrypted count/sum/bin count/mean support |
+| High | Yes | correlation / relationship statistics | `sum(x)`, `sum(y)`, `sum(x*y)`, `sum(x^2)`, `sum(y^2)` |
+| High | Yes | previous-table grouped summaries | encrypted counts/sums over larger related tables |
+| Medium | Sometimes | plain `value_counts()` | useful as a warm-up or artifact-size benchmark, but not enough alone |
+| Low | Usually no | `sns.countplot`, `sns.barplot`, `plt.hist` only | plotting belongs after decrypt; not an HE kernel |
+| Low | Usually no | missing-data display only | source must encode null policy, so benchmark value is limited |
+
+The practical target is now:
+
+```text
+notebook calculation kernel
+-> Python reference
+-> encrypt only needed vector/subset
+-> run equivalent HE operation
+-> decrypt and compare
+-> write timing/artifact report
+```
 
 ## Workload Progress
 
@@ -47,7 +87,7 @@ Do not spend new effort on web UX until this tracker says otherwise.
 | Target balance | encrypted target masks | encode `TARGET=1` and `TARGET=0` masks | `sum(target_mask)` | Implemented, needs timing |
 | Target by category | encrypted conditional count | category masks plus `TARGET=1` mask | `sum(mask)`, `sum(mask * target)` | Implemented, demo-ready |
 | Previous application EDA | encrypted previous-table masks | prepare previous_application category masks | `sum(previous_mask)` | Implemented, size/perf needs work |
-| Correlation support | encrypted sufficient statistics | select numeric pairs, valid masks, zero-fill invalids | `sum(x)`, `sum(y)`, `sum(xy)`, `sum(x^2)`, `sum(y^2)` | Implemented path, needs validation |
+| Correlation support | encrypted sufficient statistics | select numeric pairs, create pair-valid vectors, zero-fill invalid pairs | `sum(x)`, `sum(y)`, `sum(xy)`, `sum(x^2)`, `sum(y^2)` | Clean benchmark wrapper added |
 | Feature importance notebook ML | HE-friendly replacement only | trusted feature prep/model export | linear weighted sum only | Partial; tree model not HE target |
 | Merge-aware features | tokenized grouped aggregate | token/mask prep near data source | masked encrypted sums by token/match mask | Experimental |
 
@@ -104,7 +144,7 @@ Near-term benchmark order:
 2. `app_target_by_income_type`
 3. `app_target_by_occupation_type`
 4. numeric amount summaries and selected histograms
-5. selected correlation sufficient statistics
+5. selected correlation sufficient statistics with `home_credit_correlation_benchmark.py`
 6. previous contract status, after package-size optimization
 
 ## OpenFHE API Surface

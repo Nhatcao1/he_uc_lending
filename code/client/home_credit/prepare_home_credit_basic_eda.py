@@ -351,6 +351,14 @@ def value_from_source(row: dict[str, str], source: str) -> float | None:
     return parse_float(row.get(source))
 
 
+def valid_pair_value(row: dict[str, str], left: str, right: str, selected: str) -> float:
+    left_value = value_from_source(row, left)
+    right_value = value_from_source(row, right)
+    if left_value is None or right_value is None:
+        return 0.0
+    return left_value if selected == "left" else right_value
+
+
 def safe_ratio(numerator: float | None, denominator: float | None) -> float | None:
     if numerator is None or denominator is None or abs(denominator) <= 1e-12:
         return None
@@ -776,10 +784,12 @@ def build_vector_defs(
             )
 
     for left, right in correlation_pairs:
-        left_vector = add_numeric_vector(left, summary=left in numeric_columns)
-        right_vector = add_numeric_vector(right, summary=right in numeric_columns)
+        add_numeric_vector(left, summary=left in numeric_columns)
+        add_numeric_vector(right, summary=right in numeric_columns)
         pair_label = f"{left}__{right}"
         valid_vector = f"corr.valid.{safe_name(left)}.{safe_name(right)}"
+        left_pair_vector = f"corr.value.{safe_name(left)}.{safe_name(right)}.x"
+        right_pair_vector = f"corr.value.{safe_name(left)}.{safe_name(right)}.y"
         add_vector(
             VectorDef(
                 table="application_train",
@@ -794,12 +804,40 @@ def build_vector_defs(
                 ),
             )
         )
+        add_vector(
+            VectorDef(
+                table="application_train",
+                name=left_pair_vector,
+                kind="numeric_aux",
+                source_column=pair_label,
+                analysis="selected_correlation_stats",
+                group=pair_label,
+                label="x_valid",
+                value_fn=lambda row, selected_left=left, selected_right=right: valid_pair_value(
+                    row, selected_left, selected_right, "left"
+                ),
+            )
+        )
+        add_vector(
+            VectorDef(
+                table="application_train",
+                name=right_pair_vector,
+                kind="numeric_aux",
+                source_column=pair_label,
+                analysis="selected_correlation_stats",
+                group=pair_label,
+                label="y_valid",
+                value_fn=lambda row, selected_left=left, selected_right=right: valid_pair_value(
+                    row, selected_left, selected_right, "right"
+                ),
+            )
+        )
         add_count_op(aggregate_ops, "selected_correlation_stats", pair_label, "n", valid_vector)
-        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_x", valid_vector, left_vector)
-        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_y", valid_vector, right_vector)
-        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_xy", left_vector, right_vector)
-        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_x2", left_vector, left_vector)
-        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_y2", right_vector, right_vector)
+        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_x", valid_vector, left_pair_vector)
+        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_y", valid_vector, right_pair_vector)
+        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_xy", left_pair_vector, right_pair_vector)
+        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_x2", left_pair_vector, left_pair_vector)
+        add_masked_sum_op(aggregate_ops, "selected_correlation_stats", pair_label, "sum_y2", right_pair_vector, right_pair_vector)
 
     for feature in model.get("features", []):
         if not isinstance(feature, dict):
