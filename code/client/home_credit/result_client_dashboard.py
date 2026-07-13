@@ -285,6 +285,10 @@ def format_percent(value: float) -> str:
     return f"{value * 100.0:.2f}%"
 
 
+def format_percent_points(value: float) -> str:
+    return f"{value:.2f}%"
+
+
 def dict_rows(headers: list[str], rows: list[list[str]]) -> list[dict[str, str]]:
     normalized: list[dict[str, str]] = []
     for row in rows:
@@ -294,13 +298,24 @@ def dict_rows(headers: list[str], rows: list[list[str]]) -> list[dict[str, str]]
 
 
 def category_count_report(headers: list[str], rows: list[list[str]]) -> tuple[list[str], list[list[str]], str]:
-    records = [row for row in dict_rows(headers, rows) if row.get("operation") == "count"]
+    parsed_rows = dict_rows(headers, rows)
+    records = [row for row in parsed_rows if row.get("operation") == "count"]
+    percent_rows = {
+        (row.get("group", ""), row.get("label", "")): parse_result_number(row.get("value", ""))
+        for row in parsed_rows
+        if row.get("operation") == "percent" and row.get("value_name") == "count_percent_of_rows"
+    }
     total = sum(parse_result_number(row.get("value", "")) for row in records)
     report_rows = []
     for row in sorted(records, key=lambda item: parse_result_number(item.get("value", "")), reverse=True):
         count = parse_result_number(row.get("value", ""))
-        share = count / total if total else 0.0
-        report_rows.append([row.get("group", ""), row.get("label", ""), format_count(count), format_percent(share)])
+        key = (row.get("group", ""), row.get("label", ""))
+        if key in percent_rows:
+            percent = format_percent_points(percent_rows[key])
+        else:
+            share = count / total if total else 0.0
+            percent = format_percent(share)
+        report_rows.append([row.get("group", ""), row.get("label", ""), format_count(count), percent])
     return ["Column", "Segment", "Count", "Percent"], report_rows, f"Total decrypted count: {format_count(total)}"
 
 

@@ -350,6 +350,23 @@ std::vector<AggregateResult> runAggregates(
         result.outputCiphertext = std::filesystem::path("aggregates") / stem;
         serializeCiphertext(options.outputDir / result.outputCiphertext, total);
         results.push_back(result);
+
+        if ((result.operation == "count" || result.operation == "default_count") && result.totalRows > 0) {
+            const double percentScale = 100.0 / static_cast<double>(result.totalRows);
+            auto percentPlaintext = cc->MakeCKKSPackedPlaintext(std::vector<double>{percentScale});
+            auto percentCiphertext = cc->EvalMult(total, percentPlaintext);
+
+            AggregateResult percentResult = result;
+            percentResult.operation = "percent";
+            percentResult.valueName = result.operation + "_percent_of_rows";
+            const auto percentStem = safeFileStem(percentResult.analysis + "." + percentResult.group + "." +
+                                                  percentResult.label + "." + percentResult.operation + "." +
+                                                  percentResult.valueName) +
+                                     ".bin";
+            percentResult.outputCiphertext = std::filesystem::path("aggregates") / percentStem;
+            serializeCiphertext(options.outputDir / percentResult.outputCiphertext, percentCiphertext);
+            results.push_back(percentResult);
+        }
     }
     return results;
 }

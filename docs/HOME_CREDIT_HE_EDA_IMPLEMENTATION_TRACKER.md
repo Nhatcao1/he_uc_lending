@@ -76,7 +76,7 @@ benchmark_runs/home_credit_core_eda/<run-name>/
 
 | EDA pattern | Client encrypted inputs | HE server operations | Decrypted post-process |
 | --- | --- | --- | --- |
-| Count rows in a category | one 0/1 mask per category | `EvalSum(mask)` | `percent = count / total` |
+| Count rows in a category | one 0/1 mask per category | `EvalSum(mask)` and `EvalMult(count, plaintext(100 / total_rows))` | display decrypted count and HE-computed percent |
 | Count rows in a category, FHEW code path | encrypted category-code bits and plaintext label-code metadata | encrypted equality against each label code, encrypted binary count accumulator | count and percent after decrypt |
 | Default rate by category | category mask and `TARGET=1` mask | `EvalSum(mask)`, `EvalSum(EvalMultAndRelinearize(mask, target))` | `default_rate = default_count / count` |
 | Numeric total / mean | numeric value vector and valid mask | `EvalSum(value * valid_mask)`, `EvalSum(valid_mask)` | `mean = sum / count` |
@@ -263,7 +263,18 @@ benchmarking is not yet practical without bundle-size optimization.
 
 | Notebook area | Source table | Client preparation | HE server calculation | Risk |
 | --- | --- | --- | --- | --- |
-| previous contract type/status/reject reason/product/channel/etc. | `previous_application.csv` | normalize category fields, use top-K where needed, create one-hot masks | `sum(previous_mask)` | ciphertext volume grows quickly because the table has about 1.67M rows |
+| previous contract type/status/reject reason/product/channel/etc. | `previous_application.csv` | normalize category fields, use top-K where needed, create one-hot masks | `count = EvalSum(previous_mask)`; `percent = EvalMult(count, plaintext(100 / total_rows))` | ciphertext volume grows quickly because the table has about 1.67M rows |
+
+For notebook 5.15 value-count charts, both count and percentage are now HE
+outputs. The server returns:
+
+```text
+count(label)   = EvalSum(encrypted_label_mask)
+percent(label) = EvalMult(count(label), plaintext(100 / previous_application_rows))
+```
+
+The trusted side decrypts both values and renders the table/chart. It does not
+need to recompute the percentage for new runs.
 
 Recommended first previous-table benchmark:
 
