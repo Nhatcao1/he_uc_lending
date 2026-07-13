@@ -66,7 +66,8 @@ benchmark_runs/home_credit_core_eda/<run-name>/
 | Count rows in a category | one 0/1 mask per category | `EvalSum(mask)` | `percent = count / total` |
 | Default rate by category | category mask and `TARGET=1` mask | `EvalSum(mask)`, `EvalSum(EvalMultAndRelinearize(mask, target))` | `default_rate = default_count / count` |
 | Numeric total / mean | numeric value vector and valid mask | `EvalSum(value * valid_mask)`, `EvalSum(valid_mask)` | `mean = sum / count` |
-| Histogram / distribution table | one 0/1 mask per numeric bin, optional value vector | `EvalSum(bin_mask)`, optional `EvalSum(bin_mask * value)` | `percent`, optional `mean_per_bin` |
+| Histogram / distribution table, CKKS fast path | one 0/1 mask per numeric bin, optional value vector | `EvalSum(bin_mask)`, optional `EvalSum(bin_mask * value)` | `percent`, optional `mean_per_bin` |
+| Histogram / distribution table, FHEW comparison path | encrypted integer bits for numeric value, encrypted valid bit, plaintext min/max/bin count | encrypted comparisons against plaintext bin ranges, encrypted binary count accumulator | bin count and percent after decrypt |
 | Correlation support | selected numeric vectors, valid masks | sums of `x`, `y`, `xy`, `x^2`, `y^2` | client computes correlation formula |
 
 ## Implemented And Benchmarking Now
@@ -93,13 +94,66 @@ decryption.
 
 | Notebook section | Original plot | Client preparation | HE server calculation | Report output | Status |
 | --- | --- | --- | --- | --- | --- |
-| 5.1 `AMT_CREDIT` | distribution plot | clean numeric value; create valid mask; create fixed bin masks | `sum(valid)`, `sum(value * valid)`, `sum(bin_mask)`, optional `sum(bin_mask * value)` | count, sum, mean, bin count, bin percent, optional bin mean | planned next |
-| 5.2 `AMT_INCOME_TOTAL` | distribution plot | same as above, with income-specific bin policy and outlier notes | same as above | same as above | planned next |
-| 5.3 `AMT_GOODS_PRICE` | distribution plot | same as above, with goods-price bins | same as above | same as above | planned next |
+| 5.1 `AMT_CREDIT` | distribution plot | FHEW path: encrypt amount integer bits and valid bits only; source does not prepare bin masks | HE server compares encrypted values with plaintext bin ranges and accumulates encrypted count bits | bin, count, percent | experimental FHEW implementation |
+| 5.2 `AMT_INCOME_TOTAL` | distribution plot | same as above, with income min/max metadata | same as above | same as above | planned after AMT_CREDIT |
+| 5.3 `AMT_GOODS_PRICE` | distribution plot | same as above, with goods-price min/max metadata | same as above | same as above | planned after AMT_CREDIT |
 
-Important design choice: bin boundaries are selected by the trusted client side
-before encryption. The HE server does not compare encrypted values against
-thresholds in this CKKS path.
+Important design choice: there are now two numeric histogram paths.
+
+- CKKS fast path: source prepares bin masks before encryption. Fast, but
+  source-side mask preparation is heavy.
+- FHEW comparison path: source sends encrypted integer bits and valid bits only.
+  Analyzer/HE side provides plaintext min/max/bin count metadata, and the HE
+  server computes encrypted bin membership and encrypted count bits. This is
+  more aligned with a "black box source" model, but it is much slower and should
+  start with small row limits.
+
+Current FHEW limitation: the experimental path counts rows per bin. It does not
+yet compute encrypted `sum(amount)` or `mean(amount)` per bin.
+
+Experimental binaries:
+
+```text
+build/encrypt_home_credit_fhew_amt
+build/server_home_credit_fhew_amt_bins
+build/decrypt_home_credit_fhew_amt_bins
+```
+
+Minimal AMT_CREDIT FHEW flow:
+
+```bash
+./build/encrypt_home_credit_fhew_amt \
+  --input data/home_credit/application_train.csv \
+  --column AMT_CREDIT \
+  --server-output-dir benchmark_runs/fhew_amt_credit/encrypted \
+  --client-key-dir benchmark_runs/fhew_amt_credit/keys \
+  --row-limit 5 \
+  --bit-width 24 \
+  --security TOY
+
+./build/server_home_credit_fhew_amt_bins \
+  --context benchmark_runs/fhew_amt_credit/encrypted/amt/fhew/cryptoContext.bin \
+  --refresh-key benchmark_runs/fhew_amt_credit/encrypted/amt/fhew/refreshKey.bin \
+  --switch-key benchmark_runs/fhew_amt_credit/encrypted/amt/fhew/ksKey.bin \
+  --amount-manifest benchmark_runs/fhew_amt_credit/encrypted/amt/fhew/fhew_amt_amount_manifest.csv \
+  --valid-manifest benchmark_runs/fhew_amt_credit/encrypted/amt/fhew/fhew_amt_valid_manifest.csv \
+  --input-dir benchmark_runs/fhew_amt_credit/encrypted/amt/fhew \
+  --output-dir benchmark_runs/fhew_amt_credit/server_output \
+  --min 0 \
+  --max 2000000 \
+  --bin-count 3
+
+./build/decrypt_home_credit_fhew_amt_bins \
+  --context benchmark_runs/fhew_amt_credit/keys/fhew_crypto_context.bin \
+  --secret-key benchmark_runs/fhew_amt_credit/keys/fhew_secret_key.bin \
+  --manifest benchmark_runs/fhew_amt_credit/server_output/fhew_amt_bin_count_manifest.csv \
+  --input-dir benchmark_runs/fhew_amt_credit/server_output \
+  --output-csv benchmark_runs/fhew_amt_credit/decrypted_counts.csv
+```
+
+Tiny local smoke result: 5 rows, 3 bins, 24-bit amount values took about 20
+seconds on the HE server path and produced matching decrypted bin counts. This
+confirms feasibility, not scalability.
 
 ## 5.4 To 5.13 Category Count Plan
 
@@ -184,4 +238,3 @@ Correctness check:
 Performance metrics:
 Known limitation:
 ```
-
