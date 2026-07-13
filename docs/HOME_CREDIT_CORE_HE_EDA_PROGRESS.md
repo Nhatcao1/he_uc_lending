@@ -17,6 +17,12 @@ notebooks/introduction-to-manual-feature-engineering.ipynb
 notebooks/introduction-to-manual-feature-engineering-p2.ipynb
 ```
 
+Detailed implementation contract:
+
+```text
+docs/HOME_CREDIT_HE_EDA_IMPLEMENTATION_TRACKER.md
+```
+
 ## Current Direction
 
 We are treating EDA as encrypted aggregate analytics:
