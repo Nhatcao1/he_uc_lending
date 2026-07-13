@@ -285,6 +285,43 @@ previous contract status count
 Reason: it is business-readable, category cardinality is small, and it is a
 natural bridge to future join/matching work.
 
+Clean 5.15 benchmark wrapper:
+
+```text
+code/benchmarks/home_credit_previous_category_benchmark.py
+```
+
+Default case:
+
+```text
+5.15.4 previous contract status
+previous_application.NAME_CONTRACT_STATUS
+```
+
+The wrapper computes the notebook-style Python reference first:
+
+```python
+previous_application["NAME_CONTRACT_STATUS"].value_counts()
+previous_application["NAME_CONTRACT_STATUS"].value_counts(normalize=True) * 100
+```
+
+Then it prepares only the selected previous-table category masks, prunes
+unrelated prepared vectors, encrypts the masks, runs the HE aggregate server,
+decrypts the count results, compares correctness, records artifact sizes, and
+writes a Markdown report.
+
+Strict benchmark boundary:
+
+```text
+count(label) = EvalSum(encrypted_label_mask)
+total_rows   = sum(decrypted label counts)
+percent      = count(label) / total_rows after decrypt
+```
+
+The wrapper passes `--no-percent` to `server_home_credit_aggregate` by default,
+so the HE server does not use plaintext total row count to create percentage
+rows. This is stricter than the web convenience path.
+
 ## Correlation And Feature Importance
 
 | Notebook area | HE interpretation | Status |

@@ -39,6 +39,7 @@ struct Options {
     std::filesystem::path inputDir;
     std::filesystem::path outputDir;
     std::string analysisFilter;
+    bool emitPercent = true;
 };
 
 struct AggregateRow {
@@ -83,7 +84,8 @@ using AggregateKey = std::tuple<std::string, std::string, std::string, std::stri
         << "    --output-dir <server_returns_dir> \\\n"
         << "    [--analysis-filter missing_data|target_balance|application_category_counts|"
            "application_default_rates|application_numeric_histograms|previous_application_category_counts|"
-           "previous_application_target_rates|selected_correlation_stats]\n";
+           "previous_application_target_rates|selected_correlation_stats] \\\n"
+        << "    [--no-percent]\n";
     std::exit(error.empty() ? 0 : 2);
 }
 
@@ -118,6 +120,9 @@ Options parseArgs(int argc, char** argv) {
         }
         else if (arg == "--analysis-filter") {
             options.analysisFilter = needValue(arg);
+        }
+        else if (arg == "--no-percent") {
+            options.emitPercent = false;
         }
         else if (arg == "--help" || arg == "-h") {
             usage();
@@ -351,7 +356,8 @@ std::vector<AggregateResult> runAggregates(
         serializeCiphertext(options.outputDir / result.outputCiphertext, total);
         results.push_back(result);
 
-        if ((result.operation == "count" || result.operation == "default_count") && result.totalRows > 0) {
+        if (options.emitPercent && (result.operation == "count" || result.operation == "default_count") &&
+            result.totalRows > 0) {
             const double percentScale = 100.0 / static_cast<double>(result.totalRows);
             auto percentPlaintext = cc->MakeCKKSPackedPlaintext(std::vector<double>{percentScale});
             auto percentCiphertext = cc->EvalMult(total, percentPlaintext);
