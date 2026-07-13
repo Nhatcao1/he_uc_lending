@@ -24,6 +24,12 @@ MISSING_BUCKET = "__MISSING__"
 OTHER_BUCKET = "__OTHER__"
 
 WORKLOADS = {
+    "prev_contract_type": {
+        "section": "5.15.1",
+        "title": "Previous Contract Type",
+        "column": "NAME_CONTRACT_TYPE",
+        "category_mode": "all",
+    },
     "prev_contract_status": {
         "section": "5.15.4",
         "title": "Previous Contract Status",

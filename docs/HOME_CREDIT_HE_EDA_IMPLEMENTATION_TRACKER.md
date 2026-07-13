@@ -263,18 +263,26 @@ benchmarking is not yet practical without bundle-size optimization.
 
 | Notebook area | Source table | Client preparation | HE server calculation | Risk |
 | --- | --- | --- | --- | --- |
-| previous contract type/status/reject reason/product/channel/etc. | `previous_application.csv` | normalize category fields, use top-K where needed, create one-hot masks | `count = EvalSum(previous_mask)`; `percent = EvalMult(count, plaintext(100 / total_rows))` | ciphertext volume grows quickly because the table has about 1.67M rows |
+| previous contract type/status/reject reason/channel/yield | `previous_application.csv` | normalize category fields, create one-hot masks | `count = EvalSum(previous_mask)` | good business signal; same HE kernel |
+| previous product combination | `previous_application.csv` | normalize category field, use top-K plus `__OTHER__`, create one-hot masks | `count = EvalSum(previous_mask)` | useful but higher-cardinality and larger |
 
-For notebook 5.15 value-count charts, both count and percentage are now HE
-outputs. The server returns:
+For notebook 5.15 value-count charts, the core HE output is encrypted count:
 
 ```text
 count(label)   = EvalSum(encrypted_label_mask)
+```
+
+The stricter benchmark path decrypts the counts and computes percentage on the
+trusted result side, avoiding plaintext total row count on the HE server.
+
+The web convenience path can still emit server-side percentage rows with:
+
+```text
 percent(label) = EvalMult(count(label), plaintext(100 / previous_application_rows))
 ```
 
-The trusted side decrypts both values and renders the table/chart. It does not
-need to recompute the percentage for new runs.
+That path leaks total row count to the HE server and should be treated as a
+convenience mode, not the stricter private benchmark mode.
 
 Recommended first previous-table benchmark:
 
@@ -297,6 +305,22 @@ Default case:
 5.15.4 previous contract status
 previous_application.NAME_CONTRACT_STATUS
 ```
+
+Same-kernel benchmark cases:
+
+| Workload | Notebook section | Column | Notes |
+| --- | --- | --- | --- |
+| `prev_contract_type` | 5.15.1 | `NAME_CONTRACT_TYPE` | small cardinality |
+| `prev_contract_status` | 5.15.4 | `NAME_CONTRACT_STATUS` | strongest first demo |
+| `prev_reject_reason` | 5.15.6 | `CODE_REJECT_REASON` | business-readable rejection reason |
+| `prev_channel_type` | 5.15.12 | `CHANNEL_TYPE` | acquisition/sales channel |
+| `prev_yield_group` | 5.15.14 | `NAME_YIELD_GROUP` | risk/yield bucket |
+
+Different/later case:
+
+| Workload | Notebook section | Column | Notes |
+| --- | --- | --- | --- |
+| `prev_product_combination` | 5.15.15 | `PRODUCT_COMBINATION` | same computation, but high-cardinality top-K plus `__OTHER__` |
 
 The wrapper computes the notebook-style Python reference first:
 
