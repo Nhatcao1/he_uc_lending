@@ -64,6 +64,7 @@ benchmark_runs/home_credit_core_eda/<run-name>/
 | EDA pattern | Client encrypted inputs | HE server operations | Decrypted post-process |
 | --- | --- | --- | --- |
 | Count rows in a category | one 0/1 mask per category | `EvalSum(mask)` | `percent = count / total` |
+| Count rows in a category, FHEW code path | encrypted category-code bits and plaintext label-code metadata | encrypted equality against each label code, encrypted binary count accumulator | count and percent after decrypt |
 | Default rate by category | category mask and `TARGET=1` mask | `EvalSum(mask)`, `EvalSum(EvalMultAndRelinearize(mask, target))` | `default_rate = default_count / count` |
 | Numeric total / mean | numeric value vector and valid mask | `EvalSum(value * valid_mask)`, `EvalSum(valid_mask)` | `mean = sum / count` |
 | Histogram / distribution table, CKKS fast path | one 0/1 mask per numeric bin, optional value vector | `EvalSum(bin_mask)`, optional `EvalSum(bin_mask * value)` | `percent`, optional `mean_per_bin` |
@@ -194,6 +195,38 @@ category counts, not default-rate multiplication.
 Recommended next clean benchmark: implement workload-specific count-only
 benchmarks for 5.4-5.13 after reducing bundle size. They should not require
 `eval_mult_keys` unless the code path still uses masked numeric sums.
+
+Experimental 5.4 FHEW category-code benchmark:
+
+```text
+code/benchmarks/home_credit_fhew_category_count_benchmark.py
+build/encrypt_home_credit_fhew_category
+build/server_home_credit_fhew_category_count
+build/decrypt_home_credit_fhew_category_count
+```
+
+Preferred 5.4 benchmark command:
+
+```bash
+python3 code/benchmarks/home_credit_fhew_category_count_benchmark.py \
+  --input data/home_credit/application_train.csv \
+  --workload app_suite_type \
+  --row-limit 5 \
+  --security TOY \
+  --build-dir build \
+  --run-name fhew_app_suite_type_5_rows
+```
+
+This path aligns with a source-metadata model:
+
+```text
+source metadata: label -> code
+source encrypted payload: category code bits per row
+HE server: encrypted(code == plaintext_label_code), then encrypted count
+analysis side: decrypt count and compute percent
+```
+
+The source does not provide one-hot masks for this path.
 
 ## 5.15 Previous Application EDA
 

@@ -31,6 +31,10 @@ add_executable(server_home_credit_fhew_amt_bins
     code/server/fhew_amt_bins/server_home_credit_fhew_amt_bins.cpp
 )
 
+add_executable(server_home_credit_fhew_category_count
+    code/server/fhew_category_count/server_home_credit_fhew_category_count.cpp
+)
+
 add_executable(server_linear_score
     code/server/linear_score/server_linear_score.cpp
 )
@@ -59,12 +63,21 @@ add_executable(decrypt_home_credit_fhew_amt_bins
     code/client/fhew_tools/decrypt_home_credit_fhew_amt_bins.cpp
 )
 
+add_executable(encrypt_home_credit_fhew_category
+    code/client/fhew_tools/encrypt_home_credit_fhew_category.cpp
+)
+
+add_executable(decrypt_home_credit_fhew_category_count
+    code/client/fhew_tools/decrypt_home_credit_fhew_category_count.cpp
+)
+
 set(HE_UC_OPENFHE_TARGETS
     server_numeric_summary
     server_home_credit_aggregate
     server_home_credit_token_join_aggregate
     server_home_credit_fhew_match
     server_home_credit_fhew_amt_bins
+    server_home_credit_fhew_category_count
     server_linear_score
     encrypt_home_credit_payload
     decrypt_ckks_results
@@ -72,6 +85,8 @@ set(HE_UC_OPENFHE_TARGETS
     decrypt_home_credit_fhew_match
     encrypt_home_credit_fhew_amt
     decrypt_home_credit_fhew_amt_bins
+    encrypt_home_credit_fhew_category
+    decrypt_home_credit_fhew_category_count
 )
 
 foreach(target_name IN LISTS HE_UC_OPENFHE_TARGETS)
