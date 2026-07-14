@@ -19,6 +19,8 @@ import time
 from collections import Counter
 from pathlib import Path
 
+import pandas as pd
+
 
 MISSING_BUCKET = "__MISSING__"
 OTHER_BUCKET = "__OTHER__"
@@ -95,13 +97,14 @@ def normalize_category(value: str | None) -> str:
     return cleaned
 
 
-def iter_rows(path: Path, row_limit: int):
-    with path.open("r", encoding="utf-8-sig", newline="") as input_file:
-        reader = csv.DictReader(input_file)
-        for index, row in enumerate(reader):
-            if row_limit and index >= row_limit:
-                break
-            yield row
+def read_dataframe(path: Path, row_limit: int) -> pd.DataFrame:
+    return pd.read_csv(path, nrows=row_limit or None)
+
+
+def normalize_category_series(series: pd.Series) -> pd.Series:
+    normalized = series.fillna(MISSING_BUCKET).astype(str).str.strip()
+    missing = normalized.eq("") | normalized.str.lower().isin({"nan", "none", "null"})
+    return normalized.mask(missing, MISSING_BUCKET)
 
 
 def selected_labels(counts: Counter[str], cfg: dict[str, object]) -> list[str]:
@@ -112,6 +115,18 @@ def selected_labels(counts: Counter[str], cfg: dict[str, object]) -> list[str]:
         labels = [label for label, _ in counts.most_common(int(cfg.get("k", 25)))]
         if MISSING_BUCKET in counts and MISSING_BUCKET not in labels:
             labels.append(MISSING_BUCKET)
+        if bool(cfg.get("other_bucket", True)):
+            labels.append(OTHER_BUCKET)
+        return labels
+    raise ValueError(f"unsupported category mode: {mode}")
+
+
+def selected_labels_from_value_counts(counts: pd.Series, cfg: dict[str, object]) -> list[str]:
+    mode = str(cfg.get("category_mode", "all"))
+    if mode == "all":
+        return [str(label) for label in counts.index]
+    if mode == "top_k":
+        labels = [str(label) for label in counts.head(int(cfg.get("k", 25))).index]
         if bool(cfg.get("other_bucket", True)):
             labels.append(OTHER_BUCKET)
         return labels
@@ -130,13 +145,22 @@ def label_for(raw_value: str | None, labels: list[str]) -> str:
 def plaintext_reference(input_path: Path, row_limit: int, cfg: dict[str, object]) -> tuple[list[dict[str, object]], float]:
     started = time.perf_counter()
     column = str(cfg["column"])
-    rows = list(iter_rows(input_path, row_limit))
-    raw_counts = Counter(normalize_category(row.get(column)) for row in rows)
-    labels = selected_labels(raw_counts, cfg)
-    counts: Counter[str] = Counter(label_for(row.get(column), labels) for row in rows)
-    total = sum(counts.values())
+    frame = read_dataframe(input_path, row_limit)
+    counts = frame[column].value_counts()
+    labels = selected_labels_from_value_counts(counts, cfg)
+    label_set = set(labels)
+    if OTHER_BUCKET in label_set:
+        selected_categories = frame[column].where(frame[column].isna() | frame[column].isin(label_set), OTHER_BUCKET)
+    else:
+        selected_categories = frame[column]
+    grouped_counts = selected_categories.value_counts(sort=False)
+    total = int(grouped_counts.sum())
     report: list[dict[str, object]] = []
-    for label, count in sorted(counts.items(), key=lambda item: item[1], reverse=True):
+    for label, count in sorted(
+        ((label, int(grouped_counts.get(label, 0))) for label in labels),
+        key=lambda item: item[1],
+        reverse=True,
+    ):
         report.append(
             {
                 "table": "previous_application",
@@ -147,6 +171,16 @@ def plaintext_reference(input_path: Path, row_limit: int, cfg: dict[str, object]
             }
         )
     return report, time.perf_counter() - started
+
+
+def pandas_reference_code(cfg: dict[str, object]) -> str:
+    column = str(cfg["column"])
+    return "\n".join(
+        [
+            f'previous_application["{column}"].value_counts()',
+            f'previous_application["{column}"].value_counts(normalize=True) * 100',
+        ]
+    )
 
 
 def run_command(command: list[str], cwd: Path) -> tuple[float, str]:
@@ -397,11 +431,10 @@ def write_markdown_report(path: Path, summary: dict[str, object], reference: lis
 
 ## Python Reference
 
-The notebook-style reference is:
+The notebook-style pandas reference is:
 
 ```python
-previous_application["{cfg['column']}"].value_counts()
-previous_application["{cfg['column']}"].value_counts(normalize=True) * 100
+{summary.get('pandas_reference_code', '')}
 ```
 
 ## Data Before Encryption
@@ -628,6 +661,7 @@ def main() -> None:
         "filtered_manifest_rows": manifest_rows,
         "prepared_pruned": prepared_pruned,
         "server_percent_enabled": bool(args.allow_server_percent),
+        "pandas_reference_code": pandas_reference_code(cfg),
         "correctness": "passed" if passed else "failed",
         "failures": failures[:20],
         "timings_seconds": timings,

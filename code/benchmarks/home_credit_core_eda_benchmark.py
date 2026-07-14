@@ -17,6 +17,9 @@ import time
 from collections import Counter
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
+
 
 MISSING_BUCKET = "__MISSING__"
 OTHER_BUCKET = "__OTHER__"
@@ -233,13 +236,14 @@ def parse_target(value: str | None) -> int:
     return 1 if math.isfinite(parsed) and int(parsed) == 1 else 0
 
 
-def iter_rows(path: Path, row_limit: int):
-    with path.open("r", encoding="utf-8-sig", newline="") as input_file:
-        reader = csv.DictReader(input_file)
-        for index, row in enumerate(reader):
-            if row_limit and index >= row_limit:
-                break
-            yield row
+def read_dataframe(path: Path, row_limit: int) -> pd.DataFrame:
+    return pd.read_csv(path, nrows=row_limit or None)
+
+
+def normalize_category_series(series: pd.Series) -> pd.Series:
+    normalized = series.fillna(MISSING_BUCKET).astype(str).str.strip()
+    missing = normalized.eq("") | normalized.str.lower().isin({"nan", "none", "null"})
+    return normalized.mask(missing, MISSING_BUCKET)
 
 
 def selected_labels(counts: Counter[str], cfg: dict[str, object]) -> list[str]:
@@ -273,20 +277,20 @@ def label_for(raw_value: str | None, labels: list[str]) -> str:
 def plaintext_reference(input_path: Path, row_limit: int, cfg: dict[str, object]) -> tuple[list[dict[str, object]], float]:
     started = time.perf_counter()
     column = str(cfg["column"])
-    counts: Counter[str] = Counter()
-    rows = list(iter_rows(input_path, row_limit))
-    for row in rows:
-        counts[normalize_category(row.get(column))] += 1
-    labels = selected_labels(counts, cfg)
+    frame = read_dataframe(input_path, row_limit)
+    temp = frame[column].value_counts()
+    labels = [str(label) for label in cfg.get("labels", [])] if cfg.get("category_mode") == "labels" else list(temp.index)
+    labels = [label for label in labels if label in set(temp.index)]
 
-    grouped = {label: {"count": 0, "default_count": 0} for label in labels}
-    for row in rows:
-        label = label_for(row.get(column), labels)
-        if cfg.get("category_mode") == "labels" and label not in labels:
-            continue
-        bucket = grouped.setdefault(label, {"count": 0, "default_count": 0})
-        bucket["count"] += 1
-        bucket["default_count"] += parse_target(row.get("TARGET"))
+    grouped = {}
+    for label in labels:
+        target_for_label = frame["TARGET"][frame[column] == label]
+        default_count = int(np.sum(target_for_label == 1))
+        repaid_count = int(np.sum(target_for_label == 0))
+        grouped[label] = {
+            "count": default_count + repaid_count,
+            "default_count": default_count,
+        }
 
     total = sum(int(item["count"]) for item in grouped.values())
     report: list[dict[str, object]] = []
@@ -304,6 +308,20 @@ def plaintext_reference(input_path: Path, row_limit: int, cfg: dict[str, object]
             }
         )
     return report, time.perf_counter() - started
+
+
+def pandas_reference_code(cfg: dict[str, object]) -> str:
+    column = str(cfg["column"])
+    return "\n".join(
+        [
+            f'temp = application_train["{column}"].value_counts()',
+            "temp_y0 = []",
+            "temp_y1 = []",
+            "for val in temp.index:",
+            f'    temp_y1.append(np.sum(application_train["TARGET"][application_train["{column}"] == val] == 1))',
+            f'    temp_y0.append(np.sum(application_train["TARGET"][application_train["{column}"] == val] == 0))',
+        ]
+    )
 
 
 def run_command(command: list[str], cwd: Path) -> tuple[float, str]:
@@ -520,7 +538,13 @@ def write_markdown_report(path: Path, summary: dict[str, object], reference: lis
 ## What This EDA Computes
 
 This case computes the default count and default rate for each selected group.
-The plaintext Python result is used only as a local benchmark reference.
+The plaintext pandas result is used only as a local benchmark reference.
+
+## Pandas / Notebook Reference Code
+
+```python
+{summary.get('pandas_reference_code', '')}
+```
 
 ## Data Preparation Before Encryption
 
@@ -750,6 +774,7 @@ def main() -> None:
         "title": cfg.get("title", ""),
         "label_policy": cfg.get("category_mode", "all"),
         "labels": cfg.get("labels", []),
+        "pandas_reference_code": pandas_reference_code(cfg),
         "reference_rows": len(reference),
         "filtered_manifest_rows": manifest_rows,
         "correctness": "passed" if passed else "failed",
