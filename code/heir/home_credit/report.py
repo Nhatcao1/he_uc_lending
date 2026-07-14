@@ -60,6 +60,17 @@ def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[
             toolchain.get("heir_openfhe_runner_status", "") if isinstance(toolchain, dict) else "",
         ],
     ]
+    runner_result = toolchain.get("heir_openfhe_runner_result", {}) if isinstance(toolchain, dict) else {}
+    smoke_rows = []
+    if isinstance(runner_result, dict) and runner_result.get("found"):
+        smoke_rows = [
+            ["expected", runner_result.get("expected", "")],
+            ["actual", runner_result.get("actual", "")],
+            ["absolute_error", runner_result.get("absolute_error", "")],
+            ["passed", runner_result.get("passed", "")],
+        ]
+    else:
+        smoke_rows = [["result", "not found in runner output"]]
     preview_rows = [
         [
             row["label"],
@@ -121,6 +132,10 @@ raw strings, discover groups, or reproduce pandas DataFrame behavior.
 ## HEIR Toolchain Probe
 
 {markdown_table(["Tool", "Path", "Status"], toolchain_rows)}
+
+### OpenFHE Runner Smoke Result
+
+{markdown_table(["Field", "Value"], smoke_rows)}
 
 `heir_toolchain_probe_completed` means the report measured real HEIR tool
 availability and optional sample-run timing. It still does not mean the Home

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import sys
 import time
 from pathlib import Path
@@ -70,6 +71,22 @@ def write_log(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8", errors="replace")
 
 
+def parse_expected_actual(output: str) -> dict[str, object]:
+    expected = re.search(r"Expected:\s*([-+0-9.eE]+)", output)
+    actual = re.search(r"Actual:\s*([-+0-9.eE]+)", output)
+    if not expected or not actual:
+        return {"found": False}
+    expected_value = float(expected.group(1))
+    actual_value = float(actual.group(1))
+    return {
+        "found": True,
+        "expected": expected_value,
+        "actual": actual_value,
+        "absolute_error": abs(expected_value - actual_value),
+        "passed": expected_value == actual_value,
+    }
+
+
 def main() -> None:
     args = parse_args()
     from code.heir.home_credit.prepare import prepare_target_group_tensors
@@ -126,8 +143,10 @@ def main() -> None:
             )
             write_log(run_dir / "heir_openfhe_runner.log", runner_output)
             toolchain["heir_openfhe_runner_status"] = runner_status
+            toolchain["heir_openfhe_runner_result"] = parse_expected_actual(runner_output)
         else:
             toolchain["heir_openfhe_runner_status"] = "not_configured"
+            toolchain["heir_openfhe_runner_result"] = {"found": False}
 
         summary["heir_toolchain"] = toolchain
         summary["backend_status"] = "heir_toolchain_probe_completed"
