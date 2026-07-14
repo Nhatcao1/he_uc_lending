@@ -17,9 +17,35 @@ def markdown_table(headers: list[str], rows: list[list[Any]]) -> str:
     return "\n".join(lines)
 
 
+def human_bytes(value: Any) -> str:
+    try:
+        size = float(value)
+    except (TypeError, ValueError):
+        return ""
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
+    unit = 0
+    while size >= 1024 and unit < len(units) - 1:
+        size /= 1024
+        unit += 1
+    if unit == 0:
+        return f"{int(size)} {units[unit]}"
+    return f"{size:.2f} {units[unit]}"
+
+
 def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[str, Any]]) -> None:
     timings = summary.get("timings_seconds", {})
     timing_rows = [[key, f"{float(value):.6f}"] for key, value in timings.items()]
+    artifact_sizes = summary.get("artifact_sizes_bytes", {})
+    artifact_rows = [
+        [key, human_bytes(value), value]
+        for key, value in artifact_sizes.items()
+        if value
+    ]
+    baseline_rows = [
+        ["Pandas CSV load", f"{float(timings.get('pandas_load_seconds', 0.0)):.6f}"],
+        ["Notebook-style pandas calculation", f"{float(timings.get('pandas_reference_seconds', 0.0)):.6f}"],
+        ["Normal Python baseline total", f"{float(timings.get('normal_python_baseline_seconds', 0.0)):.6f}"],
+    ]
     preview_rows = [
         [
             row["label"],
@@ -51,6 +77,14 @@ def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[
 {summary.get('pandas_reference_code', '')}
 ```
 
+## Normal Python / Pandas Baseline
+
+This section measures the same notebook-style calculation before any HEIR
+compile/evaluation step. It is the baseline for comparing HEIR-generated
+encrypted kernels against ordinary pandas execution.
+
+{markdown_table(["Baseline step", "Seconds"], baseline_rows)}
+
 ## HEIR Kernel Intent
 
 ```text
@@ -62,6 +96,14 @@ default_rate = default_count / group_count after trusted decryption
 The HEIR kernel should receive fixed-shape numeric tensors. It should not parse
 raw strings, discover groups, or reproduce pandas DataFrame behavior.
 
+## HEIR Execution Status
+
+| Field | Value |
+| --- | --- |
+| Backend status | `{summary.get('backend_status', 'prepared_only')}` |
+| External compile command used | `{bool(summary.get('heir_compile_cmd'))}` |
+| External eval command used | `{bool(summary.get('heir_eval_cmd'))}` |
+
 ## Prepared Tensors
 
 | Artifact | Path |
@@ -69,6 +111,10 @@ raw strings, discover groups, or reproduce pandas DataFrame behavior.
 | Workload spec | `{summary.get('workload_spec', '')}` |
 | Tensor manifest | `{summary.get('tensor_manifest', '')}` |
 | Pandas reference | `{summary.get('pandas_reference', '')}` |
+
+## Artifact Size Summary
+
+{markdown_table(["Artifact", "Size", "Bytes"], artifact_rows)}
 
 ## Timing Summary
 
@@ -86,4 +132,3 @@ raw strings, discover groups, or reproduce pandas DataFrame behavior.
 """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(report, encoding="utf-8")
-

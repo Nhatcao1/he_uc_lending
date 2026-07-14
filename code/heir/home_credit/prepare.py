@@ -72,9 +72,16 @@ def prepare_target_group_tensors(input_path: Path, workload: str, row_limit: int
     started = time.perf_counter()
     cfg = TARGET_GROUP_WORKLOADS[workload]
     column = str(cfg["column"])
-    frame = read_application(input_path, row_limit)
-    reference = target_group_reference(frame, workload)
 
+    load_started = time.perf_counter()
+    frame = read_application(input_path, row_limit)
+    pandas_load_seconds = time.perf_counter() - load_started
+
+    reference_started = time.perf_counter()
+    reference = target_group_reference(frame, workload)
+    pandas_reference_seconds = time.perf_counter() - reference_started
+
+    tensor_started = time.perf_counter()
     tensor_dir = output_dir / "tensors"
     target_mask = [float(value == 1) for value in frame["TARGET"].fillna(0).astype(int).tolist()]
     write_vector(tensor_dir / "target_mask.csv", target_mask)
@@ -108,6 +115,8 @@ def prepare_target_group_tensors(input_path: Path, workload: str, row_limit: int
     write_csv(manifest_path, ["name", "kind", "label", "file", "rows"], tensor_rows)
     reference_path = output_dir / "pandas_reference.csv"
     write_csv(reference_path, ["label", "count", "default_count", "default_rate"], reference)
+    tensor_materialization_seconds = time.perf_counter() - tensor_started
+    prepare_wall_seconds = time.perf_counter() - started
 
     spec = {
         "workload": workload,
@@ -121,8 +130,13 @@ def prepare_target_group_tensors(input_path: Path, workload: str, row_limit: int
         "pandas_reference_code": pandas_reference_code(column),
         "tensor_manifest": str(manifest_path),
         "pandas_reference": str(reference_path),
-        "timings_seconds": {"prepare_wall_seconds": time.perf_counter() - started},
+        "timings_seconds": {
+            "pandas_load_seconds": pandas_load_seconds,
+            "pandas_reference_seconds": pandas_reference_seconds,
+            "normal_python_baseline_seconds": pandas_load_seconds + pandas_reference_seconds,
+            "tensor_materialization_seconds": tensor_materialization_seconds,
+            "prepare_wall_seconds": prepare_wall_seconds,
+        },
     }
     (output_dir / "heir_workload_spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
     return spec
-

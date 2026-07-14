@@ -36,6 +36,30 @@ def read_reference(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(input_file))
 
 
+def path_size_bytes(path: Path) -> int:
+    if path.is_file():
+        return path.stat().st_size
+    if path.is_dir():
+        total = 0
+        for child in path.rglob("*"):
+            if child.is_file():
+                total += child.stat().st_size
+        return total
+    return 0
+
+
+def collect_artifact_sizes(run_dir: Path) -> dict[str, int]:
+    return {
+        "run_dir_total": path_size_bytes(run_dir),
+        "tensor_dir": path_size_bytes(run_dir / "tensors"),
+        "tensor_manifest": path_size_bytes(run_dir / "tensor_manifest.csv"),
+        "pandas_reference": path_size_bytes(run_dir / "pandas_reference.csv"),
+        "workload_spec": path_size_bytes(run_dir / "heir_workload_spec.json"),
+        "heir_result_json": path_size_bytes(run_dir / "heir_result.json"),
+        "compiled_dir": path_size_bytes(run_dir / "compiled"),
+    }
+
+
 def main() -> None:
     args = parse_args()
     repo = Path.cwd()
@@ -46,6 +70,8 @@ def main() -> None:
     summary = prepare_target_group_tensors(Path(args.input), args.workload, args.row_limit, run_dir)
     summary["workload_spec"] = str(run_dir / "heir_workload_spec.json")
     summary["backend_status"] = "prepared_only"
+    summary["heir_compile_cmd"] = args.heir_compile_cmd
+    summary["heir_eval_cmd"] = args.heir_eval_cmd
 
     context = {
         "run_dir": str(run_dir),
@@ -69,6 +95,7 @@ def main() -> None:
         summary["backend_status"] = "external_commands_completed"
 
     summary["timings_seconds"] = timings
+    summary["artifact_sizes_bytes"] = collect_artifact_sizes(run_dir)
     (run_dir / "benchmark_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     reference_rows = read_reference(Path(summary["pandas_reference"]))
     write_report(run_dir / "benchmark_report.md", summary, reference_rows)

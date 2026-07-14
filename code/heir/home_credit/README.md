@@ -13,6 +13,38 @@ default_count = sum(group_mask * target_mask)
 The Python wrapper prepares fixed-shape numeric tensors and a benchmark report.
 The server-side HEIR build can be plugged in with external command templates.
 
+Even in `prepare-only` mode, the report measures the normal notebook-style
+pandas baseline:
+
+```text
+pandas_load_seconds
+pandas_reference_seconds
+normal_python_baseline_seconds
+```
+
+These timings are the comparison point for later HEIR compiled/evaluated runs.
+
+Each run writes a detailed report:
+
+```text
+benchmark_runs/home_credit_heir_eda/<run-name>/benchmark_report.md
+```
+
+The report includes:
+
+```text
+case metadata
+notebook-style pandas reference code
+normal Python / pandas baseline timing
+HEIR kernel intent
+external HEIR execution status
+prepared tensor paths
+artifact size summary
+timing summary
+result preview
+raw JSON summary
+```
+
 ## Prepare Only
 
 ```bash
@@ -52,4 +84,3 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
 ```
 
 The first stable server target should be `masked_default_count`.
-
