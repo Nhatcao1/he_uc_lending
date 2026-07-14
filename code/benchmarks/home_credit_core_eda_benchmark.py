@@ -408,6 +408,12 @@ def format_seconds(value: object) -> str:
         return ""
 
 
+def format_limit(value: object) -> str:
+    if isinstance(value, int) and value == 0:
+        return "all"
+    return str(value)
+
+
 def path_size_bytes(path: Path) -> int:
     if path.is_file():
         return path.stat().st_size
@@ -530,7 +536,8 @@ def write_markdown_report(path: Path, summary: dict[str, object], reference: lis
 | Notebook section | `{summary.get('notebook_section', '')}` |
 | Title | `{summary.get('title', '')}` |
 | Input | `{summary['input']}` |
-| Rows | `{summary['row_limit']}` |
+| Requested row limit | `{format_limit(summary['row_limit'])}` |
+| Counted rows in selected notebook labels | `{summary.get('counted_rows', '')}` |
 | Group column | `{summary['selected_group']}` |
 | CKKS slots | `{summary['slots']}` |
 | Correctness | **{summary['correctness']}** |
@@ -767,6 +774,7 @@ def main() -> None:
         "workload": args.workload,
         "input": str(input_path),
         "row_limit": args.row_limit,
+        "counted_rows": sum(int(row["count"]) for row in reference),
         "slots": args.slots,
         "run_dir": str(run_dir),
         "selected_group": cfg["column"],

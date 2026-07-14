@@ -345,6 +345,12 @@ def format_seconds(value: object) -> str:
     return f"{float(value):.6f}"
 
 
+def format_limit(value: object) -> str:
+    if isinstance(value, int) and value == 0:
+        return "all"
+    return str(value)
+
+
 def markdown_table(headers: list[str], rows: list[list[object]]) -> str:
     lines = [
         "| " + " | ".join(headers) + " |",
@@ -424,8 +430,9 @@ def write_markdown_report(path: Path, summary: dict[str, object], reference: lis
 | Title | `{cfg['title']}` |
 | Source table | `previous_application.csv` |
 | Column | `{cfg['column']}` |
-| Application rows used for prep | `{summary['row_limit']}` |
-| Previous rows | `{summary['previous_row_limit']}` |
+| Application row limit used for prep | `{format_limit(summary['row_limit'])}` |
+| Previous row limit | `{format_limit(summary['previous_row_limit'])}` |
+| Counted previous rows | `{summary.get('counted_rows', '')}` |
 | CKKS slots | `{summary['slots']}` |
 | Correctness | **{summary['correctness']}** |
 
@@ -656,6 +663,7 @@ def main() -> None:
         "previous_application": str(previous_path),
         "row_limit": args.row_limit,
         "previous_row_limit": args.previous_row_limit,
+        "counted_rows": sum(int(row["count"]) for row in reference),
         "slots": args.slots,
         "run_dir": str(run_dir),
         "filtered_manifest_rows": manifest_rows,
