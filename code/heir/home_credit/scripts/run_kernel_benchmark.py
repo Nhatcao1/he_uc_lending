@@ -13,7 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from code.heir.home_credit.report import write_report
-from code.heir.home_credit.runner import run_template
+from code.heir.home_credit.runner import probe_tool, run_template
 from code.heir.home_credit.workloads import TARGET_GROUP_WORKLOADS
 
 
@@ -24,9 +24,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--row-limit", type=int, default=0, help="0 means all rows.")
     parser.add_argument("--output-root", default="benchmark_runs/home_credit_heir_eda")
     parser.add_argument("--run-name", default="")
-    parser.add_argument("--backend", default="prepare-only", choices=["prepare-only", "external"])
+    parser.add_argument("--backend", default="prepare-only", choices=["prepare-only", "external", "heir-toolchain"])
     parser.add_argument("--heir-compile-cmd", default="", help="Optional command template for HEIR compilation.")
     parser.add_argument("--heir-eval-cmd", default="", help="Optional command template for HEIR evaluation.")
+    parser.add_argument("--heir-opt", default="heir-opt", help="Path to heir-opt for heir-toolchain backend.")
+    parser.add_argument("--heir-translate", default="heir-translate", help="Path to heir-translate for heir-toolchain backend.")
+    parser.add_argument(
+        "--heir-openfhe-runner",
+        default="",
+        help="Optional generated/OpenFHE executable to run as a HEIR smoke benchmark, e.g. dot_product.",
+    )
     return parser.parse_args()
 
 
@@ -59,6 +66,10 @@ def collect_artifact_sizes(run_dir: Path) -> dict[str, int]:
     }
 
 
+def write_log(path: Path, content: str) -> None:
+    path.write_text(content, encoding="utf-8", errors="replace")
+
+
 def main() -> None:
     args = parse_args()
     from code.heir.home_credit.prepare import prepare_target_group_tensors
@@ -73,6 +84,9 @@ def main() -> None:
     summary["backend_status"] = "prepared_only"
     summary["heir_compile_cmd"] = args.heir_compile_cmd
     summary["heir_eval_cmd"] = args.heir_eval_cmd
+    summary["heir_opt"] = args.heir_opt
+    summary["heir_translate"] = args.heir_translate
+    summary["heir_openfhe_runner"] = args.heir_openfhe_runner
 
     context = {
         "run_dir": str(run_dir),
@@ -94,6 +108,29 @@ def main() -> None:
         timings["heir_eval_seconds"], eval_output = run_template(args.heir_eval_cmd, context, repo)
         (run_dir / "heir_eval.log").write_text(eval_output, encoding="utf-8")
         summary["backend_status"] = "external_commands_completed"
+    elif args.backend == "heir-toolchain":
+        toolchain = {}
+        timings["heir_opt_probe_seconds"], opt_status, opt_output = probe_tool([args.heir_opt, "--help"], repo)
+        write_log(run_dir / "heir_opt_probe.log", opt_output)
+        toolchain["heir_opt_status"] = opt_status
+
+        timings["heir_translate_probe_seconds"], translate_status, translate_output = probe_tool(
+            [args.heir_translate, "--help"], repo
+        )
+        write_log(run_dir / "heir_translate_probe.log", translate_output)
+        toolchain["heir_translate_status"] = translate_status
+
+        if args.heir_openfhe_runner:
+            timings["heir_openfhe_runner_seconds"], runner_status, runner_output = probe_tool(
+                [args.heir_openfhe_runner], repo
+            )
+            write_log(run_dir / "heir_openfhe_runner.log", runner_output)
+            toolchain["heir_openfhe_runner_status"] = runner_status
+        else:
+            toolchain["heir_openfhe_runner_status"] = "not_configured"
+
+        summary["heir_toolchain"] = toolchain
+        summary["backend_status"] = "heir_toolchain_probe_completed"
 
     summary["timings_seconds"] = timings
     summary["artifact_sizes_bytes"] = collect_artifact_sizes(run_dir)

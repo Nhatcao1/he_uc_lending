@@ -46,6 +46,20 @@ def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[
         ["Notebook-style pandas calculation", f"{float(timings.get('pandas_reference_seconds', 0.0)):.6f}"],
         ["Normal Python baseline total", f"{float(timings.get('normal_python_baseline_seconds', 0.0)):.6f}"],
     ]
+    toolchain = summary.get("heir_toolchain", {})
+    toolchain_rows = [
+        ["heir-opt", summary.get("heir_opt", ""), toolchain.get("heir_opt_status", "") if isinstance(toolchain, dict) else ""],
+        [
+            "heir-translate",
+            summary.get("heir_translate", ""),
+            toolchain.get("heir_translate_status", "") if isinstance(toolchain, dict) else "",
+        ],
+        [
+            "OpenFHE runner",
+            summary.get("heir_openfhe_runner", ""),
+            toolchain.get("heir_openfhe_runner_status", "") if isinstance(toolchain, dict) else "",
+        ],
+    ]
     preview_rows = [
         [
             row["label"],
@@ -103,6 +117,16 @@ raw strings, discover groups, or reproduce pandas DataFrame behavior.
 | Backend status | `{summary.get('backend_status', 'prepared_only')}` |
 | External compile command used | `{bool(summary.get('heir_compile_cmd'))}` |
 | External eval command used | `{bool(summary.get('heir_eval_cmd'))}` |
+
+## HEIR Toolchain Probe
+
+{markdown_table(["Tool", "Path", "Status"], toolchain_rows)}
+
+`heir_toolchain_probe_completed` means the report measured real HEIR tool
+availability and optional sample-run timing. It still does not mean the Home
+Credit `masked_default_count` kernel has been compiled and evaluated under HE.
+That requires a generated runner that accepts this benchmark's tensor manifest
+and writes `heir_result.json`.
 
 ## Prepared Tensors
 

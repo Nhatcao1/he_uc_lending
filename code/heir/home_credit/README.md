@@ -84,3 +84,25 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
 ```
 
 The first stable server target should be `masked_default_count`.
+
+## HEIR Toolchain Probe
+
+Use this before the real Home Credit generated runner exists. It verifies and
+times the installed HEIR tools and can run an existing OpenFHE sample executable
+such as `dot_product`.
+
+```bash
+python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
+  --input data/home_credit/application_train.csv \
+  --workload app_target_by_education_type \
+  --row-limit 0 \
+  --output-root benchmark_runs/home_credit_heir_eda \
+  --run-name education_heir_toolchain_probe_all \
+  --backend heir-toolchain \
+  --heir-opt /root/heir-work/.venv/bin/heir-opt \
+  --heir-translate /root/heir-work/.venv/bin/heir-translate \
+  --heir-openfhe-runner /root/heir-work/build-heir-openfhe/dot_product
+```
+
+This is a HEIR/OpenFHE toolchain smoke benchmark, not yet the Home Credit
+encrypted EDA kernel. The report will say that explicitly.
