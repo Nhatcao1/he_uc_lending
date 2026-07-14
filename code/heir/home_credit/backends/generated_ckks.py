@@ -492,6 +492,9 @@ def run_generated_ckks_backend(
     heir_translate: str,
     heir_opt_pipeline: str,
 ) -> tuple[dict[str, float], dict[str, Any], str]:
+    # Commands run from the benchmark directory; use absolute paths so CMake
+    # does not resolve a relative run path a second time.
+    run_dir = run_dir.resolve()
     work_dir = run_dir / "heir_generated_ckks"
     build_dir = work_dir / "build"
     if work_dir.exists():
