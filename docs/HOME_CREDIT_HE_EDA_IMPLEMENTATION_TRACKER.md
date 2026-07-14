@@ -14,7 +14,10 @@ There are now two separate scopes:
 | Scope | Goal | What we allow |
 | --- | --- | --- |
 | Benchmark / notebook replication | Prove the notebook calculation can be reproduced with HE and compare against Python | Trusted benchmark code may split rows into the needed group/vector before encryption |
-| Product architecture | Decide how a real data source, HE server, and analysis side exchange encrypted data | Source/client boundaries, metadata policy, key handling, PSI/FHEW/CKKS design |
+| Product architecture | Decide how a real data source, HE server, and analysis side exchange encrypted data | Source/client boundaries, metadata policy, key handling, PSI, CKKS design |
+
+Scheme rule: active Home Credit EDA work is CKKS only. Older non-CKKS notes in
+this file are archived experiment notes, not current implementation direction.
 
 Current focus is the first scope. For each notebook EDA, we care about the
 encrypted calculation itself: what vector is encrypted, what OpenFHE operation
@@ -77,11 +80,9 @@ benchmark_runs/home_credit_core_eda/<run-name>/
 | EDA pattern | Client encrypted inputs | HE server operations | Decrypted post-process |
 | --- | --- | --- | --- |
 | Count rows in a category | one 0/1 mask per category | `EvalSum(mask)` and `EvalMult(count, plaintext(100 / total_rows))` | display decrypted count and HE-computed percent |
-| Count rows in a category, FHEW code path | encrypted category-code bits and plaintext label-code metadata | encrypted equality against each label code, encrypted binary count accumulator | count and percent after decrypt |
 | Default rate by category | category mask and `TARGET=1` mask | `EvalSum(mask)`, `EvalSum(EvalMultAndRelinearize(mask, target))` | `default_rate = default_count / count` |
 | Numeric total / mean | numeric value vector and valid mask | `EvalSum(value * valid_mask)`, `EvalSum(valid_mask)` | `mean = sum / count` |
-| Histogram / distribution table, CKKS fast path | one 0/1 mask per numeric bin, optional value vector | `EvalSum(bin_mask)`, optional `EvalSum(bin_mask * value)` | `percent`, optional `mean_per_bin` |
-| Histogram / distribution table, FHEW comparison path | encrypted integer bits for numeric value, encrypted valid bit, plaintext min/max/bin count | encrypted comparisons against plaintext bin ranges, encrypted binary count accumulator | bin count and percent after decrypt |
+| Histogram / distribution table | one 0/1 mask per numeric bin, optional value vector | `EvalSum(bin_mask)`, optional `EvalSum(bin_mask * value)` | `percent`, optional `mean_per_bin` |
 | Correlation support | selected numeric vectors, valid masks | sums of `x`, `y`, `xy`, `x^2`, `y^2` | client computes correlation formula |
 
 ## Implemented And Benchmarking Now
@@ -126,24 +127,14 @@ decryption.
 
 | Notebook section | Original plot | Client preparation | HE server calculation | Report output | Status |
 | --- | --- | --- | --- | --- | --- |
-| 5.1 `AMT_CREDIT` | distribution plot | FHEW path: encrypt amount integer bits and valid bits only; source does not prepare bin masks | HE server compares encrypted values with plaintext bin ranges and accumulates encrypted count bits | bin, count, percent | experimental FHEW implementation |
-| 5.2 `AMT_INCOME_TOTAL` | distribution plot | same as above, with income min/max metadata | same as above | same as above | planned after AMT_CREDIT |
-| 5.3 `AMT_GOODS_PRICE` | distribution plot | same as above, with goods-price min/max metadata | same as above | same as above | planned after AMT_CREDIT |
+| 5.1 `AMT_CREDIT` | distribution plot | create CKKS numeric vector and/or CKKS bin masks | `EvalSum(value)`, `EvalSum(valid_mask)`, `EvalSum(bin_mask)` | sum, count, mean, bin count, percent | active CKKS path |
+| 5.2 `AMT_INCOME_TOTAL` | distribution plot | same as above, with income metadata | same as above | same as above | CKKS path |
+| 5.3 `AMT_GOODS_PRICE` | distribution plot | same as above, with goods-price metadata | same as above | same as above | CKKS path |
 
-Important design choice: there are now two numeric histogram paths.
+Important design choice: numeric histogram work now follows CKKS. Source/trusted
+prep creates numeric vectors and bin masks; HE computes encrypted sums.
 
-- CKKS fast path: source prepares bin masks before encryption. Fast, but
-  source-side mask preparation is heavy.
-- FHEW comparison path: source sends encrypted integer bits and valid bits only.
-  Analyzer/HE side provides plaintext min/max/bin count metadata, and the HE
-  server computes encrypted bin membership and encrypted count bits. This is
-  more aligned with a "black box source" model, but it is much slower and should
-  start with small row limits.
-
-Current FHEW limitation: the experimental path counts rows per bin. It does not
-yet compute encrypted `sum(amount)` or `mean(amount)` per bin.
-
-Experimental binaries:
+Archived non-CKKS experiment notes:
 
 ```text
 build/encrypt_home_credit_fhew_amt
@@ -169,7 +160,7 @@ python3 code/benchmarks/home_credit_fhew_amt_bins_benchmark.py \
   --run-name fhew_amt_credit_5_rows
 ```
 
-Minimal AMT_CREDIT FHEW flow:
+Archived AMT_CREDIT non-CKKS flow:
 
 ```bash
 ./build/encrypt_home_credit_fhew_amt \
@@ -227,7 +218,7 @@ Recommended next clean benchmark: implement workload-specific count-only
 benchmarks for 5.4-5.13 after reducing bundle size. They should not require
 `eval_mult_keys` unless the code path still uses masked numeric sums.
 
-Experimental 5.4 FHEW category-code benchmark:
+Archived 5.4 non-CKKS category-code benchmark:
 
 ```text
 code/benchmarks/home_credit_fhew_category_count_benchmark.py

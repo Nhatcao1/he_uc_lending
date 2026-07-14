@@ -42,11 +42,20 @@ raw Home Credit table in trusted benchmark environment
 -> benchmark report compares Python vs HE, with timing and artifact size
 ```
 
+Scheme rule:
+
+```text
+Home Credit EDA scheme: CKKS
+All new Home Credit EDA benchmark, report, and implementation work follows CKKS.
+Any non-CKKS code path is legacy/toolchain smoke only and must not drive the
+Home Credit EDA plan.
+```
+
 This means we can test one group at a time, or pass separate prepared vectors
 such as `Family`, `Unaccompanied`, `Working`, and `Pensioner`, instead of
 requiring the HE server to discover those groups from raw strings. Product
-questions such as source metadata, key management, PSI, and FHEW category
-discovery remain important, but they are not blocking the benchmark phase.
+questions such as source metadata, key management, PSI, and category discovery
+are outside the active CKKS EDA implementation path.
 
 Do not spend new effort on web UX until this tracker says otherwise.
 
@@ -263,8 +272,9 @@ must match decrypted HE count/default_count within CKKS tolerance.
   prepares group masks; HE server sums encrypted masks.
 - HE server does not parse raw CSV, normalize strings, choose top-K categories,
   or handle null logic from raw values.
-- CKKS counts are approximate but acceptable for prototype aggregate analytics;
-  BFV/BGV can be evaluated later for exact integer-count workloads.
+- CKKS is the only active Home Credit EDA scheme. Counts are approximate under
+  CKKS but acceptable for prototype reporting when checked against tolerance.
+- Non-CKKS paths are paused unless explicitly reopened as separate experiments.
 - Previous application EDA is the first place package size becomes painful.
   Treat it as a separate performance track from application_train-only EDA.
 - The current web flow can still submit and view jobs, but it is not the focus

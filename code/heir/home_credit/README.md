@@ -3,6 +3,15 @@
 This folder is a separate HEIR-oriented lane for Home Credit encrypted EDA.
 It does not replace the current handwritten OpenFHE benchmark yet.
 
+Scheme rule for Home Credit EDA:
+
+```text
+Active target scheme: CKKS
+```
+
+Any non-CKKS HEIR sample in this folder is a toolchain smoke/bridge only. It
+must not be used as the product-facing Home Credit EDA scheme.
+
 The first target is notebook section `5.14.x`:
 
 ```text
@@ -107,64 +116,29 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
 This is a HEIR/OpenFHE toolchain smoke benchmark, not yet the Home Credit
 encrypted EDA kernel. The report will say that explicitly.
 
-## Real HEIR/OpenFHE Dot-Product Backend
+## Temporary HEIR/OpenFHE Dot-Product Bridge
 
-The first real Home Credit HEIR backend reuses the generated `dot_product`
-kernel:
+Archived status: the current generated `dot_product` sample proves the
+HEIR/OpenFHE toolchain can emit and build OpenFHE code, but it is not an active
+Home Credit EDA benchmark path because it is not CKKS.
+
+The target CKKS kernel remains:
 
 ```text
 dot_product(mask, target) = sum(mask * target)
 dot_product(mask, ones)   = sum(mask)
 ```
 
-The runner chunks tensors into 8-row blocks because the synced sample was
-generated from `tensor<8xi16>`.
-
-Small test first:
-
-```bash
-python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
-  --input data/home_credit/application_train.csv \
-  --workload app_target_by_education_type \
-  --row-limit 1000 \
-  --output-root benchmark_runs/home_credit_heir_eda \
-  --run-name education_heir_openfhe_dot_1k \
-  --backend heir-openfhe-dot \
-  --heir-generated-dir /root/heir-work \
-  --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE \
-  --heir-vector-size 8 \
-  --heir-scheme BGV
-```
-
-All rows:
-
-```bash
-python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
-  --input data/home_credit/application_train.csv \
-  --workload app_target_by_education_type \
-  --row-limit 0 \
-  --output-root benchmark_runs/home_credit_heir_eda \
-  --run-name education_heir_openfhe_dot_all \
-  --backend heir-openfhe-dot \
-  --heir-generated-dir /root/heir-work \
-  --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE \
-  --heir-vector-size 8 \
-  --heir-scheme BGV
-```
-
-This is real HEIR-generated OpenFHE computation, but still an initial adapter:
-it reuses the 8-slot generated sample kernel rather than compiling a new larger
-Home Credit-specific kernel.
-
-For an 8192-slot generated kernel, first regenerate `/root/heir-work/heir_output.cpp`
-and `/root/heir-work/heir_output.h`, or pass the HEIR lowering pipeline directly
-with `--heir-opt-pipeline`. The benchmark writes the source MLIR here:
+For an active 8192-slot CKKS generated kernel, regenerate
+`/root/heir-work/heir_output.cpp` and `/root/heir-work/heir_output.h`, or pass
+the HEIR lowering pipeline directly with `--heir-opt-pipeline`. The benchmark
+writes the source MLIR here:
 
 ```text
 benchmark_runs/home_credit_heir_eda/<run-name>/heir_openfhe_dot/home_credit_dot_product_8192.mlir
 ```
 
-If the pipeline is known, run:
+Command shape once CKKS generation is available:
 
 ```bash
 python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
@@ -179,8 +153,8 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
   --heir-generated-dir /root/heir-work \
   --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE \
   --heir-vector-size 8192 \
-  --heir-scheme BGV \
-  --heir-opt-pipeline '<PASTE_HEIR_PIPELINE_HERE>'
+  --heir-scheme CKKS \
+  --heir-opt-pipeline '<PASTE_HEIR_CKKS_PIPELINE_HERE>'
 ```
 
 The runner intentionally fails if `--heir-vector-size` does not match the
