@@ -209,7 +209,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--build-dir", default="build")
     parser.add_argument("--output-root", default="benchmark_runs/home_credit_core_eda")
     parser.add_argument("--run-name", default="", help="Optional run directory name.")
-    parser.add_argument("--tolerance", type=float, default=1e-3)
+    parser.add_argument("--tolerance", type=float, default=1e-4)
     parser.add_argument("--keep-existing", action="store_true", help="Do not delete an existing run directory.")
     return parser.parse_args()
 

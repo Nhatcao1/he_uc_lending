@@ -76,7 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--build-dir", default="build")
     parser.add_argument("--output-root", default="benchmark_runs/home_credit_previous_category")
     parser.add_argument("--run-name", default="")
-    parser.add_argument("--tolerance", type=float, default=1e-3)
+    parser.add_argument("--tolerance", type=float, default=1e-4)
     parser.add_argument("--keep-existing", action="store_true")
     parser.add_argument(
         "--allow-server-percent",
