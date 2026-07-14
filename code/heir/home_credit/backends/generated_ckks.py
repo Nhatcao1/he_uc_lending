@@ -303,7 +303,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(OpenFHE CONFIG REQUIRED)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenFHE_CXX_FLAGS}")
+# OpenFHE development builds can export -Werror. HEIR-generated source may
+# legitimately trigger compiler-version-specific warnings (for example an
+# int/unsigned loop comparison); retain warnings but do not make them fatal in
+# this consumer benchmark build.
+set(HEIR_OPENFHE_CXX_FLAGS "${OpenFHE_CXX_FLAGS}")
+string(REPLACE "-Werror" "" HEIR_OPENFHE_CXX_FLAGS "${HEIR_OPENFHE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${HEIR_OPENFHE_CXX_FLAGS}")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenFHE_EXE_LINKER_FLAGS}")
 
 add_executable(
