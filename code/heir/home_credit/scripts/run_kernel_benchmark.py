@@ -12,7 +12,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
-from code.heir.home_credit.prepare import prepare_target_group_tensors
 from code.heir.home_credit.report import write_report
 from code.heir.home_credit.runner import run_template
 from code.heir.home_credit.workloads import TARGET_GROUP_WORKLOADS
@@ -62,6 +61,8 @@ def collect_artifact_sizes(run_dir: Path) -> dict[str, int]:
 
 def main() -> None:
     args = parse_args()
+    from code.heir.home_credit.prepare import prepare_target_group_tensors
+
     repo = Path.cwd()
     run_name = args.run_name or f"{args.workload}_{args.row_limit or 'all'}_{int(time.time())}"
     run_dir = Path(args.output_root) / run_name

@@ -8,7 +8,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from code.heir.home_credit.workloads import TARGET_GROUP_WORKLOADS
@@ -38,8 +37,8 @@ def target_group_reference(frame: pd.DataFrame, workload: str) -> list[dict[str,
     rows = []
     for label in labels:
         target_for_label = frame["TARGET"][frame[column] == label]
-        default_count = int(np.sum(target_for_label == 1))
-        repaid_count = int(np.sum(target_for_label == 0))
+        default_count = int((target_for_label == 1).sum())
+        repaid_count = int((target_for_label == 0).sum())
         count = default_count + repaid_count
         rows.append(
             {
