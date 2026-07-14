@@ -533,6 +533,70 @@ corr = (n * sum_xy - sum_x * sum_y)
     path.write_text(report, encoding="utf-8")
 
 
+def write_failure_markdown_report(path: Path, summary: dict[str, object]) -> None:
+    timings = summary.get("timings_seconds", {})
+    assert isinstance(timings, dict)
+    artifact_sizes = summary.get("artifact_sizes_bytes", {})
+    assert isinstance(artifact_sizes, dict)
+    artifacts = summary.get("artifacts", {})
+    assert isinstance(artifacts, dict)
+
+    timing_rows = [[key, format_seconds(value)] for key, value in sorted(timings.items())]
+    size_rows = []
+    for key, value in sorted(artifact_sizes.items()):
+        size_rows.append([key, human_bytes(value), value])
+
+    report = f"""# Home Credit HE Correlation Benchmark Report
+
+## Case
+
+| Field | Value |
+| --- | --- |
+| Workload | `selected_correlation_stats` |
+| Input | `{summary.get('input', '')}` |
+| Rows | `{summary.get('row_limit', '')}` |
+| Pair preset | `{summary.get('pair_preset', '')}` |
+| Pairs | `{summary.get('pairs', '')}` |
+| CKKS slots | `{summary.get('slots', '')}` |
+| Correctness | **failed** |
+| Failure stage | `{summary.get('failure_stage', '')}` |
+
+## Failure
+
+```text
+{summary.get('error', '')}
+```
+
+This report is still useful for performance review: artifacts and timings up to
+the failure point are preserved. A common failure for large raw amount
+correlations is CKKS decode failure from approximation error after multiplying
+large values and summing many rows. The usual fix is scaling amount features
+before encryption, because Pearson correlation is scale invariant.
+
+## Timing Summary
+
+{markdown_table(["Metric", "Seconds"], timing_rows)}
+
+## Artifact Size Summary
+
+{markdown_table(["Artifact", "Size", "Bytes"], size_rows)}
+
+## Artifacts
+
+| Artifact | Path |
+| --- | --- |
+| JSON summary | `{path.parent / 'benchmark_summary.json'}` |
+| Plaintext reference | `{artifacts.get('plaintext_reference', '')}` |
+| Decrypted raw aggregate CSV | `{artifacts.get('decrypted_raw_csv', '')}` |
+| Decrypted report CSV | `{artifacts.get('decrypted_report_csv', '')}` |
+| Markdown report | `{path}` |
+| Prepared vectors | `{artifacts.get('prepared_dir', '')}` |
+| Encrypted bundle | `{artifacts.get('encrypted_dir', '')}` |
+| HE server output | `{artifacts.get('server_output_dir', '')}` |
+"""
+    path.write_text(report, encoding="utf-8")
+
+
 def main() -> None:
     args = parse_args()
     repo = Path.cwd()
@@ -558,127 +622,167 @@ def main() -> None:
     empty_category_config.write_text('{"categorical_columns":{}}\n', encoding="utf-8")
 
     timings: dict[str, float] = {}
-    reference, timings["python_reference_seconds"] = plaintext_reference(input_path, args.row_limit, pairs)
-    write_reference(reference_csv, reference)
+    reference: list[dict[str, float | str]] = []
+    manifest_rows = 0
+    stage = "python_reference"
+    try:
+        reference, timings["python_reference_seconds"] = plaintext_reference(input_path, args.row_limit, pairs)
+        write_reference(reference_csv, reference)
 
-    prepare_command = [
-        "python3",
-        "code/client/home_credit/prepare_home_credit_basic_eda.py",
-        "--input",
-        str(input_path),
-        "--output-dir",
-        str(prepared_dir),
-        "--row-limit",
-        str(args.row_limit),
-        "--category-config",
-        str(empty_category_config),
-        "--amount-columns",
-        "",
-        "--numeric-columns",
-        "",
-        "--missing-columns",
-        "",
-        "--histogram-columns",
-        "",
-        "--correlation-pairs",
-        pair_arg,
-    ]
-    timings["prepare_wall_seconds"], prepare_output = run_command(prepare_command, repo)
+        stage = "prepare"
+        prepare_command = [
+            "python3",
+            "code/client/home_credit/prepare_home_credit_basic_eda.py",
+            "--input",
+            str(input_path),
+            "--output-dir",
+            str(prepared_dir),
+            "--row-limit",
+            str(args.row_limit),
+            "--category-config",
+            str(empty_category_config),
+            "--amount-columns",
+            "",
+            "--numeric-columns",
+            "",
+            "--missing-columns",
+            "",
+            "--histogram-columns",
+            "",
+            "--correlation-pairs",
+            pair_arg,
+        ]
+        timings["prepare_wall_seconds"], prepare_output = run_command(prepare_command, repo)
 
-    encrypt_command = [
-        str(Path(args.build_dir) / "encrypt_home_credit_payload"),
-        "--prepared-dir",
-        str(prepared_dir),
-        "--server-output-dir",
-        str(encrypted_dir),
-        "--client-key-dir",
-        str(key_dir),
-        "--slots",
-        str(args.slots),
-    ]
-    timings["encrypt_wall_seconds"], encrypt_output = run_command(encrypt_command, repo)
-    timings.update(parse_timing_lines(encrypt_output, "encrypt"))
+        stage = "encrypt"
+        encrypt_command = [
+            str(Path(args.build_dir) / "encrypt_home_credit_payload"),
+            "--prepared-dir",
+            str(prepared_dir),
+            "--server-output-dir",
+            str(encrypted_dir),
+            "--client-key-dir",
+            str(key_dir),
+            "--slots",
+            str(args.slots),
+        ]
+        timings["encrypt_wall_seconds"], encrypt_output = run_command(encrypt_command, repo)
+        timings.update(parse_timing_lines(encrypt_output, "encrypt"))
 
-    manifest_rows = filter_manifest_by_analysis(
-        encrypted_dir / "aggregate_manifest.csv",
-        filtered_manifest,
-        "selected_correlation_stats",
-    )
+        stage = "filter_manifest"
+        manifest_rows = filter_manifest_by_analysis(
+            encrypted_dir / "aggregate_manifest.csv",
+            filtered_manifest,
+            "selected_correlation_stats",
+        )
 
-    server_command = [
-        str(Path(args.build_dir) / "server_home_credit_aggregate"),
-        "--context",
-        str(encrypted_dir / "crypto_context.bin"),
-        "--eval-sum-keys",
-        str(encrypted_dir / "eval_sum_keys.bin"),
-        "--eval-mult-keys",
-        str(encrypted_dir / "eval_mult_keys.bin"),
-        "--manifest",
-        str(filtered_manifest),
-        "--input-dir",
-        str(encrypted_dir / "vectors"),
-        "--output-dir",
-        str(server_dir),
-        "--analysis-filter",
-        "selected_correlation_stats",
-    ]
-    timings["he_server_wall_seconds"], server_output = run_command(server_command, repo)
-    timings.update(parse_timing_lines(server_output, "he_server"))
+        stage = "he_server"
+        server_command = [
+            str(Path(args.build_dir) / "server_home_credit_aggregate"),
+            "--context",
+            str(encrypted_dir / "crypto_context.bin"),
+            "--eval-sum-keys",
+            str(encrypted_dir / "eval_sum_keys.bin"),
+            "--eval-mult-keys",
+            str(encrypted_dir / "eval_mult_keys.bin"),
+            "--manifest",
+            str(filtered_manifest),
+            "--input-dir",
+            str(encrypted_dir / "vectors"),
+            "--output-dir",
+            str(server_dir),
+            "--analysis-filter",
+            "selected_correlation_stats",
+        ]
+        timings["he_server_wall_seconds"], server_output = run_command(server_command, repo)
+        timings.update(parse_timing_lines(server_output, "he_server"))
 
-    decrypt_command = [
-        str(Path(args.build_dir) / "decrypt_ckks_results"),
-        "--context",
-        str(encrypted_dir / "crypto_context.bin"),
-        "--secret-key",
-        str(key_dir / "secret_key.bin"),
-        "--manifest",
-        str(server_dir / "aggregate_summary_manifest.csv"),
-        "--input-dir",
-        str(server_dir),
-        "--output-csv",
-        str(decrypted_raw_csv),
-        "--manifest-type",
-        "aggregate",
-    ]
-    timings["decrypt_wall_seconds"], decrypt_output = run_command(decrypt_command, repo)
-    timings.update(parse_timing_lines(decrypt_output, "decrypt"))
+        stage = "decrypt"
+        decrypt_command = [
+            str(Path(args.build_dir) / "decrypt_ckks_results"),
+            "--context",
+            str(encrypted_dir / "crypto_context.bin"),
+            "--secret-key",
+            str(key_dir / "secret_key.bin"),
+            "--manifest",
+            str(server_dir / "aggregate_summary_manifest.csv"),
+            "--input-dir",
+            str(server_dir),
+            "--output-csv",
+            str(decrypted_raw_csv),
+            "--manifest-type",
+            "aggregate",
+        ]
+        timings["decrypt_wall_seconds"], decrypt_output = run_command(decrypt_command, repo)
+        timings.update(parse_timing_lines(decrypt_output, "decrypt"))
 
-    decrypted = read_decrypted_stats(decrypted_raw_csv)
-    write_decrypted_report_csv(decrypted_report_csv, reference, decrypted)
-    failures = compare_results(reference, decrypted, args.tolerance)
-    passed = not failures
+        stage = "compare"
+        decrypted = read_decrypted_stats(decrypted_raw_csv)
+        write_decrypted_report_csv(decrypted_report_csv, reference, decrypted)
+        failures = compare_results(reference, decrypted, args.tolerance)
+        passed = not failures
 
-    summary = {
-        "workload": "selected_correlation_stats",
-        "input": str(input_path),
-        "row_limit": args.row_limit,
-        "slots": args.slots,
-        "pair_preset": args.pair_preset if not args.pairs.strip() else "custom",
-        "pairs": pair_arg,
-        "run_dir": str(run_dir),
-        "reference_rows": len(reference),
-        "filtered_manifest_rows": manifest_rows,
-        "correctness": "passed" if passed else "failed",
-        "failures": failures[:20],
-        "timings_seconds": timings,
-        "artifact_sizes_bytes": collect_artifact_sizes(run_dir, prepared_dir, encrypted_dir, key_dir, server_dir),
-        "artifacts": {
-            "plaintext_reference": str(reference_csv),
-            "decrypted_raw_csv": str(decrypted_raw_csv),
-            "decrypted_report_csv": str(decrypted_report_csv),
-            "markdown_report": str(markdown_report),
-            "prepared_dir": str(prepared_dir),
-            "encrypted_dir": str(encrypted_dir),
-            "server_output_dir": str(server_dir),
-        },
-        "decrypted_stats": decrypted,
-    }
-    (run_dir / "benchmark_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    write_markdown_report(markdown_report, summary, reference)
+        summary = {
+            "workload": "selected_correlation_stats",
+            "input": str(input_path),
+            "row_limit": args.row_limit,
+            "slots": args.slots,
+            "pair_preset": args.pair_preset if not args.pairs.strip() else "custom",
+            "pairs": pair_arg,
+            "run_dir": str(run_dir),
+            "reference_rows": len(reference),
+            "filtered_manifest_rows": manifest_rows,
+            "correctness": "passed" if passed else "failed",
+            "failures": failures[:20],
+            "timings_seconds": timings,
+            "artifact_sizes_bytes": collect_artifact_sizes(run_dir, prepared_dir, encrypted_dir, key_dir, server_dir),
+            "artifacts": {
+                "plaintext_reference": str(reference_csv),
+                "decrypted_raw_csv": str(decrypted_raw_csv),
+                "decrypted_report_csv": str(decrypted_report_csv),
+                "markdown_report": str(markdown_report),
+                "prepared_dir": str(prepared_dir),
+                "encrypted_dir": str(encrypted_dir),
+                "server_output_dir": str(server_dir),
+            },
+            "decrypted_stats": decrypted,
+        }
+        (run_dir / "benchmark_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        write_markdown_report(markdown_report, summary, reference)
 
-    print(json.dumps(summary, indent=2))
-    if not passed:
-        raise SystemExit(1)
+        print(json.dumps(summary, indent=2))
+        if not passed:
+            raise SystemExit(1)
+    except Exception as exc:
+        summary = {
+            "workload": "selected_correlation_stats",
+            "input": str(input_path),
+            "row_limit": args.row_limit,
+            "slots": args.slots,
+            "pair_preset": args.pair_preset if not args.pairs.strip() else "custom",
+            "pairs": pair_arg,
+            "run_dir": str(run_dir),
+            "reference_rows": len(reference),
+            "filtered_manifest_rows": manifest_rows,
+            "correctness": "failed",
+            "failure_stage": stage,
+            "error": str(exc),
+            "timings_seconds": timings,
+            "artifact_sizes_bytes": collect_artifact_sizes(run_dir, prepared_dir, encrypted_dir, key_dir, server_dir),
+            "artifacts": {
+                "plaintext_reference": str(reference_csv),
+                "decrypted_raw_csv": str(decrypted_raw_csv),
+                "decrypted_report_csv": str(decrypted_report_csv),
+                "markdown_report": str(markdown_report),
+                "prepared_dir": str(prepared_dir),
+                "encrypted_dir": str(encrypted_dir),
+                "server_output_dir": str(server_dir),
+            },
+        }
+        (run_dir / "benchmark_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+        write_failure_markdown_report(markdown_report, summary)
+        print(json.dumps(summary, indent=2))
+        raise
 
 
 if __name__ == "__main__":
