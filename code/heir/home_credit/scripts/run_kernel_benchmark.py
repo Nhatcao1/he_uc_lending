@@ -28,7 +28,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--backend",
         default="prepare-only",
-        choices=["prepare-only", "external", "heir-toolchain", "heir-ckks-openfhe", "heir-openfhe-dot"],
+        choices=[
+            "prepare-only",
+            "external",
+            "heir-toolchain",
+            "heir-generated-ckks",
+            "heir-ckks-openfhe",
+            "heir-openfhe-dot",
+        ],
     )
     parser.add_argument("--heir-compile-cmd", default="", help="Optional command template for HEIR compilation.")
     parser.add_argument("--heir-eval-cmd", default="", help="Optional command template for HEIR evaluation.")
@@ -42,7 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--heir-generated-dir",
         default="/root/heir-work",
-        help="Directory containing HEIR-generated heir_output.cpp/h for heir-openfhe-dot.",
+        help="Directory containing HEIR-generated CKKS heir_output.cpp/h.",
     )
     parser.add_argument(
         "--openfhe-dir",
@@ -52,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--heir-vector-size",
         type=int,
-        default=8,
+        default=8192,
         help="Static vector size expected by HEIR-generated dot_product sources.",
     )
     parser.add_argument(
@@ -132,6 +139,7 @@ def collect_artifact_sizes(run_dir: Path) -> dict[str, int]:
         "workload_spec": path_size_bytes(run_dir / "heir_workload_spec.json"),
         "heir_result_json": path_size_bytes(run_dir / "heir_result.json"),
         "compiled_dir": path_size_bytes(run_dir / "compiled"),
+        "heir_generated_ckks_dir": path_size_bytes(run_dir / "heir_generated_ckks"),
         "heir_openfhe_dot_dir": path_size_bytes(run_dir / "heir_openfhe_dot"),
         "ckks_prepared_dir": path_size_bytes(run_dir / "ckks_prepared"),
         "ckks_encrypted_dir": path_size_bytes(run_dir / "ckks_encrypted"),
@@ -234,6 +242,24 @@ def main() -> None:
 
         summary["heir_toolchain"] = toolchain
         summary["backend_status"] = "heir_toolchain_probe_completed"
+    elif args.backend == "heir-generated-ckks":
+        from code.heir.home_credit.backends.generated_ckks import run_generated_ckks_backend
+
+        backend_timings, heir_result, backend_log = run_generated_ckks_backend(
+            run_dir=run_dir,
+            generated_dir=Path(args.heir_generated_dir),
+            openfhe_dir=args.openfhe_dir,
+            vector_size=args.heir_vector_size,
+            heir_opt=args.heir_opt,
+            heir_translate=args.heir_translate,
+            heir_opt_pipeline=args.heir_opt_pipeline,
+        )
+        timings.update(backend_timings)
+        write_log(run_dir / "heir_generated_ckks.log", backend_log)
+        reference_rows_for_compare = read_reference(Path(summary["pandas_reference"]))
+        summary["heir_result"] = heir_result
+        summary["heir_correctness"] = compare_heir_result(reference_rows_for_compare, heir_result)
+        summary["backend_status"] = "heir_generated_ckks_completed"
     elif args.backend == "heir-ckks-openfhe":
         from code.heir.home_credit.backends.ckks_openfhe import run_ckks_openfhe_backend
 
@@ -255,7 +281,7 @@ def main() -> None:
     elif args.backend == "heir-openfhe-dot":
         raise SystemExit(
             "heir-openfhe-dot is archived because it is not CKKS. "
-            "Use --backend heir-ckks-openfhe for active Home Credit EDA."
+            "Use --backend heir-generated-ckks for full HEIR proof."
         )
 
     summary["timings_seconds"] = timings

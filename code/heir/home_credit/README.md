@@ -94,50 +94,58 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
 
 The first stable server target should be `masked_default_count`.
 
-## Active CKKS HE Benchmark
+## Active Full-HEIR CKKS Benchmark
 
-Use this path for current Home Credit HEIR-lane benchmarking. It prepares HEIR
-fixed-shape tensors, then executes the same `masked_default_count` kernel with
-the existing CKKS OpenFHE binaries:
+Use this path for proof that HEIR generated and executed the encrypted kernel.
+The benchmark refuses to pass unless `heir_output.cpp/h` are HEIR-generated,
+CKKS-only, compiled into the runner, and the runner calls the generated
+`dot_product(...)` function.
 
 ```text
 HEIR tensor manifest
--> CKKS OpenFHE encrypt
--> CKKS OpenFHE aggregate server
--> CKKS decrypt
+-> HEIR-generated CKKS OpenFHE source
+-> CMake builds generated source plus runner
+-> runner calls generated dot_product(mask, target)
 -> compare against notebook-style pandas reference
--> write benchmark_report.md
+-> report generated source hashes and correctness
 ```
 
-Build required binaries:
-
-```bash
-cmake -S . -B build -DOpenFHE_DIR=$HOME/openfhe-development/build
-cmake --build build --target \
-  encrypt_home_credit_payload \
-  server_home_credit_aggregate \
-  decrypt_ckks_results
-```
-
-Run one small CKKS HE benchmark:
+Run with pre-generated CKKS `heir_output.cpp/h` in `/root/heir-work`:
 
 ```bash
 python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
   --input data/home_credit/application_train.csv \
   --workload app_target_by_education_type \
-  --row-limit 10000 \
+  --row-limit 1000 \
   --output-root benchmark_runs/home_credit_heir_eda \
-  --run-name education_heir_ckks_openfhe_10k \
-  --backend heir-ckks-openfhe \
-  --build-dir build \
-  --slots 8192
+  --run-name education_heir_generated_ckks_1k \
+  --backend heir-generated-ckks \
+  --heir-generated-dir /root/heir-work \
+  --openfhe-dir /root/openfhe-development/build \
+  --heir-vector-size 8192
 ```
 
-The report is written to:
+Or regenerate source in the benchmark run when the HEIR CKKS lowering pipeline
+is known:
 
-```text
-benchmark_runs/home_credit_heir_eda/education_heir_ckks_openfhe_10k/benchmark_report.md
+```bash
+python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
+  --input data/home_credit/application_train.csv \
+  --workload app_target_by_education_type \
+  --row-limit 1000 \
+  --output-root benchmark_runs/home_credit_heir_eda \
+  --run-name education_heir_generated_ckks_1k_regen \
+  --backend heir-generated-ckks \
+  --heir-opt /root/heir-work/.venv/bin/heir-opt \
+  --heir-translate /root/heir-work/.venv/bin/heir-translate \
+  --openfhe-dir /root/openfhe-development/build \
+  --heir-vector-size 8192 \
+  --heir-opt-pipeline '<PASTE_HEIR_CKKS_PIPELINE_HERE>'
 ```
+
+The report is written to `benchmark_report.md` under the run directory. The
+proof section must include `heir_output.cpp`, `heir_output.h`, both SHA-256
+hashes, the runner binary, and `backend = heir_generated_ckks_openfhe`.
 
 ## HEIR Toolchain Probe
 
@@ -161,7 +169,7 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
 This is a HEIR/OpenFHE toolchain smoke benchmark, not yet the Home Credit
 encrypted EDA kernel. The report will say that explicitly.
 
-## Temporary HEIR/OpenFHE Dot-Product Bridge
+## Archived Non-Proof Bridges
 
 Archived status: the current generated `dot_product` sample proves the
 HEIR/OpenFHE toolchain can emit and build OpenFHE code, but it is not an active
@@ -174,37 +182,11 @@ dot_product(mask, target) = sum(mask * target)
 dot_product(mask, ones)   = sum(mask)
 ```
 
-For an active 8192-slot CKKS generated kernel, regenerate
-`/root/heir-work/heir_output.cpp` and `/root/heir-work/heir_output.h`, or pass
-the HEIR lowering pipeline directly with `--heir-opt-pipeline`. The benchmark
-writes the source MLIR here:
+`heir-ckks-openfhe` is useful only as a fallback CKKS OpenFHE benchmark over the
+HEIR tensor contract. It does not prove HEIR generated the kernel.
 
-```text
-benchmark_runs/home_credit_heir_eda/<run-name>/heir_openfhe_dot/home_credit_dot_product_8192.mlir
-```
-
-Command shape once CKKS generation is available:
-
-```bash
-python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
-  --input data/home_credit/application_train.csv \
-  --workload app_target_by_education_type \
-  --row-limit 1000 \
-  --output-root benchmark_runs/home_credit_heir_eda \
-  --run-name education_heir_openfhe_dot_1k_v8192 \
-  --backend heir-openfhe-dot \
-  --heir-opt /root/heir-work/.venv/bin/heir-opt \
-  --heir-translate /root/heir-work/.venv/bin/heir-translate \
-  --heir-generated-dir /root/heir-work \
-  --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE \
-  --heir-vector-size 8192 \
-  --heir-scheme CKKS \
-  --heir-opt-pipeline '<PASTE_HEIR_CKKS_PIPELINE_HERE>'
-```
-
-The runner intentionally fails if `--heir-vector-size` does not match the
-generated `heir_output.cpp/h`, because otherwise the benchmark would silently
-measure the wrong tensor size.
+`heir-openfhe-dot` is archived and blocked because the synced sample is not the
+active CKKS proof path.
 
 To search for the existing dot-product pipeline on the server:
 

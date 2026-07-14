@@ -84,17 +84,31 @@ def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[
         failure_rows = [["not run"]]
     heir_result = summary.get("heir_result", {})
     heir_result_rows = []
+    proof_rows = [["status", "not run"]]
     if isinstance(heir_result, dict):
         heir_result_rows = [
             ["backend", heir_result.get("backend", "")],
             ["scheme", heir_result.get("scheme", "")],
             ["slots", heir_result.get("slots", "")],
             ["codegen", heir_result.get("codegen", "")],
+            ["generated_function", heir_result.get("generated_function", "")],
             ["chunk_size", heir_result.get("chunk_size", "")],
             ["eval_seconds_inside_runner", heir_result.get("eval_seconds_inside_runner", "")],
             ["total_seconds_inside_runner", heir_result.get("total_seconds_inside_runner", "")],
+            ["runner_binary", heir_result.get("runner_binary", "")],
+            ["mlir_input", heir_result.get("mlir_input", "")],
             ["decrypted_csv", heir_result.get("decrypted_csv", "")],
         ]
+        proof = heir_result.get("heir_proof", {})
+        if isinstance(proof, dict) and proof:
+            proof_rows = [
+                ["heir_output.cpp", proof.get("heir_output_cpp", "")],
+                ["heir_output.cpp sha256", proof.get("heir_output_cpp_sha256", "")],
+                ["heir_output.h", proof.get("heir_output_h", "")],
+                ["heir_output.h sha256", proof.get("heir_output_h_sha256", "")],
+                ["detected_vector_size", proof.get("detected_vector_size", "")],
+                ["required_symbols", ", ".join(proof.get("required_symbols", []))],
+            ]
     if not heir_result_rows:
         heir_result_rows = [["status", "not run"]]
     preview_rows = [
@@ -176,6 +190,14 @@ and writes `heir_result.json`.
 ## Home Credit HEIR/OpenFHE Result
 
 {markdown_table(["Field", "Value"], heir_result_rows)}
+
+## HEIR Generated Source Proof
+
+This section is the proof that the benchmark used HEIR-generated source. A
+valid full-HEIR run must show generated `heir_output.cpp/h` paths and hashes,
+and the runner must compile those files.
+
+{markdown_table(["Field", "Value"], proof_rows)}
 
 ### Correctness Against Pandas Reference
 
