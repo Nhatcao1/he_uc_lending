@@ -145,7 +145,10 @@ double generatedDotSum(
     PublicKeyT publicKey,
     PrivateKeyT secretKey,
     const std::vector<double>& left,
-    const std::vector<double>& right) {
+    const std::vector<double>& right,
+    double& encryptionSeconds,
+    double& computeSeconds,
+    double& decryptionSeconds) {
   if (left.size() != right.size()) {
     throw std::runtime_error("vector size mismatch");
   }
@@ -158,10 +161,21 @@ double generatedDotSum(
       chunkLeft[i] = left[offset + i];
       chunkRight[i] = right[offset + i];
     }
+    const auto encryptStarted = std::chrono::steady_clock::now();
     auto encryptedLeft = dot_product__encrypt__arg0(cryptoContext, chunkLeft, publicKey);
     auto encryptedRight = dot_product__encrypt__arg1(cryptoContext, chunkRight, publicKey);
+    const auto encryptEnded = std::chrono::steady_clock::now();
+    encryptionSeconds += std::chrono::duration<double>(encryptEnded - encryptStarted).count();
+
+    const auto computeStarted = std::chrono::steady_clock::now();
     auto encryptedResult = dot_product(cryptoContext, encryptedLeft, encryptedRight);
+    const auto computeEnded = std::chrono::steady_clock::now();
+    computeSeconds += std::chrono::duration<double>(computeEnded - computeStarted).count();
+
+    const auto decryptStarted = std::chrono::steady_clock::now();
     total += static_cast<double>(dot_product__decrypt__result0(cryptoContext, encryptedResult, secretKey));
+    const auto decryptEnded = std::chrono::steady_clock::now();
+    decryptionSeconds += std::chrono::duration<double>(decryptEnded - decryptStarted).count();
   }
   return total;
 }
@@ -197,11 +211,21 @@ int main(int argc, char** argv) {
     auto targetMask = readVector(runDir / targetRow.file);
     std::vector<double> oneMask(targetMask.size(), 1.0);
 
+    const auto contextStarted = std::chrono::steady_clock::now();
     auto cryptoContext = dot_product__generate_crypto_context();
+    const auto contextEnded = std::chrono::steady_clock::now();
+    const double contextSeconds = std::chrono::duration<double>(contextEnded - contextStarted).count();
+
+    const auto keygenStarted = std::chrono::steady_clock::now();
     auto keyPair = cryptoContext->KeyGen();
     cryptoContext = dot_product__configure_crypto_context(cryptoContext, keyPair.secretKey);
+    const auto keygenEnded = std::chrono::steady_clock::now();
+    const double keygenSeconds = std::chrono::duration<double>(keygenEnded - keygenStarted).count();
 
     const auto evalStarted = std::chrono::steady_clock::now();
+    double encryptionSeconds = 0.0;
+    double computeSeconds = 0.0;
+    double decryptionSeconds = 0.0;
 
     struct Result {
       std::string label;
@@ -212,8 +236,12 @@ int main(int argc, char** argv) {
     results.reserve(groupRows.size());
     for (const auto& groupRow : groupRows) {
       auto groupMask = readVector(runDir / groupRow.file);
-      const double count = generatedDotSum(cryptoContext, keyPair.publicKey, keyPair.secretKey, groupMask, oneMask);
-      const double defaultCount = generatedDotSum(cryptoContext, keyPair.publicKey, keyPair.secretKey, groupMask, targetMask);
+      const double count = generatedDotSum(
+          cryptoContext, keyPair.publicKey, keyPair.secretKey, groupMask, oneMask,
+          encryptionSeconds, computeSeconds, decryptionSeconds);
+      const double defaultCount = generatedDotSum(
+          cryptoContext, keyPair.publicKey, keyPair.secretKey, groupMask, targetMask,
+          encryptionSeconds, computeSeconds, decryptionSeconds);
       results.push_back({groupRow.label, count, defaultCount});
     }
 
@@ -232,6 +260,11 @@ int main(int argc, char** argv) {
     output << "  \"codegen\": \"heir_generated_openfhe_cpp\",\n";
     output << "  \"generated_function\": \"dot_product\",\n";
     output << "  \"chunk_size\": @VECTOR_SIZE@,\n";
+    output << "  \"context_setup_seconds\": " << contextSeconds << ",\n";
+    output << "  \"keygen_configure_seconds\": " << keygenSeconds << ",\n";
+    output << "  \"encryption_seconds\": " << encryptionSeconds << ",\n";
+    output << "  \"encrypted_compute_seconds\": " << computeSeconds << ",\n";
+    output << "  \"decryption_seconds\": " << decryptionSeconds << ",\n";
     output << "  \"eval_seconds_inside_runner\": " << evalSeconds << ",\n";
     output << "  \"total_seconds_inside_runner\": " << totalSeconds << ",\n";
     output << "  \"results\": [\n";
@@ -248,6 +281,7 @@ int main(int argc, char** argv) {
     std::cout << "HEIR-generated CKKS OpenFHE runner complete\n";
     std::cout << "Generated function: dot_product\n";
     std::cout << "Results: " << results.size() << "\n";
+    std::cout << "Encrypted compute seconds: " << computeSeconds << "\n";
     std::cout << "Eval seconds: " << evalSeconds << "\n";
     std::cout << "Total seconds: " << totalSeconds << "\n";
     return 0;

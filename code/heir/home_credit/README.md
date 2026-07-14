@@ -143,6 +143,13 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
   --heir-opt-pipeline '<PASTE_HEIR_CKKS_PIPELINE_HERE>'
 ```
 
+This is the one-shot convenience path: it materializes tensors, generates the
+CKKS source, builds the generated runner, encrypts the tensors, invokes the
+generated `dot_product`, decrypts, checks against pandas, and writes the
+report. The report separates source generation/build overhead from runtime and
+also separates context/key setup, encryption, encrypted computation, and
+decryption. `encrypted_compute_seconds` is the pure HE calculation metric.
+
 The report is written to `benchmark_report.md` under the run directory. The
 proof section must include `heir_output.cpp`, `heir_output.h`, both SHA-256
 hashes, the runner binary, and `backend = heir_generated_ckks_openfhe`.
