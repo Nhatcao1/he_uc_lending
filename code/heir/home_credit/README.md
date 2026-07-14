@@ -131,7 +131,9 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
   --run-name education_heir_openfhe_dot_1k \
   --backend heir-openfhe-dot \
   --heir-generated-dir /root/heir-work \
-  --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE
+  --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE \
+  --heir-vector-size 8 \
+  --heir-scheme BGV
 ```
 
 All rows:
@@ -145,9 +147,29 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
   --run-name education_heir_openfhe_dot_all \
   --backend heir-openfhe-dot \
   --heir-generated-dir /root/heir-work \
-  --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE
+  --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE \
+  --heir-vector-size 8 \
+  --heir-scheme BGV
 ```
 
 This is real HEIR-generated OpenFHE computation, but still an initial adapter:
 it reuses the 8-slot generated sample kernel rather than compiling a new larger
 Home Credit-specific kernel.
+
+For an 8192-slot generated kernel, first regenerate `/root/heir-work/heir_output.cpp`
+and `/root/heir-work/heir_output.h` from the generated MLIR written under the
+run directory:
+
+```text
+benchmark_runs/home_credit_heir_eda/<run-name>/heir_openfhe_dot/home_credit_dot_product_8192.mlir
+```
+
+Then rerun with:
+
+```bash
+--heir-vector-size 8192
+```
+
+The runner intentionally fails if `--heir-vector-size` does not match the
+generated `heir_output.cpp/h`, because otherwise the benchmark would silently
+measure the wrong tensor size.

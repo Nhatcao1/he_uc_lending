@@ -116,6 +116,8 @@ def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[
 | Actual rows loaded | `{summary['actual_rows']}` |
 | Group column | `{summary['column']}` |
 | Kernel | `{summary['kernel']}` |
+| HEIR scheme requested | `{summary.get('heir_scheme', '')}` |
+| HEIR vector size | `{summary.get('heir_vector_size', '')}` |
 | Backend status | `{summary.get('backend_status', 'prepared_only')}` |
 
 ## Notebook Reference Code

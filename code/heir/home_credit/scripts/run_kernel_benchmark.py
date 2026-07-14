@@ -49,6 +49,18 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional OpenFHE_DIR for CMake, e.g. /root/openfhe-install/lib/cmake/OpenFHE.",
     )
+    parser.add_argument(
+        "--heir-vector-size",
+        type=int,
+        default=8,
+        help="Static vector size expected by HEIR-generated dot_product sources.",
+    )
+    parser.add_argument(
+        "--heir-scheme",
+        default="BGV",
+        choices=["BGV", "CKKS"],
+        help="Scheme requested for HEIR backend. Current generated dot backend supports BGV only.",
+    )
     return parser.parse_args()
 
 
@@ -153,6 +165,8 @@ def main() -> None:
     summary["heir_openfhe_runner"] = args.heir_openfhe_runner
     summary["heir_generated_dir"] = args.heir_generated_dir
     summary["openfhe_dir"] = args.openfhe_dir
+    summary["heir_vector_size"] = args.heir_vector_size
+    summary["heir_scheme"] = args.heir_scheme
 
     context = {
         "run_dir": str(run_dir),
@@ -200,12 +214,15 @@ def main() -> None:
         summary["heir_toolchain"] = toolchain
         summary["backend_status"] = "heir_toolchain_probe_completed"
     elif args.backend == "heir-openfhe-dot":
+        if args.heir_scheme != "BGV":
+            raise SystemExit("heir-openfhe-dot currently supports only BGV generated sources, not CKKS.")
         from code.heir.home_credit.backends.openfhe_dot import run_openfhe_dot_backend
 
         backend_timings, heir_result, backend_log = run_openfhe_dot_backend(
             run_dir=run_dir,
             generated_dir=Path(args.heir_generated_dir),
             openfhe_dir=args.openfhe_dir,
+            vector_size=args.heir_vector_size,
         )
         timings.update(backend_timings)
         write_log(run_dir / "heir_openfhe_dot.log", backend_log)

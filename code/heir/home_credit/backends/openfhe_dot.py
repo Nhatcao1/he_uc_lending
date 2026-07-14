@@ -4,14 +4,15 @@ The synced HEIR sample generates a BGV/OpenFHE function:
 
     dot_product(arg0, arg1) = sum(arg0 * arg1)
 
-for static `tensor<8xi16>` inputs. This adapter reuses that generated kernel as
+for static integer tensor inputs. This adapter reuses that generated kernel as
 the first real Home Credit HEIR-backed computation by chunking prepared 0/1
-masks into blocks of 8.
+masks into the generated tensor size.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -19,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 
-RUNNER_CPP = r'''
+RUNNER_CPP_TEMPLATE = r'''
 #include <cstdint>
 #include <chrono>
 #include <cstdlib>
@@ -154,10 +155,11 @@ int64_t encryptedDotSum(
     throw std::runtime_error("vector size mismatch");
   }
   int64_t total = 0;
-  for (std::size_t offset = 0; offset < left.size(); offset += 8) {
-    std::vector<int16_t> chunkLeft(8, 0);
-    std::vector<int16_t> chunkRight(8, 0);
-    for (std::size_t i = 0; i < 8 && offset + i < left.size(); ++i) {
+  constexpr std::size_t kChunkSize = @VECTOR_SIZE@;
+  for (std::size_t offset = 0; offset < left.size(); offset += kChunkSize) {
+    std::vector<int16_t> chunkLeft(kChunkSize, 0);
+    std::vector<int16_t> chunkRight(kChunkSize, 0);
+    for (std::size_t i = 0; i < kChunkSize && offset + i < left.size(); ++i) {
       chunkLeft[i] = left[offset + i];
       chunkRight[i] = right[offset + i];
     }
@@ -231,7 +233,8 @@ int main(int argc, char** argv) {
     }
     output << "{\n";
     output << "  \"backend\": \"heir_openfhe_dot_product\",\n";
-    output << "  \"chunk_size\": 8,\n";
+    output << "  \"scheme\": \"BGV\",\n";
+    output << "  \"chunk_size\": @VECTOR_SIZE@,\n";
     output << "  \"eval_seconds_inside_runner\": " << evalSeconds << ",\n";
     output << "  \"total_seconds_inside_runner\": " << totalSeconds << ",\n";
     output << "  \"results\": [\n";
@@ -317,6 +320,34 @@ def run_command(command: list[str], cwd: Path) -> tuple[float, str]:
     return time.perf_counter() - started, completed.stdout + completed.stderr
 
 
+def dot_product_mlir(vector_size: int) -> str:
+    return f"""func.func @dot_product(
+    %arg0: tensor<{vector_size}xi16> {{secret.secret}},
+    %arg1: tensor<{vector_size}xi16> {{secret.secret}}
+) -> i16 {{
+  %c0 = arith.constant 0 : index
+  %c0_i16 = arith.constant 0 : i16
+
+  %result = affine.for %i = 0 to {vector_size}
+      iter_args(%sum = %c0_i16) -> (i16) {{
+    %x = tensor.extract %arg0[%i] : tensor<{vector_size}xi16>
+    %y = tensor.extract %arg1[%i] : tensor<{vector_size}xi16>
+    %product = arith.muli %x, %y : i16
+    %next = arith.addi %sum, %product : i16
+    affine.yield %next : i16
+  }}
+
+  return %result : i16
+}}
+"""
+
+
+def detect_generated_vector_size(generated_cpp: Path) -> int | None:
+    text = generated_cpp.read_text(encoding="utf-8", errors="replace")
+    matches = [int(value) for value in re.findall(r"std::vector<int16_t>\s+\w+\((\d+),\s*0\)", text)]
+    return max(matches) if matches else None
+
+
 def copy_generated_heir_sources(generated_dir: Path, work_dir: Path) -> None:
     for name in ("heir_output.cpp", "heir_output.h"):
         source = generated_dir / name
@@ -333,12 +364,29 @@ def run_openfhe_dot_backend(
     run_dir: Path,
     generated_dir: Path,
     openfhe_dir: str,
+    vector_size: int,
 ) -> tuple[dict[str, float], dict[str, Any], str]:
     work_dir = run_dir / "heir_openfhe_dot"
     build_dir = work_dir / "build"
     work_dir.mkdir(parents=True, exist_ok=True)
+    (work_dir / f"home_credit_dot_product_{vector_size}.mlir").write_text(
+        dot_product_mlir(vector_size),
+        encoding="utf-8",
+    )
     copy_generated_heir_sources(generated_dir, work_dir)
-    (work_dir / "home_credit_heir_dot_runner.cpp").write_text(RUNNER_CPP, encoding="utf-8")
+    generated_vector_size = detect_generated_vector_size(work_dir / "heir_output.cpp")
+    if generated_vector_size != vector_size:
+        raise ValueError(
+            "HEIR generated source vector size mismatch: "
+            f"requested {vector_size}, but {generated_dir / 'heir_output.cpp'} appears to support "
+            f"{generated_vector_size}. Regenerate heir_output.cpp/h from "
+            f"{work_dir / f'home_credit_dot_product_{vector_size}.mlir'} first, or run with "
+            f"--heir-vector-size {generated_vector_size}."
+        )
+    (work_dir / "home_credit_heir_dot_runner.cpp").write_text(
+        RUNNER_CPP_TEMPLATE.replace("@VECTOR_SIZE@", str(vector_size)),
+        encoding="utf-8",
+    )
     (work_dir / "CMakeLists.txt").write_text(CMAKE_TEMPLATE, encoding="utf-8")
 
     configure_command = ["cmake", "-S", str(work_dir), "-B", str(build_dir)]
