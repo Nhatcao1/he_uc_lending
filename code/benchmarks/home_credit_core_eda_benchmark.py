@@ -21,23 +21,181 @@ from pathlib import Path
 MISSING_BUCKET = "__MISSING__"
 OTHER_BUCKET = "__OTHER__"
 
+INCOME_TYPE_LABELS = [
+    "Working",
+    "Commercial associate",
+    "Pensioner",
+    "State servant",
+    "Unemployed",
+    "Student",
+    "Businessman",
+]
+
+FAMILY_STATUS_LABELS = [
+    "Married",
+    "Single / not married",
+    "Civil marriage",
+    "Separated",
+    "Widow",
+]
+
+OCCUPATION_TYPE_LABELS = [
+    "Laborers",
+    "Sales staff",
+    "Core staff",
+    "Managers",
+    "Drivers",
+    "High skill tech staff",
+    "Accountants",
+    "Medicine staff",
+    "Security staff",
+    "Cooking staff",
+    "Cleaning staff",
+    "Private service staff",
+    "Low-skill Laborers",
+    "Waiters/barmen staff",
+    "Secretaries",
+    "Realty agents",
+]
+
+EDUCATION_TYPE_LABELS = [
+    "Secondary / secondary special",
+    "Higher education",
+    "Incomplete higher",
+    "Lower secondary",
+    "Academic degree",
+]
+
+HOUSING_TYPE_LABELS = [
+    "House / apartment",
+    "With parents",
+    "Municipal apartment",
+    "Rented apartment",
+    "Office apartment",
+]
+
+ORGANIZATION_TYPE_LABELS = [
+    "Business Entity Type 3",
+    "XNA",
+    "Self-employed",
+    "Other",
+    "Medicine",
+    "Business Entity Type 2",
+    "Government",
+    "School",
+    "Trade: type 7",
+    "Kindergarten",
+    "Construction",
+    "Business Entity Type 1",
+    "Transport: type 4",
+    "Trade: type 3",
+    "Industry: type 9",
+    "Industry: type 3",
+    "Security",
+    "Housing",
+    "Industry: type 11",
+    "Military",
+    "Bank",
+    "Agriculture",
+    "Police",
+    "Transport: type 2",
+    "Postal",
+    "Security Ministries",
+    "Trade: type 2",
+    "Restaurant",
+    "Services",
+    "University",
+    "Industry: type 7",
+    "Transport: type 3",
+    "Industry: type 4",
+    "Hotel",
+    "Electricity",
+    "Industry: type 1",
+    "Trade: type 6",
+    "Industry: type 5",
+    "Insurance",
+    "Telecom",
+    "Emergency",
+    "Industry: type 2",
+    "Advertising",
+    "Realtor",
+    "Culture",
+    "Industry: type 12",
+    "Trade: type 1",
+    "Mobile",
+    "Legal Services",
+    "Cleaning",
+    "Transport: type 1",
+    "Industry: type 6",
+    "Industry: type 10",
+]
+
+SUITE_TYPE_LABELS = [
+    "Unaccompanied",
+    "Family",
+    "Spouse, partner",
+    "Children",
+    "Other_B",
+    "Other_A",
+    "Group of people",
+]
+
 WORKLOADS = {
-    "app_target_by_education_type": {
-        "column": "NAME_EDUCATION_TYPE",
-        "analysis": "application_default_rates",
-        "category_mode": "all",
-    },
     "app_target_by_income_type": {
+        "section": "5.14.1",
+        "title": "Income Type by Target",
         "column": "NAME_INCOME_TYPE",
         "analysis": "application_default_rates",
-        "category_mode": "all",
+        "category_mode": "labels",
+        "labels": INCOME_TYPE_LABELS,
+    },
+    "app_target_by_family_status": {
+        "section": "5.14.2",
+        "title": "Family Status by Target",
+        "column": "NAME_FAMILY_STATUS",
+        "analysis": "application_default_rates",
+        "category_mode": "labels",
+        "labels": FAMILY_STATUS_LABELS,
     },
     "app_target_by_occupation_type": {
+        "section": "5.14.3",
+        "title": "Occupation by Target",
         "column": "OCCUPATION_TYPE",
         "analysis": "application_default_rates",
-        "category_mode": "top_k",
-        "k": 20,
-        "other_bucket": True,
+        "category_mode": "labels",
+        "labels": OCCUPATION_TYPE_LABELS,
+    },
+    "app_target_by_education_type": {
+        "section": "5.14.4",
+        "title": "Education by Target",
+        "column": "NAME_EDUCATION_TYPE",
+        "analysis": "application_default_rates",
+        "category_mode": "labels",
+        "labels": EDUCATION_TYPE_LABELS,
+    },
+    "app_target_by_housing_type": {
+        "section": "5.14.5",
+        "title": "Housing Type by Target",
+        "column": "NAME_HOUSING_TYPE",
+        "analysis": "application_default_rates",
+        "category_mode": "labels",
+        "labels": HOUSING_TYPE_LABELS,
+    },
+    "app_target_by_organization_type": {
+        "section": "5.14.6",
+        "title": "Organization Type by Target",
+        "column": "ORGANIZATION_TYPE",
+        "analysis": "application_default_rates",
+        "category_mode": "labels",
+        "labels": ORGANIZATION_TYPE_LABELS,
+    },
+    "app_target_by_suite_type": {
+        "section": "5.14.7",
+        "title": "Suite Type by Target",
+        "column": "NAME_TYPE_SUITE",
+        "analysis": "application_default_rates",
+        "category_mode": "labels",
+        "labels": SUITE_TYPE_LABELS,
     },
 }
 
@@ -88,6 +246,11 @@ def selected_labels(counts: Counter[str], cfg: dict[str, object]) -> list[str]:
     mode = str(cfg.get("category_mode", "all"))
     if mode == "all":
         return sorted(counts)
+    if mode == "labels":
+        labels = [str(label) for label in cfg.get("labels", [])]
+        if not labels:
+            raise ValueError("labels mode requires a non-empty labels list")
+        return labels
     if mode == "top_k":
         labels = [label for label, _ in counts.most_common(int(cfg.get("k", 20)))]
         if MISSING_BUCKET in counts and MISSING_BUCKET not in labels:
@@ -119,6 +282,8 @@ def plaintext_reference(input_path: Path, row_limit: int, cfg: dict[str, object]
     grouped = {label: {"count": 0, "default_count": 0} for label in labels}
     for row in rows:
         label = label_for(row.get(column), labels)
+        if cfg.get("category_mode") == "labels" and label not in labels:
+            continue
         bucket = grouped.setdefault(label, {"count": 0, "default_count": 0})
         bucket["count"] += 1
         bucket["default_count"] += parse_target(row.get("TARGET"))
@@ -344,6 +509,8 @@ def write_markdown_report(path: Path, summary: dict[str, object], reference: lis
 | Field | Value |
 | --- | --- |
 | Workload | `{summary['workload']}` |
+| Notebook section | `{summary.get('notebook_section', '')}` |
+| Title | `{summary.get('title', '')}` |
 | Input | `{summary['input']}` |
 | Rows | `{summary['row_limit']}` |
 | Group column | `{summary['selected_group']}` |
@@ -358,8 +525,10 @@ The plaintext Python result is used only as a local benchmark reference.
 ## Data Preparation Before Encryption
 
 The trusted side reads the raw Home Credit application table, normalizes the
-group column, creates one 0/1 mask per group label, creates a `TARGET=1` mask,
-and writes vector manifests for encryption.
+group column, creates one 0/1 mask per notebook label, creates a `TARGET=1`
+mask, and writes vector manifests for encryption. Rows outside the notebook
+label list are ignored for this benchmark so the output matches the notebook
+chart categories.
 
 ## HE Operation Path
 
@@ -447,6 +616,35 @@ def main() -> None:
     decrypted_csv = run_dir / "decrypted.csv"
     reference_csv = run_dir / "plaintext_reference.csv"
     markdown_report = run_dir / f"{args.workload}_report.md"
+    category_config = run_dir / "category_config.json"
+    empty_model = run_dir / "empty_linear_model.json"
+    category_config.write_text(
+        json.dumps(
+            {
+                "categorical_columns": {
+                    str(cfg["column"]): {
+                        "mode": cfg.get("category_mode", "all"),
+                        "labels": cfg.get("labels", []),
+                        **{key: value for key, value in cfg.items() if key in {"k", "other_bucket"}},
+                    }
+                }
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    empty_model.write_text(
+        json.dumps(
+            {
+                "model_type": "empty_benchmark_model",
+                "trained": False,
+                "bias": 0.0,
+                "features": [],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     timings: dict[str, float] = {}
     reference, timings["python_reference_seconds"] = plaintext_reference(input_path, args.row_limit, cfg)
@@ -461,6 +659,20 @@ def main() -> None:
         str(prepared_dir),
         "--row-limit",
         str(args.row_limit),
+        "--category-config",
+        str(category_config),
+        "--amount-columns",
+        "",
+        "--numeric-columns",
+        "",
+        "--missing-columns",
+        "",
+        "--histogram-columns",
+        "",
+        "--correlation-pairs",
+        "",
+        "--model-json",
+        str(empty_model),
     ]
     timings["prepare_wall_seconds"], prepare_output = run_command(prepare_command, repo)
 
@@ -534,6 +746,10 @@ def main() -> None:
         "slots": args.slots,
         "run_dir": str(run_dir),
         "selected_group": cfg["column"],
+        "notebook_section": cfg.get("section", ""),
+        "title": cfg.get("title", ""),
+        "label_policy": cfg.get("category_mode", "all"),
+        "labels": cfg.get("labels", []),
         "reference_rows": len(reference),
         "filtered_manifest_rows": manifest_rows,
         "correctness": "passed" if passed else "failed",

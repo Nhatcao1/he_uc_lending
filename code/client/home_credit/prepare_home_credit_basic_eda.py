@@ -502,6 +502,10 @@ def selected_categories(category_config: dict[str, dict[str, object]], counts: d
                 labels.append(OTHER_BUCKET)
         elif mode == "all":
             labels = sorted(counter)
+        elif mode == "labels":
+            labels = [str(label) for label in policy.get("labels", [])]
+            if not labels:
+                raise ValueError(f"labels mode for {column} requires a non-empty labels list")
         else:
             raise ValueError(f"unsupported category mode for {column}: {mode}")
         selected[column] = labels
