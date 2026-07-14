@@ -94,6 +94,51 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
 
 The first stable server target should be `masked_default_count`.
 
+## Active CKKS HE Benchmark
+
+Use this path for current Home Credit HEIR-lane benchmarking. It prepares HEIR
+fixed-shape tensors, then executes the same `masked_default_count` kernel with
+the existing CKKS OpenFHE binaries:
+
+```text
+HEIR tensor manifest
+-> CKKS OpenFHE encrypt
+-> CKKS OpenFHE aggregate server
+-> CKKS decrypt
+-> compare against notebook-style pandas reference
+-> write benchmark_report.md
+```
+
+Build required binaries:
+
+```bash
+cmake -S . -B build -DOpenFHE_DIR=$HOME/openfhe-development/build
+cmake --build build --target \
+  encrypt_home_credit_payload \
+  server_home_credit_aggregate \
+  decrypt_ckks_results
+```
+
+Run one small CKKS HE benchmark:
+
+```bash
+python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
+  --input data/home_credit/application_train.csv \
+  --workload app_target_by_education_type \
+  --row-limit 10000 \
+  --output-root benchmark_runs/home_credit_heir_eda \
+  --run-name education_heir_ckks_openfhe_10k \
+  --backend heir-ckks-openfhe \
+  --build-dir build \
+  --slots 8192
+```
+
+The report is written to:
+
+```text
+benchmark_runs/home_credit_heir_eda/education_heir_ckks_openfhe_10k/benchmark_report.md
+```
+
 ## HEIR Toolchain Probe
 
 Use this before the real Home Credit generated runner exists. It verifies and

@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--backend",
         default="prepare-only",
-        choices=["prepare-only", "external", "heir-toolchain", "heir-openfhe-dot"],
+        choices=["prepare-only", "external", "heir-toolchain", "heir-ckks-openfhe", "heir-openfhe-dot"],
     )
     parser.add_argument("--heir-compile-cmd", default="", help="Optional command template for HEIR compilation.")
     parser.add_argument("--heir-eval-cmd", default="", help="Optional command template for HEIR evaluation.")
@@ -57,15 +57,20 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--heir-scheme",
-        default="BGV",
-        choices=["BGV", "CKKS"],
-        help="Scheme requested for HEIR backend. Current generated dot backend supports BGV only.",
+        default="CKKS",
+        choices=["CKKS"],
+        help="Scheme requested for active HEIR Home Credit EDA backends.",
     )
     parser.add_argument(
         "--heir-opt-pipeline",
         default="",
         help="Optional heir-opt pass pipeline to regenerate heir_output.cpp/h from generated MLIR.",
     )
+    parser.add_argument("--build-dir", default="build", help="Build directory containing OpenFHE benchmark binaries.")
+    parser.add_argument("--slots", "--ckks-slots", dest="ckks_slots", type=int, default=8192)
+    parser.add_argument("--multiplicative-depth", type=int, default=3)
+    parser.add_argument("--scaling-mod-size", type=int, default=50)
+    parser.add_argument("--first-mod-size", type=int, default=60)
     return parser.parse_args()
 
 
@@ -90,11 +95,11 @@ def compare_heir_result(reference_rows: list[dict[str, str]], result: dict[str, 
         if actual is None:
             failures.append(f"missing label {label}")
             continue
-        expected_count = int(float(row["count"]))
-        expected_default = int(float(row["default_count"]))
-        actual_count = int(float(actual.get("count", -1)))
-        actual_default = int(float(actual.get("default_count", -1)))
-        if expected_count != actual_count or expected_default != actual_default:
+        expected_count = float(row["count"])
+        expected_default = float(row["default_count"])
+        actual_count = float(actual.get("count", -1))
+        actual_default = float(actual.get("default_count", -1))
+        if abs(expected_count - actual_count) > 1e-4 or abs(expected_default - actual_default) > 1e-4:
             failures.append(
                 f"{label}: expected count/default {expected_count}/{expected_default}, "
                 f"actual {actual_count}/{actual_default}"
@@ -128,6 +133,11 @@ def collect_artifact_sizes(run_dir: Path) -> dict[str, int]:
         "heir_result_json": path_size_bytes(run_dir / "heir_result.json"),
         "compiled_dir": path_size_bytes(run_dir / "compiled"),
         "heir_openfhe_dot_dir": path_size_bytes(run_dir / "heir_openfhe_dot"),
+        "ckks_prepared_dir": path_size_bytes(run_dir / "ckks_prepared"),
+        "ckks_encrypted_dir": path_size_bytes(run_dir / "ckks_encrypted"),
+        "ckks_key_dir": path_size_bytes(run_dir / "ckks_keys"),
+        "ckks_server_output_dir": path_size_bytes(run_dir / "ckks_server_output"),
+        "ckks_decrypted_csv": path_size_bytes(run_dir / "ckks_decrypted.csv"),
     }
 
 
@@ -173,6 +183,11 @@ def main() -> None:
     summary["heir_vector_size"] = args.heir_vector_size
     summary["heir_scheme"] = args.heir_scheme
     summary["heir_opt_pipeline"] = args.heir_opt_pipeline
+    summary["build_dir"] = args.build_dir
+    summary["ckks_slots"] = args.ckks_slots
+    summary["multiplicative_depth"] = args.multiplicative_depth
+    summary["scaling_mod_size"] = args.scaling_mod_size
+    summary["first_mod_size"] = args.first_mod_size
 
     context = {
         "run_dir": str(run_dir),
@@ -219,26 +234,29 @@ def main() -> None:
 
         summary["heir_toolchain"] = toolchain
         summary["backend_status"] = "heir_toolchain_probe_completed"
-    elif args.backend == "heir-openfhe-dot":
-        if args.heir_scheme != "BGV":
-            raise SystemExit("heir-openfhe-dot currently supports only BGV generated sources, not CKKS.")
-        from code.heir.home_credit.backends.openfhe_dot import run_openfhe_dot_backend
+    elif args.backend == "heir-ckks-openfhe":
+        from code.heir.home_credit.backends.ckks_openfhe import run_ckks_openfhe_backend
 
-        backend_timings, heir_result, backend_log = run_openfhe_dot_backend(
+        backend_timings, heir_result, backend_log = run_ckks_openfhe_backend(
             run_dir=run_dir,
-            generated_dir=Path(args.heir_generated_dir),
-            openfhe_dir=args.openfhe_dir,
-            vector_size=args.heir_vector_size,
-            heir_opt=args.heir_opt,
-            heir_translate=args.heir_translate,
-            heir_opt_pipeline=args.heir_opt_pipeline,
+            build_dir=Path(args.build_dir),
+            analysis_name=args.workload,
+            slots=args.ckks_slots,
+            multiplicative_depth=args.multiplicative_depth,
+            scaling_mod_size=args.scaling_mod_size,
+            first_mod_size=args.first_mod_size,
         )
         timings.update(backend_timings)
-        write_log(run_dir / "heir_openfhe_dot.log", backend_log)
+        write_log(run_dir / "heir_ckks_openfhe.log", backend_log)
         reference_rows_for_compare = read_reference(Path(summary["pandas_reference"]))
         summary["heir_result"] = heir_result
         summary["heir_correctness"] = compare_heir_result(reference_rows_for_compare, heir_result)
-        summary["backend_status"] = "heir_openfhe_dot_completed"
+        summary["backend_status"] = "heir_ckks_openfhe_completed"
+    elif args.backend == "heir-openfhe-dot":
+        raise SystemExit(
+            "heir-openfhe-dot is archived because it is not CKKS. "
+            "Use --backend heir-ckks-openfhe for active Home Credit EDA."
+        )
 
     summary["timings_seconds"] = timings
     summary["artifact_sizes_bytes"] = collect_artifact_sizes(run_dir)

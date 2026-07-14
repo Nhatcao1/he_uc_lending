@@ -87,9 +87,13 @@ def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[
     if isinstance(heir_result, dict):
         heir_result_rows = [
             ["backend", heir_result.get("backend", "")],
+            ["scheme", heir_result.get("scheme", "")],
+            ["slots", heir_result.get("slots", "")],
+            ["codegen", heir_result.get("codegen", "")],
             ["chunk_size", heir_result.get("chunk_size", "")],
             ["eval_seconds_inside_runner", heir_result.get("eval_seconds_inside_runner", "")],
             ["total_seconds_inside_runner", heir_result.get("total_seconds_inside_runner", "")],
+            ["decrypted_csv", heir_result.get("decrypted_csv", "")],
         ]
     if not heir_result_rows:
         heir_result_rows = [["status", "not run"]]
@@ -118,6 +122,7 @@ def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[
 | Kernel | `{summary['kernel']}` |
 | HEIR scheme requested | `{summary.get('heir_scheme', '')}` |
 | HEIR vector size | `{summary.get('heir_vector_size', '')}` |
+| CKKS slots | `{summary.get('ckks_slots', '')}` |
 | HEIR opt pipeline supplied | `{bool(summary.get('heir_opt_pipeline'))}` |
 | Backend status | `{summary.get('backend_status', 'prepared_only')}` |
 
