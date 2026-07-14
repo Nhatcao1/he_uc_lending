@@ -61,6 +61,11 @@ def parse_args() -> argparse.Namespace:
         choices=["BGV", "CKKS"],
         help="Scheme requested for HEIR backend. Current generated dot backend supports BGV only.",
     )
+    parser.add_argument(
+        "--heir-opt-pipeline",
+        default="",
+        help="Optional heir-opt pass pipeline to regenerate heir_output.cpp/h from generated MLIR.",
+    )
     return parser.parse_args()
 
 
@@ -167,6 +172,7 @@ def main() -> None:
     summary["openfhe_dir"] = args.openfhe_dir
     summary["heir_vector_size"] = args.heir_vector_size
     summary["heir_scheme"] = args.heir_scheme
+    summary["heir_opt_pipeline"] = args.heir_opt_pipeline
 
     context = {
         "run_dir": str(run_dir),
@@ -223,6 +229,9 @@ def main() -> None:
             generated_dir=Path(args.heir_generated_dir),
             openfhe_dir=args.openfhe_dir,
             vector_size=args.heir_vector_size,
+            heir_opt=args.heir_opt,
+            heir_translate=args.heir_translate,
+            heir_opt_pipeline=args.heir_opt_pipeline,
         )
         timings.update(backend_timings)
         write_log(run_dir / "heir_openfhe_dot.log", backend_log)

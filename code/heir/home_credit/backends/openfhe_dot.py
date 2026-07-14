@@ -314,10 +314,30 @@ set_target_properties(
 '''
 
 
+def resolve_executable(executable: str) -> str:
+    if not executable:
+        raise ValueError("missing executable path")
+    if "/" in executable:
+        path = Path(executable)
+        if not path.exists():
+            raise FileNotFoundError(f"executable does not exist: {executable}")
+        return executable
+    resolved = shutil.which(executable)
+    if not resolved:
+        raise FileNotFoundError(f"executable not found on PATH: {executable}")
+    return resolved
+
+
 def run_command(command: list[str], cwd: Path) -> tuple[float, str]:
     started = time.perf_counter()
-    completed = subprocess.run(command, cwd=cwd, check=True, text=True, capture_output=True)  # noqa: S603
-    return time.perf_counter() - started, completed.stdout + completed.stderr
+    completed = subprocess.run(command, cwd=cwd, text=True, capture_output=True)  # noqa: S603
+    output = completed.stdout + completed.stderr
+    if completed.returncode != 0:
+        raise RuntimeError(
+            "command failed with exit code "
+            f"{completed.returncode}: {' '.join(command)}\n{output}"
+        )
+    return time.perf_counter() - started, output
 
 
 def dot_product_mlir(vector_size: int) -> str:
@@ -356,6 +376,59 @@ def copy_generated_heir_sources(generated_dir: Path, work_dir: Path) -> None:
         shutil.copy2(source, work_dir / name)
 
 
+def maybe_generate_heir_sources(
+    mlir_path: Path,
+    work_dir: Path,
+    heir_opt: str,
+    heir_translate: str,
+    heir_opt_pipeline: str,
+) -> tuple[dict[str, float], str, bool]:
+    if not heir_opt_pipeline:
+        return {}, "", False
+
+    heir_opt = resolve_executable(heir_opt)
+    heir_translate = resolve_executable(heir_translate)
+
+    timings: dict[str, float] = {}
+    logs: list[str] = []
+    lowered_mlir = work_dir / "output.mlir"
+
+    timings["heir_opt_lower_seconds"], output = run_command(
+        [
+            heir_opt,
+            str(mlir_path),
+            f"--pass-pipeline={heir_opt_pipeline}",
+            "-o",
+            str(lowered_mlir),
+        ],
+        work_dir,
+    )
+    logs.append(output)
+    timings["heir_translate_cpp_seconds"], output = run_command(
+        [
+            heir_translate,
+            "--emit-openfhe-pke",
+            str(lowered_mlir),
+            "-o",
+            str(work_dir / "heir_output.cpp"),
+        ],
+        work_dir,
+    )
+    logs.append(output)
+    timings["heir_translate_header_seconds"], output = run_command(
+        [
+            heir_translate,
+            "--emit-openfhe-pke-header",
+            str(lowered_mlir),
+            "-o",
+            str(work_dir / "heir_output.h"),
+        ],
+        work_dir,
+    )
+    logs.append(output)
+    return timings, "\n".join(logs), True
+
+
 def read_result(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -365,22 +438,39 @@ def run_openfhe_dot_backend(
     generated_dir: Path,
     openfhe_dir: str,
     vector_size: int,
+    heir_opt: str = "",
+    heir_translate: str = "",
+    heir_opt_pipeline: str = "",
 ) -> tuple[dict[str, float], dict[str, Any], str]:
     work_dir = run_dir / "heir_openfhe_dot"
     build_dir = work_dir / "build"
     work_dir.mkdir(parents=True, exist_ok=True)
-    (work_dir / f"home_credit_dot_product_{vector_size}.mlir").write_text(
+    mlir_path = work_dir / f"home_credit_dot_product_{vector_size}.mlir"
+    mlir_path.write_text(
         dot_product_mlir(vector_size),
         encoding="utf-8",
     )
-    copy_generated_heir_sources(generated_dir, work_dir)
+    timings: dict[str, float] = {}
+    logs: list[str] = []
+    generated, output, regenerated = maybe_generate_heir_sources(
+        mlir_path=mlir_path,
+        work_dir=work_dir,
+        heir_opt=heir_opt,
+        heir_translate=heir_translate,
+        heir_opt_pipeline=heir_opt_pipeline,
+    )
+    timings.update(generated)
+    if output:
+        logs.append(output)
+    if not regenerated:
+        copy_generated_heir_sources(generated_dir, work_dir)
     generated_vector_size = detect_generated_vector_size(work_dir / "heir_output.cpp")
     if generated_vector_size != vector_size:
         raise ValueError(
             "HEIR generated source vector size mismatch: "
             f"requested {vector_size}, but {generated_dir / 'heir_output.cpp'} appears to support "
             f"{generated_vector_size}. Regenerate heir_output.cpp/h from "
-            f"{work_dir / f'home_credit_dot_product_{vector_size}.mlir'} first, or run with "
+            f"{mlir_path} first, pass --heir-opt-pipeline, or run with "
             f"--heir-vector-size {generated_vector_size}."
         )
     (work_dir / "home_credit_heir_dot_runner.cpp").write_text(
@@ -393,8 +483,6 @@ def run_openfhe_dot_backend(
     if openfhe_dir:
         configure_command.append(f"-DOpenFHE_DIR={openfhe_dir}")
 
-    timings: dict[str, float] = {}
-    logs: list[str] = []
     timings["heir_openfhe_cmake_configure_seconds"], output = run_command(configure_command, run_dir)
     logs.append(output)
     timings["heir_openfhe_build_seconds"], output = run_command(

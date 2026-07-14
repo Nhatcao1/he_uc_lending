@@ -157,19 +157,40 @@ it reuses the 8-slot generated sample kernel rather than compiling a new larger
 Home Credit-specific kernel.
 
 For an 8192-slot generated kernel, first regenerate `/root/heir-work/heir_output.cpp`
-and `/root/heir-work/heir_output.h` from the generated MLIR written under the
-run directory:
+and `/root/heir-work/heir_output.h`, or pass the HEIR lowering pipeline directly
+with `--heir-opt-pipeline`. The benchmark writes the source MLIR here:
 
 ```text
 benchmark_runs/home_credit_heir_eda/<run-name>/heir_openfhe_dot/home_credit_dot_product_8192.mlir
 ```
 
-Then rerun with:
+If the pipeline is known, run:
 
 ```bash
---heir-vector-size 8192
+python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
+  --input data/home_credit/application_train.csv \
+  --workload app_target_by_education_type \
+  --row-limit 1000 \
+  --output-root benchmark_runs/home_credit_heir_eda \
+  --run-name education_heir_openfhe_dot_1k_v8192 \
+  --backend heir-openfhe-dot \
+  --heir-opt /root/heir-work/.venv/bin/heir-opt \
+  --heir-translate /root/heir-work/.venv/bin/heir-translate \
+  --heir-generated-dir /root/heir-work \
+  --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE \
+  --heir-vector-size 8192 \
+  --heir-scheme BGV \
+  --heir-opt-pipeline '<PASTE_HEIR_PIPELINE_HERE>'
 ```
 
 The runner intentionally fails if `--heir-vector-size` does not match the
 generated `heir_output.cpp/h`, because otherwise the benchmark would silently
 measure the wrong tensor size.
+
+To search for the existing dot-product pipeline on the server:
+
+```bash
+cd /root/heir-work
+grep -R "pass-pipeline\\|heir-opt\\|emit-openfhe" -n . 2>/dev/null | head -100
+history | grep -E "heir-opt|emit-openfhe|pass-pipeline" | tail -80
+```
