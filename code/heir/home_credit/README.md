@@ -106,3 +106,48 @@ python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
 
 This is a HEIR/OpenFHE toolchain smoke benchmark, not yet the Home Credit
 encrypted EDA kernel. The report will say that explicitly.
+
+## Real HEIR/OpenFHE Dot-Product Backend
+
+The first real Home Credit HEIR backend reuses the generated `dot_product`
+kernel:
+
+```text
+dot_product(mask, target) = sum(mask * target)
+dot_product(mask, ones)   = sum(mask)
+```
+
+The runner chunks tensors into 8-row blocks because the synced sample was
+generated from `tensor<8xi16>`.
+
+Small test first:
+
+```bash
+python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
+  --input data/home_credit/application_train.csv \
+  --workload app_target_by_education_type \
+  --row-limit 1000 \
+  --output-root benchmark_runs/home_credit_heir_eda \
+  --run-name education_heir_openfhe_dot_1k \
+  --backend heir-openfhe-dot \
+  --heir-generated-dir /root/heir-work \
+  --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE
+```
+
+All rows:
+
+```bash
+python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
+  --input data/home_credit/application_train.csv \
+  --workload app_target_by_education_type \
+  --row-limit 0 \
+  --output-root benchmark_runs/home_credit_heir_eda \
+  --run-name education_heir_openfhe_dot_all \
+  --backend heir-openfhe-dot \
+  --heir-generated-dir /root/heir-work \
+  --openfhe-dir /root/openfhe-install/lib/cmake/OpenFHE
+```
+
+This is real HEIR-generated OpenFHE computation, but still an initial adapter:
+it reuses the 8-slot generated sample kernel rather than compiling a new larger
+Home Credit-specific kernel.

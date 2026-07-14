@@ -71,6 +71,28 @@ def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[
         ]
     else:
         smoke_rows = [["result", "not found in runner output"]]
+    heir_correctness = summary.get("heir_correctness", {})
+    if isinstance(heir_correctness, dict):
+        correctness_rows = [
+            ["passed", heir_correctness.get("passed", "")],
+            ["checked_labels", heir_correctness.get("checked_labels", "")],
+            ["failure_count", len(heir_correctness.get("failures", [])) if isinstance(heir_correctness.get("failures", []), list) else ""],
+        ]
+        failure_rows = [[failure] for failure in heir_correctness.get("failures", [])] or [["none"]]
+    else:
+        correctness_rows = [["status", "not run"]]
+        failure_rows = [["not run"]]
+    heir_result = summary.get("heir_result", {})
+    heir_result_rows = []
+    if isinstance(heir_result, dict):
+        heir_result_rows = [
+            ["backend", heir_result.get("backend", "")],
+            ["chunk_size", heir_result.get("chunk_size", "")],
+            ["eval_seconds_inside_runner", heir_result.get("eval_seconds_inside_runner", "")],
+            ["total_seconds_inside_runner", heir_result.get("total_seconds_inside_runner", "")],
+        ]
+    if not heir_result_rows:
+        heir_result_rows = [["status", "not run"]]
     preview_rows = [
         [
             row["label"],
@@ -142,6 +164,18 @@ availability and optional sample-run timing. It still does not mean the Home
 Credit `masked_default_count` kernel has been compiled and evaluated under HE.
 That requires a generated runner that accepts this benchmark's tensor manifest
 and writes `heir_result.json`.
+
+## Home Credit HEIR/OpenFHE Result
+
+{markdown_table(["Field", "Value"], heir_result_rows)}
+
+### Correctness Against Pandas Reference
+
+{markdown_table(["Field", "Value"], correctness_rows)}
+
+### Correctness Failures
+
+{markdown_table(["Failure"], failure_rows)}
 
 ## Prepared Tensors
 

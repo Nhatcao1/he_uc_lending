@@ -25,7 +25,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--row-limit", type=int, default=0, help="0 means all rows.")
     parser.add_argument("--output-root", default="benchmark_runs/home_credit_heir_eda")
     parser.add_argument("--run-name", default="")
-    parser.add_argument("--backend", default="prepare-only", choices=["prepare-only", "external", "heir-toolchain"])
+    parser.add_argument(
+        "--backend",
+        default="prepare-only",
+        choices=["prepare-only", "external", "heir-toolchain", "heir-openfhe-dot"],
+    )
     parser.add_argument("--heir-compile-cmd", default="", help="Optional command template for HEIR compilation.")
     parser.add_argument("--heir-eval-cmd", default="", help="Optional command template for HEIR evaluation.")
     parser.add_argument("--heir-opt", default="heir-opt", help="Path to heir-opt for heir-toolchain backend.")
@@ -35,12 +39,54 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Optional generated/OpenFHE executable to run as a HEIR smoke benchmark, e.g. dot_product.",
     )
+    parser.add_argument(
+        "--heir-generated-dir",
+        default="/root/heir-work",
+        help="Directory containing HEIR-generated heir_output.cpp/h for heir-openfhe-dot.",
+    )
+    parser.add_argument(
+        "--openfhe-dir",
+        default="",
+        help="Optional OpenFHE_DIR for CMake, e.g. /root/openfhe-install/lib/cmake/OpenFHE.",
+    )
     return parser.parse_args()
 
 
 def read_reference(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as input_file:
         return list(csv.DictReader(input_file))
+
+
+def compare_heir_result(reference_rows: list[dict[str, str]], result: dict[str, object]) -> dict[str, object]:
+    actual_rows = result.get("results", [])
+    if not isinstance(actual_rows, list):
+        return {"passed": False, "failures": ["heir_result.json has no results list"]}
+    actual_by_label = {
+        str(row.get("label")): row
+        for row in actual_rows
+        if isinstance(row, dict)
+    }
+    failures = []
+    for row in reference_rows:
+        label = row["label"]
+        actual = actual_by_label.get(label)
+        if actual is None:
+            failures.append(f"missing label {label}")
+            continue
+        expected_count = int(float(row["count"]))
+        expected_default = int(float(row["default_count"]))
+        actual_count = int(float(actual.get("count", -1)))
+        actual_default = int(float(actual.get("default_count", -1)))
+        if expected_count != actual_count or expected_default != actual_default:
+            failures.append(
+                f"{label}: expected count/default {expected_count}/{expected_default}, "
+                f"actual {actual_count}/{actual_default}"
+            )
+    return {
+        "passed": not failures,
+        "failures": failures[:20],
+        "checked_labels": len(reference_rows),
+    }
 
 
 def path_size_bytes(path: Path) -> int:
@@ -64,6 +110,7 @@ def collect_artifact_sizes(run_dir: Path) -> dict[str, int]:
         "workload_spec": path_size_bytes(run_dir / "heir_workload_spec.json"),
         "heir_result_json": path_size_bytes(run_dir / "heir_result.json"),
         "compiled_dir": path_size_bytes(run_dir / "compiled"),
+        "heir_openfhe_dot_dir": path_size_bytes(run_dir / "heir_openfhe_dot"),
     }
 
 
@@ -104,6 +151,8 @@ def main() -> None:
     summary["heir_opt"] = args.heir_opt
     summary["heir_translate"] = args.heir_translate
     summary["heir_openfhe_runner"] = args.heir_openfhe_runner
+    summary["heir_generated_dir"] = args.heir_generated_dir
+    summary["openfhe_dir"] = args.openfhe_dir
 
     context = {
         "run_dir": str(run_dir),
@@ -150,6 +199,20 @@ def main() -> None:
 
         summary["heir_toolchain"] = toolchain
         summary["backend_status"] = "heir_toolchain_probe_completed"
+    elif args.backend == "heir-openfhe-dot":
+        from code.heir.home_credit.backends.openfhe_dot import run_openfhe_dot_backend
+
+        backend_timings, heir_result, backend_log = run_openfhe_dot_backend(
+            run_dir=run_dir,
+            generated_dir=Path(args.heir_generated_dir),
+            openfhe_dir=args.openfhe_dir,
+        )
+        timings.update(backend_timings)
+        write_log(run_dir / "heir_openfhe_dot.log", backend_log)
+        reference_rows_for_compare = read_reference(Path(summary["pandas_reference"]))
+        summary["heir_result"] = heir_result
+        summary["heir_correctness"] = compare_heir_result(reference_rows_for_compare, heir_result)
+        summary["backend_status"] = "heir_openfhe_dot_completed"
 
     summary["timings_seconds"] = timings
     summary["artifact_sizes_bytes"] = collect_artifact_sizes(run_dir)
