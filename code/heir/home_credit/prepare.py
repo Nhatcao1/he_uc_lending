@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -115,13 +116,13 @@ def prepare_target_group_tensors(input_path: Path, workload: str, row_limit: int
     ]
     for item in reference:
         label = str(item["label"])
-        safe_label = "".join(char if char.isalnum() else "_" for char in label).strip("_").lower()
+        label_token = tensor_label_token(label)
         mask = [float(value == label) for value in frame[column].tolist()]
-        file_name = f"tensors/group_{safe_label}.csv"
+        file_name = f"tensors/group_{label_token}.csv"
         write_vector(output_dir / file_name, mask)
         tensor_rows.append(
             {
-                "name": f"group_mask.{safe_label}",
+                "name": f"group_mask.{label_token}",
                 "kind": "group_mask",
                 "label": label,
                 "file": file_name,
@@ -173,6 +174,12 @@ def previous_reference_code(column: str) -> str:
 
 def safe_label(label: str) -> str:
     return "".join(char if char.isalnum() else "_" for char in label).strip("_").lower() or "blank"
+
+
+def tensor_label_token(label: str) -> str:
+    """Create a readable filename token without conflating distinct labels."""
+    digest = hashlib.sha256(label.encode("utf-8")).hexdigest()[:10]
+    return f"{safe_label(label)}_{digest}"
 
 
 def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit: int, output_dir: Path) -> dict[str, Any]:
@@ -237,11 +244,12 @@ def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit
     for item in reference:
         label = str(item["label"])
         mask = [float(value == label) for value in grouped.tolist()]
-        vector_path = tensor_dir / f"group_{safe_label(label)}.csv"
+        label_token = tensor_label_token(label)
+        vector_path = tensor_dir / f"group_{label_token}.csv"
         write_vector(vector_path, mask)
         tensor_rows.append(
             {
-                "name": f"group_mask.{safe_label(label)}",
+                "name": f"group_mask.{label_token}",
                 "kind": "group_mask",
                 "label": label,
                 "file": vector_path.relative_to(output_dir).as_posix(),
