@@ -75,13 +75,32 @@ def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[
     if isinstance(heir_correctness, dict):
         correctness_rows = [
             ["passed", heir_correctness.get("passed", "")],
+            ["absolute_tolerance", heir_correctness.get("tolerance", summary.get("accuracy_tolerance", ""))],
             ["checked_labels", heir_correctness.get("checked_labels", "")],
+            ["max_absolute_error", heir_correctness.get("max_absolute_error", "")],
+            ["mean_absolute_error", heir_correctness.get("mean_absolute_error", "")],
             ["failure_count", len(heir_correctness.get("failures", [])) if isinstance(heir_correctness.get("failures", []), list) else ""],
         ]
         failure_rows = [[failure] for failure in heir_correctness.get("failures", [])] or [["none"]]
+        accuracy_rows = [
+            [
+                detail.get("label", ""),
+                detail.get("expected_count", ""),
+                detail.get("actual_count", ""),
+                detail.get("count_absolute_error", ""),
+                detail.get("secondary_metric", ""),
+                detail.get("expected_secondary", ""),
+                detail.get("actual_secondary", ""),
+                detail.get("secondary_absolute_error", ""),
+                detail.get("passed", ""),
+            ]
+            for detail in heir_correctness.get("details", [])
+            if isinstance(detail, dict)
+        ] or [["not run", "", "", "", "", "", "", "", ""]]
     else:
         correctness_rows = [["status", "not run"]]
         failure_rows = [["not run"]]
+        accuracy_rows = [["not run", "", "", "", "", "", "", "", ""]]
     heir_result = summary.get("heir_result", {})
     heir_result_rows = []
     proof_rows = [["status", "not run"]]
@@ -228,6 +247,13 @@ and the runner must compile those files.
 ### Correctness Failures
 
 {markdown_table(["Failure"], failure_rows)}
+
+### CKKS Accuracy Detail
+
+Every count and secondary result must have absolute error less than or equal to
+the configured tolerance. The full machine-readable table is `heir_accuracy.csv`.
+
+{markdown_table(["Label", "Pandas count", "CKKS count", "Count error", "Secondary metric", "Pandas value", "CKKS value", "Value error", "Pass"], accuracy_rows)}
 
 ## Prepared Tensors
 

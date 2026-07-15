@@ -79,6 +79,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--multiplicative-depth", type=int, default=3)
     parser.add_argument("--scaling-mod-size", type=int, default=50)
     parser.add_argument("--first-mod-size", type=int, default=60)
+    parser.add_argument(
+        "--accuracy-tolerance",
+        type=float,
+        default=1e-4,
+        help="Maximum absolute CKKS error accepted for every reported encrypted value.",
+    )
     return parser.parse_args()
 
 
@@ -87,37 +93,90 @@ def read_reference(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(input_file))
 
 
-def compare_heir_result(reference_rows: list[dict[str, str]], result: dict[str, object]) -> dict[str, object]:
+def compare_heir_result(
+    reference_rows: list[dict[str, str]], result: dict[str, object], tolerance: float
+) -> dict[str, object]:
     actual_rows = result.get("results", [])
     if not isinstance(actual_rows, list):
-        return {"passed": False, "failures": ["heir_result.json has no results list"]}
+        return {"passed": False, "tolerance": tolerance, "failures": ["heir_result.json has no results list"], "details": []}
     actual_by_label = {
         str(row.get("label")): row
         for row in actual_rows
         if isinstance(row, dict)
     }
     failures = []
+    details = []
     for row in reference_rows:
         label = row["label"]
         actual = actual_by_label.get(label)
         if actual is None:
             failures.append(f"missing label {label}")
+            details.append({"label": label, "passed": False, "failure": "missing HEIR result"})
             continue
         expected_count = float(row["count"])
         expected_secondary_key = "default_count" if "default_count" in row else "percent"
         expected_secondary = float(row[expected_secondary_key])
         actual_count = float(actual.get("count", -1))
         actual_secondary = float(actual.get(expected_secondary_key, -1))
-        if abs(expected_count - actual_count) > 1e-4 or abs(expected_secondary - actual_secondary) > 1e-4:
+        count_error = abs(expected_count - actual_count)
+        secondary_error = abs(expected_secondary - actual_secondary)
+        passed = count_error <= tolerance and secondary_error <= tolerance
+        details.append(
+            {
+                "label": label,
+                "expected_count": expected_count,
+                "actual_count": actual_count,
+                "count_absolute_error": count_error,
+                "secondary_metric": expected_secondary_key,
+                "expected_secondary": expected_secondary,
+                "actual_secondary": actual_secondary,
+                "secondary_absolute_error": secondary_error,
+                "passed": passed,
+                "failure": "" if passed else "absolute error exceeds tolerance",
+            }
+        )
+        if not passed:
             failures.append(
                 f"{label}: expected count/{expected_secondary_key} {expected_count}/{expected_secondary}, "
                 f"actual {actual_count}/{actual_secondary}"
             )
+    numeric_details = [detail for detail in details if "count_absolute_error" in detail]
+    all_errors = [
+        float(detail[key])
+        for detail in numeric_details
+        for key in ("count_absolute_error", "secondary_absolute_error")
+    ]
     return {
         "passed": not failures,
+        "tolerance": tolerance,
         "failures": failures[:20],
         "checked_labels": len(reference_rows),
+        "details": details,
+        "max_absolute_error": max(all_errors) if all_errors else None,
+        "mean_absolute_error": (sum(all_errors) / len(all_errors)) if all_errors else None,
     }
+
+
+def write_accuracy_csv(path: Path, accuracy: dict[str, object]) -> None:
+    details = accuracy.get("details", [])
+    if not isinstance(details, list):
+        return
+    fieldnames = [
+        "label",
+        "expected_count",
+        "actual_count",
+        "count_absolute_error",
+        "secondary_metric",
+        "expected_secondary",
+        "actual_secondary",
+        "secondary_absolute_error",
+        "passed",
+        "failure",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as output_file:
+        writer = csv.DictWriter(output_file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(detail for detail in details if isinstance(detail, dict))
 
 
 def path_size_bytes(path: Path) -> int:
@@ -140,6 +199,7 @@ def collect_artifact_sizes(run_dir: Path) -> dict[str, int]:
         "pandas_reference": path_size_bytes(run_dir / "pandas_reference.csv"),
         "workload_spec": path_size_bytes(run_dir / "heir_workload_spec.json"),
         "heir_result_json": path_size_bytes(run_dir / "heir_result.json"),
+        "heir_accuracy_csv": path_size_bytes(run_dir / "heir_accuracy.csv"),
         "compiled_dir": path_size_bytes(run_dir / "compiled"),
         "heir_generated_ckks_dir": path_size_bytes(run_dir / "heir_generated_ckks"),
         "heir_openfhe_dot_dir": path_size_bytes(run_dir / "heir_openfhe_dot"),
@@ -203,6 +263,7 @@ def main() -> None:
     summary["multiplicative_depth"] = args.multiplicative_depth
     summary["scaling_mod_size"] = args.scaling_mod_size
     summary["first_mod_size"] = args.first_mod_size
+    summary["accuracy_tolerance"] = args.accuracy_tolerance
 
     context = {
         "run_dir": str(run_dir),
@@ -265,7 +326,10 @@ def main() -> None:
         write_log(run_dir / "heir_generated_ckks.log", backend_log)
         reference_rows_for_compare = read_reference(Path(summary["pandas_reference"]))
         summary["heir_result"] = heir_result
-        summary["heir_correctness"] = compare_heir_result(reference_rows_for_compare, heir_result)
+        summary["heir_correctness"] = compare_heir_result(
+            reference_rows_for_compare, heir_result, args.accuracy_tolerance
+        )
+        write_accuracy_csv(run_dir / "heir_accuracy.csv", summary["heir_correctness"])
         summary["backend_status"] = "heir_generated_ckks_completed"
     elif args.backend == "heir-ckks-openfhe":
         from code.heir.home_credit.backends.ckks_openfhe import run_ckks_openfhe_backend
@@ -283,7 +347,10 @@ def main() -> None:
         write_log(run_dir / "heir_ckks_openfhe.log", backend_log)
         reference_rows_for_compare = read_reference(Path(summary["pandas_reference"]))
         summary["heir_result"] = heir_result
-        summary["heir_correctness"] = compare_heir_result(reference_rows_for_compare, heir_result)
+        summary["heir_correctness"] = compare_heir_result(
+            reference_rows_for_compare, heir_result, args.accuracy_tolerance
+        )
+        write_accuracy_csv(run_dir / "heir_accuracy.csv", summary["heir_correctness"])
         summary["backend_status"] = "heir_ckks_openfhe_completed"
     elif args.backend == "heir-openfhe-dot":
         raise SystemExit(
