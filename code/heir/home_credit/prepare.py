@@ -288,3 +288,154 @@ def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit
     }
     (output_dir / "heir_workload_spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
     return spec
+
+
+def previous_loan_count_reference_code() -> str:
+    """Return the exact normal-dataflow baseline used by the history benchmark."""
+    return "\n".join(
+        [
+            'previous_counts = previous_application.groupby("SK_ID_CURR").size().rename("previous_loan_count")',
+            'joined = application_train[["SK_ID_CURR", "TARGET"]].merge(',
+            '    previous_counts, on="SK_ID_CURR", how="left"',
+            ').fillna({"previous_loan_count": 0})',
+        ]
+    )
+
+
+def prepare_previous_loan_count_tensors(
+    application_path: Path,
+    previous_application_path: Path,
+    application_row_limit: int,
+    previous_row_limit: int,
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Create an anonymous padded history matrix without exporting applicant IDs.
+
+    The row-to-ID mapping and TARGET stay in ``client_private``. The HE input is
+    only an ``application_count x slots_per_application`` matrix of 0/1 history
+    indicators plus a vector of ones. This intentionally separates record
+    alignment from the encrypted per-applicant summation.
+    """
+    started = time.perf_counter()
+    load_started = time.perf_counter()
+    application = read_application(application_path, application_row_limit)
+    application_load_seconds = time.perf_counter() - load_started
+    previous_load_started = time.perf_counter()
+    previous = read_previous_application(previous_application_path, previous_row_limit)
+    previous_load_seconds = time.perf_counter() - previous_load_started
+
+    required_application = {"SK_ID_CURR", "TARGET"}
+    required_previous = {"SK_ID_CURR"}
+    missing_application = sorted(required_application.difference(application.columns))
+    missing_previous = sorted(required_previous.difference(previous.columns))
+    if missing_application:
+        raise ValueError(f"application_train missing required columns: {', '.join(missing_application)}")
+    if missing_previous:
+        raise ValueError(f"previous_application missing required columns: {', '.join(missing_previous)}")
+    if application["SK_ID_CURR"].duplicated().any():
+        raise ValueError("application_train SK_ID_CURR must be unique for the history-count benchmark")
+
+    reference_started = time.perf_counter()
+    previous_counts = previous.groupby("SK_ID_CURR").size().rename("previous_loan_count")
+    joined = application[["SK_ID_CURR", "TARGET"]].merge(
+        previous_counts, on="SK_ID_CURR", how="left"
+    ).fillna({"previous_loan_count": 0})
+    joined["previous_loan_count"] = joined["previous_loan_count"].astype(int)
+    pandas_reference_seconds = time.perf_counter() - reference_started
+
+    tensor_started = time.perf_counter()
+    application_ids = application["SK_ID_CURR"].tolist()
+    index_by_id = {int(value): index for index, value in enumerate(application_ids)}
+    matched_previous = previous[previous["SK_ID_CURR"].isin(index_by_id)].copy()
+    matched_previous["app_index"] = matched_previous["SK_ID_CURR"].map(index_by_id).astype(int)
+    history_lengths = matched_previous.groupby("app_index").size()
+    slots_per_application = int(history_lengths.max()) if not history_lengths.empty else 1
+    application_count = int(len(application))
+    history_mask = [0.0] * (application_count * slots_per_application)
+    next_slot = [0] * application_count
+    for app_index in matched_previous["app_index"].tolist():
+        slot = next_slot[app_index]
+        if slot >= slots_per_application:
+            raise RuntimeError("history slot allocation exceeded its fixed tensor shape")
+        history_mask[app_index * slots_per_application + slot] = 1.0
+        next_slot[app_index] += 1
+
+    tensor_dir = output_dir / "tensors"
+    history_path = tensor_dir / "history_mask_matrix.csv"
+    unit_weights_path = tensor_dir / "unit_weights.csv"
+    write_vector(history_path, history_mask)
+    write_vector(unit_weights_path, [1.0] * slots_per_application)
+
+    client_private_dir = output_dir / "client_private"
+    reference_rows = [
+        {
+            "app_index": index,
+            "previous_loan_count": int(value),
+        }
+        for index, value in enumerate(joined["previous_loan_count"].tolist())
+    ]
+    mapping_rows = [
+        {
+            "app_index": index,
+            "SK_ID_CURR": int(row.SK_ID_CURR),
+            "TARGET": int(row.TARGET) if pd.notna(row.TARGET) else "",
+        }
+        for index, row in enumerate(application[["SK_ID_CURR", "TARGET"]].itertuples(index=False))
+    ]
+    write_csv(output_dir / "pandas_reference.csv", ["app_index", "previous_loan_count"], reference_rows)
+    write_csv(client_private_dir / "applicant_mapping.csv", ["app_index", "SK_ID_CURR", "TARGET"], mapping_rows)
+
+    tensor_rows = [
+        {
+            "name": "history_mask_matrix",
+            "kind": "history_mask_matrix",
+            "label": "1=one previous_application row in this anonymous applicant slot",
+            "file": history_path.relative_to(output_dir).as_posix(),
+            "rows": len(history_mask),
+        },
+        {
+            "name": "unit_weights",
+            "kind": "unit_weight",
+            "label": "1",
+            "file": unit_weights_path.relative_to(output_dir).as_posix(),
+            "rows": slots_per_application,
+        },
+    ]
+    prepared_tensor_count = validate_tensor_artifacts(output_dir, tensor_rows)
+    manifest_path = output_dir / "tensor_manifest.csv"
+    write_csv(manifest_path, ["name", "kind", "label", "file", "rows"], tensor_rows)
+    tensor_materialization_seconds = time.perf_counter() - tensor_started
+    prepare_wall_seconds = time.perf_counter() - started
+
+    spec = {
+        "workload": "previous_loan_count_by_applicant",
+        "notebook_section": "derived applicant-history feature",
+        "title": "Previous Loan Count per Applicant",
+        "application_input": str(application_path),
+        "previous_application_input": str(previous_application_path),
+        "requested_application_row_limit": application_row_limit,
+        "requested_previous_row_limit": previous_row_limit,
+        "application_rows": application_count,
+        "previous_application_rows": int(len(previous)),
+        "matched_previous_rows": int(len(matched_previous)),
+        "slots_per_application": slots_per_application,
+        "padding_slots": application_count * slots_per_application - int(len(matched_previous)),
+        "prepared_tensor_count": prepared_tensor_count,
+        "kernel": "per_applicant_history_count",
+        "pandas_reference_code": previous_loan_count_reference_code(),
+        "tensor_manifest": str(manifest_path),
+        "pandas_reference": str(output_dir / "pandas_reference.csv"),
+        "client_private_mapping": str(client_private_dir / "applicant_mapping.csv"),
+        "timings_seconds": {
+            "pandas_application_load_seconds": application_load_seconds,
+            "pandas_previous_application_load_seconds": previous_load_seconds,
+            "pandas_reference_seconds": pandas_reference_seconds,
+            "normal_python_baseline_seconds": (
+                application_load_seconds + previous_load_seconds + pandas_reference_seconds
+            ),
+            "tensor_materialization_seconds": tensor_materialization_seconds,
+            "prepare_wall_seconds": prepare_wall_seconds,
+        },
+    }
+    (output_dir / "heir_workload_spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
+    return spec

@@ -283,3 +283,179 @@ the configured tolerance. The full machine-readable table is `heir_accuracy.csv`
 """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(report, encoding="utf-8")
+
+
+def write_previous_loan_count_report(
+    path: Path,
+    summary: dict[str, Any],
+    reference_rows: list[dict[str, Any]],
+    actual_by_index: dict[str, float],
+    mapping_by_index: dict[str, dict[str, str]],
+) -> None:
+    """Write the explicit report for the one-feature applicant-history flow."""
+    timings = summary.get("timings_seconds", {})
+    artifact_sizes = summary.get("artifact_sizes_bytes", {})
+    accuracy = summary.get("heir_correctness", {})
+    result = summary.get("heir_result", {})
+    details = accuracy.get("details", []) if isinstance(accuracy, dict) else []
+    preview_rows = []
+    for row in reference_rows[:20]:
+        index = str(row["app_index"])
+        mapping = mapping_by_index.get(index, {})
+        expected = float(row["previous_loan_count"])
+        actual = actual_by_index.get(index, float("nan"))
+        preview_rows.append(
+            [
+                index,
+                mapping.get("TARGET", ""),
+                int(expected),
+                actual,
+                abs(expected - actual) if actual == actual else "",
+            ]
+        )
+    accuracy_rows = [
+        [
+            detail.get("app_index", ""),
+            detail.get("expected_previous_loan_count", ""),
+            detail.get("actual_previous_loan_count", ""),
+            detail.get("absolute_error", ""),
+            detail.get("passed", ""),
+        ]
+        for detail in details[:50]
+        if isinstance(detail, dict)
+    ] or [["not run", "", "", "", ""]]
+    timing_rows = [[key, f"{float(value):.6f}"] for key, value in timings.items()]
+    size_rows = [
+        [key, human_bytes(value), value]
+        for key, value in artifact_sizes.items()
+        if value
+    ]
+    result_rows = [
+        ["backend", result.get("backend", "") if isinstance(result, dict) else ""],
+        ["scheme", result.get("scheme", "") if isinstance(result, dict) else ""],
+        ["generated function", result.get("generated_function", "") if isinstance(result, dict) else ""],
+        ["application count", result.get("application_count", "") if isinstance(result, dict) else ""],
+        ["slots per applicant", result.get("slots_per_application", "") if isinstance(result, dict) else ""],
+        ["encrypted compute seconds", result.get("encrypted_compute_seconds", "") if isinstance(result, dict) else ""],
+        ["decrypted output", result.get("decrypted_output_csv", "") if isinstance(result, dict) else ""],
+    ]
+    proof = result.get("heir_proof", {}) if isinstance(result, dict) else {}
+    proof_rows = [
+        ["heir_output.cpp sha256", proof.get("heir_output_cpp_sha256", "")],
+        ["heir_output.h sha256", proof.get("heir_output_h_sha256", "")],
+        ["detected vector size", proof.get("detected_vector_size", "")],
+    ] if isinstance(proof, dict) and proof else [["status", "not run"]]
+    failures = accuracy.get("failures", []) if isinstance(accuracy, dict) else []
+    failure_rows = [[item] for item in failures[:20]] if failures else [["none"]]
+
+    report = f"""# HEIR CKKS Previous-Loan Count Benchmark
+
+## Scope
+
+One derived feature only: `previous_loan_count` for every applicant in
+`application_train`. This benchmark intentionally does not compute approval
+rate, amounts, or a risk score.
+
+## Input And Boundary
+
+| Field | Value |
+| --- | --- |
+| Application input | `{summary.get('application_input', '')}` |
+| Previous-application input | `{summary.get('previous_application_input', '')}` |
+| Application rows | `{summary.get('application_rows', '')}` |
+| Previous rows loaded | `{summary.get('previous_application_rows', '')}` |
+| Previous rows aligned to selected applicants | `{summary.get('matched_previous_rows', '')}` |
+| Fixed slots per applicant | `{summary.get('slots_per_application', '')}` |
+| Padding slots | `{summary.get('padding_slots', '')}` |
+
+Source-side alignment maps `SK_ID_CURR` to an anonymous row index and assigns
+each matching historical application to one fixed slot. It does **not** send
+the ID mapping to the HE runner. `client_private/applicant_mapping.csv` stays
+with the trusted source and is used only to interpret decrypted row indexes.
+
+## Normal Pandas Reference
+
+```python
+{summary.get('pandas_reference_code', '')}
+```
+
+This is the ordinary dataframe flow: `groupby(SK_ID_CURR).size()`, then
+`merge(..., how="left")`, then fill missing history counts with zero.
+
+## Encrypted HEIR Input
+
+```text
+history_mask_matrix[applicant_index, history_slot] = 1 for a real previous row; 0 for padding
+unit_weights[history_slot] = 1
+```
+
+For benchmark convenience, the generated runner creates keys, encrypts these
+tensors, evaluates, and decrypts in one timed process. A deployment moves key
+generation/encryption and final decryption to the trusted source. The HE
+compute receives only anonymous row indexes, encrypted values, and public
+tensor dimensions; it does not need `SK_ID_CURR` or `TARGET`.
+
+## HEIR CKKS Calculation
+
+```text
+previous_loan_count[applicant] = dot_product(history_mask_row, unit_weights)
+```
+
+The generated `dot_product` kernel is evaluated once per applicant row. This
+is deliberately a correctness-first implementation; its per-row ciphertext
+work is expected to be expensive at full population scale.
+
+## HEIR/OpenFHE Result
+
+{markdown_table(["Field", "Value"], result_rows)}
+
+## Generated Source Proof
+
+{markdown_table(["Field", "Value"], proof_rows)}
+
+## Accuracy Against Pandas
+
+{markdown_table(["Field", "Value"], [
+    ["passed", accuracy.get("passed", "") if isinstance(accuracy, dict) else "not run"],
+    ["absolute tolerance", accuracy.get("tolerance", "") if isinstance(accuracy, dict) else ""],
+    ["checked applicants", accuracy.get("checked_rows", "") if isinstance(accuracy, dict) else ""],
+    ["max absolute error", accuracy.get("max_absolute_error", "") if isinstance(accuracy, dict) else ""],
+])}
+
+### Accuracy Detail
+
+{markdown_table(["Anonymous app index", "Pandas count", "CKKS decrypted count", "Absolute error", "Pass"], accuracy_rows)}
+
+### Failures
+
+{markdown_table(["Failure"], failure_rows)}
+
+## Decrypted Output Preview
+
+`TARGET` below comes from the client-private mapping and is shown only to make
+the later risk-analysis join visible. It is not consumed by this HE kernel.
+
+{markdown_table(["Anonymous app index", "Client TARGET", "Pandas previous-loan count", "CKKS decrypted count", "Absolute error"], preview_rows)}
+
+## Artifact Size Summary
+
+{markdown_table(["Artifact", "Size", "Bytes"], size_rows)}
+
+## Timing Summary
+
+{markdown_table(["Metric", "Seconds"], timing_rows)}
+
+## Next Scope
+
+This benchmark proves encrypted per-applicant historical aggregation. A later
+kernel may consume the encrypted count vector together with encrypted `TARGET`
+to calculate correlation or a linear score without exposing either input.
+
+## Raw Summary
+
+```json
+{json.dumps(summary, indent=2)}
+```
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(report, encoding="utf-8")
