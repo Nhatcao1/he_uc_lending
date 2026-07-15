@@ -364,6 +364,12 @@ def main() -> None:
     reference_rows = read_reference(Path(summary["pandas_reference"]))
     write_report(run_dir / "benchmark_report.md", summary, reference_rows)
     print(json.dumps(summary, indent=2))
+    accuracy = summary.get("heir_correctness")
+    if isinstance(accuracy, dict) and accuracy.get("passed") is False:
+        raise SystemExit(
+            "CKKS accuracy acceptance failed: one or more absolute errors exceed "
+            f"{args.accuracy_tolerance}. See {run_dir / 'heir_accuracy.csv'}"
+        )
 
 
 if __name__ == "__main__":
