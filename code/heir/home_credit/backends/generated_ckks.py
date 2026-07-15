@@ -196,20 +196,35 @@ int main(int argc, char** argv) {
   try {
     const auto manifestRows = readManifest(manifestPath);
     TensorRow targetRow;
+    TensorRow countWeightRow;
+    TensorRow percentWeightRow;
     std::vector<TensorRow> groupRows;
     for (const auto& row : manifestRows) {
       if (row.kind == "target_mask") {
         targetRow = row;
+      } else if (row.kind == "count_weight") {
+        countWeightRow = row;
+      } else if (row.kind == "percent_weight") {
+        percentWeightRow = row;
       } else if (row.kind == "group_mask") {
         groupRows.push_back(row);
       }
     }
-    if (targetRow.file.empty()) {
-      throw std::runtime_error("tensor manifest has no target_mask row");
+    const bool isTargetByGroup = !targetRow.file.empty();
+    if (!isTargetByGroup && (countWeightRow.file.empty() || percentWeightRow.file.empty())) {
+      throw std::runtime_error("category-count manifest needs count_weight and percent_weight rows");
     }
 
-    auto targetMask = readVector(runDir / targetRow.file);
-    std::vector<double> oneMask(targetMask.size(), 1.0);
+    std::vector<double> targetMask;
+    std::vector<double> countWeights;
+    std::vector<double> percentWeights;
+    if (isTargetByGroup) {
+      targetMask = readVector(runDir / targetRow.file);
+      countWeights.assign(targetMask.size(), 1.0);
+    } else {
+      countWeights = readVector(runDir / countWeightRow.file);
+      percentWeights = readVector(runDir / percentWeightRow.file);
+    }
 
     const auto contextStarted = std::chrono::steady_clock::now();
     auto cryptoContext = dot_product__generate_crypto_context();
@@ -230,19 +245,20 @@ int main(int argc, char** argv) {
     struct Result {
       std::string label;
       double count;
-      double defaultCount;
+      double secondary;
     };
     std::vector<Result> results;
     results.reserve(groupRows.size());
     for (const auto& groupRow : groupRows) {
       auto groupMask = readVector(runDir / groupRow.file);
       const double count = generatedDotSum(
-          cryptoContext, keyPair.publicKey, keyPair.secretKey, groupMask, oneMask,
+          cryptoContext, keyPair.publicKey, keyPair.secretKey, groupMask, countWeights,
           encryptionSeconds, computeSeconds, decryptionSeconds);
-      const double defaultCount = generatedDotSum(
-          cryptoContext, keyPair.publicKey, keyPair.secretKey, groupMask, targetMask,
+      const auto& secondaryWeights = isTargetByGroup ? targetMask : percentWeights;
+      const double secondary = generatedDotSum(
+          cryptoContext, keyPair.publicKey, keyPair.secretKey, groupMask, secondaryWeights,
           encryptionSeconds, computeSeconds, decryptionSeconds);
-      results.push_back({groupRow.label, count, defaultCount});
+      results.push_back({groupRow.label, count, secondary});
     }
 
     const auto evalEnded = std::chrono::steady_clock::now();
@@ -259,6 +275,7 @@ int main(int argc, char** argv) {
     output << "  \"scheme\": \"CKKS\",\n";
     output << "  \"codegen\": \"heir_generated_openfhe_cpp\",\n";
     output << "  \"generated_function\": \"dot_product\",\n";
+    output << "  \"analysis_mode\": \"" << (isTargetByGroup ? "target_by_group" : "category_count") << "\",\n";
     output << "  \"chunk_size\": @VECTOR_SIZE@,\n";
     output << "  \"context_setup_seconds\": " << contextSeconds << ",\n";
     output << "  \"keygen_configure_seconds\": " << keygenSeconds << ",\n";
@@ -272,7 +289,7 @@ int main(int argc, char** argv) {
       const auto& item = results[i];
       output << "    {\"label\": \"" << jsonEscape(item.label) << "\", "
              << "\"count\": " << item.count << ", "
-             << "\"default_count\": " << item.defaultCount << "}";
+             << (isTargetByGroup ? "\"default_count\": " : "\"percent\": ") << item.secondary << "}";
       output << (i + 1 == results.size() ? "\n" : ",\n");
     }
     output << "  ]\n";

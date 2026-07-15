@@ -116,15 +116,34 @@ def write_report(path: Path, summary: dict[str, Any], reference_rows: list[dict[
             ]
     if not heir_result_rows:
         heir_result_rows = [["status", "not run"]]
-    preview_rows = [
-        [
-            row["label"],
-            row["count"],
-            row["default_count"],
-            f"{float(row['default_rate']) * 100:.4f}%",
+    is_target_by_group = bool(reference_rows and "default_count" in reference_rows[0])
+    if is_target_by_group:
+        preview_headers = ["Segment", "Count", "Default count", "Default rate"]
+        preview_rows = [
+            [
+                row["label"],
+                row["count"],
+                row["default_count"],
+                f"{float(row['default_rate']) * 100:.4f}%",
+            ]
+            for row in reference_rows[:20]
         ]
-        for row in reference_rows[:20]
-    ]
+        kernel_intent = (
+            "group_count = sum(group_mask)\n"
+            "default_count = sum(group_mask * target_mask)\n"
+            "default_rate = default_count / group_count after trusted decryption"
+        )
+    else:
+        preview_headers = ["Segment", "Count", "Percent"]
+        preview_rows = [
+            [row["label"], row["count"], f"{float(row['percent']):.4f}%"]
+            for row in reference_rows[:20]
+        ]
+        kernel_intent = (
+            "category_count = sum(category_mask * count_weight)\n"
+            "category_percent = sum(category_mask * percent_weight)\n"
+            "# percent_weight is the encrypted vector 100 / valid_category_rows"
+        )
     report = f"""# HEIR Home Credit EDA Benchmark Package
 
 ## Case
@@ -162,9 +181,7 @@ encrypted kernels against ordinary pandas execution.
 ## HEIR Kernel Intent
 
 ```text
-group_count = sum(group_mask)
-default_count = sum(group_mask * target_mask)
-default_rate = default_count / group_count after trusted decryption
+{kernel_intent}
 ```
 
 The HEIR kernel should receive fixed-shape numeric tensors. It should not parse
@@ -230,7 +247,7 @@ and the runner must compile those files.
 
 ## Result Preview
 
-{markdown_table(["Segment", "Count", "Default count", "Default rate"], preview_rows)}
+{markdown_table(preview_headers, preview_rows)}
 
 ## Raw Summary
 

@@ -168,3 +168,25 @@ TARGET_GROUP_WORKLOADS = {
     },
 }
 
+# Notebook section 5.15 runs categorical distributions over previous_application.
+# High-cardinality columns use the notebook-friendly top-K plus __OTHER__ view.
+PREVIOUS_CATEGORY_WORKLOADS = {
+    "prev_contract_type": {"section": "5.15.1", "title": "Previous Contract Type", "column": "NAME_CONTRACT_TYPE"},
+    "prev_weekday_process_start": {"section": "5.15.2", "title": "Previous Application Weekday", "column": "WEEKDAY_APPR_PROCESS_START"},
+    "prev_cash_loan_purpose": {"section": "5.15.3", "title": "Previous Cash Loan Purpose", "column": "NAME_CASH_LOAN_PURPOSE", "top_k": 20},
+    "prev_contract_status": {"section": "5.15.4", "title": "Previous Contract Status", "column": "NAME_CONTRACT_STATUS"},
+    "prev_payment_type": {"section": "5.15.5", "title": "Previous Payment Type", "column": "NAME_PAYMENT_TYPE"},
+    "prev_reject_reason": {"section": "5.15.6", "title": "Previous Reject Reason", "column": "CODE_REJECT_REASON"},
+    "prev_suite_type": {"section": "5.15.7", "title": "Previous Suite Type", "column": "NAME_TYPE_SUITE"},
+    "prev_client_type": {"section": "5.15.8", "title": "Previous Client Type", "column": "NAME_CLIENT_TYPE"},
+    "prev_goods_category": {"section": "5.15.9", "title": "Previous Goods Category", "column": "NAME_GOODS_CATEGORY", "top_k": 25},
+    "prev_portfolio": {"section": "5.15.10", "title": "Previous Portfolio", "column": "NAME_PORTFOLIO"},
+    "prev_product_type": {"section": "5.15.11", "title": "Previous Product Type", "column": "NAME_PRODUCT_TYPE"},
+    "prev_channel_type": {"section": "5.15.12", "title": "Previous Channel Type", "column": "CHANNEL_TYPE"},
+    "prev_seller_industry": {"section": "5.15.13", "title": "Previous Seller Industry", "column": "NAME_SELLER_INDUSTRY"},
+    "prev_yield_group": {"section": "5.15.14", "title": "Previous Yield Group", "column": "NAME_YIELD_GROUP"},
+    "prev_product_combination": {"section": "5.15.15", "title": "Previous Product Combination", "column": "PRODUCT_COMBINATION", "top_k": 25},
+    "prev_insured_on_approval": {"section": "5.15.16", "title": "Previous Insured on Approval", "column": "NFLAG_INSURED_ON_APPROVAL"},
+}
+
+HEIR_WORKLOADS = {**TARGET_GROUP_WORKLOADS, **PREVIOUS_CATEGORY_WORKLOADS}

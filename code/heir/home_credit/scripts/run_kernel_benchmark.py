@@ -15,14 +15,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from code.heir.home_credit.report import write_report
 from code.heir.home_credit.runner import probe_tool, run_template
-from code.heir.home_credit.workloads import TARGET_GROUP_WORKLOADS
+from code.heir.home_credit.workloads import HEIR_WORKLOADS, TARGET_GROUP_WORKLOADS
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Prepare and optionally run HEIR Home Credit EDA benchmark.")
     parser.add_argument("--input", default="data/home_credit/application_train.csv")
-    parser.add_argument("--workload", default="app_target_by_education_type", choices=sorted(TARGET_GROUP_WORKLOADS))
-    parser.add_argument("--row-limit", type=int, default=0, help="0 means all rows.")
+    parser.add_argument("--previous-application", default="data/home_credit/previous_application.csv")
+    parser.add_argument("--workload", default="app_target_by_education_type", choices=sorted(HEIR_WORKLOADS))
+    parser.add_argument("--row-limit", type=int, default=0, help="0 means all rows for the selected source table.")
     parser.add_argument("--output-root", default="benchmark_runs/home_credit_heir_eda")
     parser.add_argument("--run-name", default="")
     parser.add_argument(
@@ -103,13 +104,14 @@ def compare_heir_result(reference_rows: list[dict[str, str]], result: dict[str, 
             failures.append(f"missing label {label}")
             continue
         expected_count = float(row["count"])
-        expected_default = float(row["default_count"])
+        expected_secondary_key = "default_count" if "default_count" in row else "percent"
+        expected_secondary = float(row[expected_secondary_key])
         actual_count = float(actual.get("count", -1))
-        actual_default = float(actual.get("default_count", -1))
-        if abs(expected_count - actual_count) > 1e-4 or abs(expected_default - actual_default) > 1e-4:
+        actual_secondary = float(actual.get(expected_secondary_key, -1))
+        if abs(expected_count - actual_count) > 1e-4 or abs(expected_secondary - actual_secondary) > 1e-4:
             failures.append(
-                f"{label}: expected count/default {expected_count}/{expected_default}, "
-                f"actual {actual_count}/{actual_default}"
+                f"{label}: expected count/{expected_secondary_key} {expected_count}/{expected_secondary}, "
+                f"actual {actual_count}/{actual_secondary}"
             )
     return {
         "passed": not failures,
@@ -171,14 +173,19 @@ def parse_expected_actual(output: str) -> dict[str, object]:
 
 def main() -> None:
     args = parse_args()
-    from code.heir.home_credit.prepare import prepare_target_group_tensors
+    from code.heir.home_credit.prepare import prepare_previous_category_tensors, prepare_target_group_tensors
 
     repo = Path.cwd()
     run_name = args.run_name or f"{args.workload}_{args.row_limit or 'all'}_{int(time.time())}"
     run_dir = Path(args.output_root) / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    summary = prepare_target_group_tensors(Path(args.input), args.workload, args.row_limit, run_dir)
+    if args.workload in TARGET_GROUP_WORKLOADS:
+        summary = prepare_target_group_tensors(Path(args.input), args.workload, args.row_limit, run_dir)
+    else:
+        summary = prepare_previous_category_tensors(
+            Path(args.previous_application), args.workload, args.row_limit, run_dir
+        )
     summary["workload_spec"] = str(run_dir / "heir_workload_spec.json")
     summary["backend_status"] = "prepared_only"
     summary["heir_compile_cmd"] = args.heir_compile_cmd

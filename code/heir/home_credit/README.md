@@ -12,11 +12,15 @@ Active target scheme: CKKS
 Any non-CKKS HEIR sample in this folder is a toolchain smoke/bridge only. It
 must not be used as the product-facing Home Credit EDA scheme.
 
-The first target is notebook section `5.14.x`:
+The initial targets are notebook sections `5.14.x` and `5.15.x`:
 
 ```text
 group_count = sum(group_mask)
 default_count = sum(group_mask * target_mask)
+
+# 5.15 previous_application category distribution
+category_count = sum(category_mask * count_weight)
+category_percent = sum(category_mask * percent_weight)
 ```
 
 The Python wrapper prepares fixed-shape numeric tensors and a benchmark report.
@@ -153,6 +157,28 @@ decryption. `encrypted_compute_seconds` is the pure HE calculation metric.
 The report is written to `benchmark_report.md` under the run directory. The
 proof section must include `heir_output.cpp`, `heir_output.h`, both SHA-256
 hashes, the runner binary, and `backend = heir_generated_ckks_openfhe`.
+
+## 5.15 Previous Application Category Benchmark
+
+All `5.15.1` through `5.15.16` workloads use the same generated CKKS
+dot-product kernel. The wrapper prepares encrypted category masks from
+`previous_application.csv`, plus encrypted `1` and `100/N` weight vectors, so
+the server returns both encrypted count and encrypted percent. `N` is the
+non-null row count for the selected column. High-cardinality columns use the
+configured top-K labels plus `__OTHER__`.
+
+```bash
+python3 code/benchmarks/home_credit_heir_eda_benchmark.py \
+  --previous-application data/home_credit/previous_application.csv \
+  --workload prev_contract_status \
+  --row-limit 10000 \
+  --output-root benchmark_runs/home_credit_heir_eda \
+  --run-name previous_contract_status_heir_ckks_10k \
+  --backend heir-generated-ckks \
+  --heir-generated-dir /root/heir-work \
+  --openfhe-dir /root/openfhe-development/build \
+  --heir-vector-size 8192
+```
 
 ## HEIR Toolchain Probe
 
