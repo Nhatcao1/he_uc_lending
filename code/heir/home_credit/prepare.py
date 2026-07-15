@@ -71,6 +71,21 @@ def write_csv(path: Path, fieldnames: list[str], rows: list[dict[str, Any]]) -> 
         writer.writerows(rows)
 
 
+def validate_tensor_artifacts(output_dir: Path, tensor_rows: list[dict[str, Any]]) -> int:
+    """Fail preparation early when a manifest entry has no materialized vector."""
+    missing = []
+    for row in tensor_rows:
+        relative_path = Path(str(row["file"]))
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            raise ValueError(f"unsafe tensor path in manifest: {relative_path}")
+        path = output_dir / relative_path
+        if not path.is_file() or path.stat().st_size == 0:
+            missing.append(str(relative_path))
+    if missing:
+        raise FileNotFoundError(f"prepared tensor artifacts missing: {', '.join(missing)}")
+    return len(tensor_rows)
+
+
 def prepare_target_group_tensors(input_path: Path, workload: str, row_limit: int, output_dir: Path) -> dict[str, Any]:
     started = time.perf_counter()
     cfg = TARGET_GROUP_WORKLOADS[workload]
@@ -115,6 +130,7 @@ def prepare_target_group_tensors(input_path: Path, workload: str, row_limit: int
         )
 
     manifest_path = output_dir / "tensor_manifest.csv"
+    prepared_tensor_count = validate_tensor_artifacts(output_dir, tensor_rows)
     write_csv(manifest_path, ["name", "kind", "label", "file", "rows"], tensor_rows)
     reference_path = output_dir / "pandas_reference.csv"
     write_csv(reference_path, ["label", "count", "default_count", "default_rate"], reference)
@@ -128,6 +144,7 @@ def prepare_target_group_tensors(input_path: Path, workload: str, row_limit: int
         "input": str(input_path),
         "requested_row_limit": row_limit,
         "actual_rows": int(len(frame)),
+        "prepared_tensor_count": prepared_tensor_count,
         "column": column,
         "kernel": "masked_default_count",
         "pandas_reference_code": pandas_reference_code(column),
@@ -197,35 +214,44 @@ def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit
     tensor_dir = output_dir / "tensors"
     count_weights = [1.0] * len(frame)
     percent_weights = [100.0 / total_rows if total_rows else 0.0] * len(frame)
-    write_vector(tensor_dir / "count_weights.csv", count_weights)
-    write_vector(tensor_dir / "percent_weights.csv", percent_weights)
+    count_weight_path = tensor_dir / "count_weights.csv"
+    percent_weight_path = tensor_dir / "percent_weights.csv"
+    write_vector(count_weight_path, count_weights)
+    write_vector(percent_weight_path, percent_weights)
     tensor_rows = [
-        {"name": "count_weights", "kind": "count_weight", "label": "1", "file": "tensors/count_weights.csv", "rows": len(frame)},
+        {
+            "name": "count_weights",
+            "kind": "count_weight",
+            "label": "1",
+            "file": count_weight_path.relative_to(output_dir).as_posix(),
+            "rows": len(frame),
+        },
         {
             "name": "percent_weights",
             "kind": "percent_weight",
             "label": "100/N",
-            "file": "tensors/percent_weights.csv",
+            "file": percent_weight_path.relative_to(output_dir).as_posix(),
             "rows": len(frame),
         },
     ]
     for item in reference:
         label = str(item["label"])
         mask = [float(value == label) for value in grouped.tolist()]
-        file_name = f"tensors/group_{safe_label(label)}.csv"
-        write_vector(output_dir / file_name, mask)
+        vector_path = tensor_dir / f"group_{safe_label(label)}.csv"
+        write_vector(vector_path, mask)
         tensor_rows.append(
             {
                 "name": f"group_mask.{safe_label(label)}",
                 "kind": "group_mask",
                 "label": label,
-                "file": file_name,
+                "file": vector_path.relative_to(output_dir).as_posix(),
                 "rows": len(mask),
             }
         )
 
     manifest_path = output_dir / "tensor_manifest.csv"
     reference_path = output_dir / "pandas_reference.csv"
+    prepared_tensor_count = validate_tensor_artifacts(output_dir, tensor_rows)
     write_csv(manifest_path, ["name", "kind", "label", "file", "rows"], tensor_rows)
     write_csv(reference_path, ["label", "count", "percent"], reference)
     tensor_materialization_seconds = time.perf_counter() - tensor_started
@@ -237,6 +263,7 @@ def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit
         "input": str(input_path),
         "requested_row_limit": row_limit,
         "actual_rows": int(len(frame)),
+        "prepared_tensor_count": prepared_tensor_count,
         "valid_category_rows": total_rows,
         "column": column,
         "kernel": "category_count_and_percent",

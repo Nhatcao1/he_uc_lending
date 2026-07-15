@@ -179,6 +179,24 @@ def write_accuracy_csv(path: Path, accuracy: dict[str, object]) -> None:
         writer.writerows(detail for detail in details if isinstance(detail, dict))
 
 
+def validate_manifest_files(run_dir: Path) -> int:
+    """Ensure every tensor manifest entry exists before the HEIR runner starts."""
+    manifest_path = run_dir / "tensor_manifest.csv"
+    with manifest_path.open("r", encoding="utf-8-sig", newline="") as input_file:
+        rows = list(csv.DictReader(input_file))
+    missing = []
+    for row in rows:
+        relative_path = Path(row["file"])
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            raise ValueError(f"unsafe tensor path in manifest: {relative_path}")
+        path = run_dir / relative_path
+        if not path.is_file() or path.stat().st_size == 0:
+            missing.append(str(relative_path))
+    if missing:
+        raise FileNotFoundError(f"benchmark preparation incomplete; missing tensors: {', '.join(missing)}")
+    return len(rows)
+
+
 def path_size_bytes(path: Path) -> int:
     if path.is_file():
         return path.stat().st_size
@@ -247,6 +265,7 @@ def main() -> None:
             Path(args.previous_application), args.workload, args.row_limit, run_dir
         )
     summary["workload_spec"] = str(run_dir / "heir_workload_spec.json")
+    summary["validated_tensor_count"] = validate_manifest_files(run_dir)
     summary["backend_status"] = "prepared_only"
     summary["heir_compile_cmd"] = args.heir_compile_cmd
     summary["heir_eval_cmd"] = args.heir_eval_cmd
