@@ -43,6 +43,9 @@ Each run writes a detailed report:
 benchmark_runs/home_credit_heir_eda/<run-name>/benchmark_report.md
 ```
 
+The concise source-input, Python-output, and decrypted-HE-output contract is
+documented in [`HOME_CREDIT_HEIR_EDA_INPUT_OUTPUT.md`](../../../docs/HOME_CREDIT_HEIR_EDA_INPUT_OUTPUT.md).
+
 The report includes:
 
 ```text
