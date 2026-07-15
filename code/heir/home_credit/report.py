@@ -395,6 +395,27 @@ generation/encryption and final decryption to the trusted source. The HE
 compute receives only anonymous row indexes, encrypted values, and public
 tensor dimensions; it does not need `SK_ID_CURR` or `TARGET`.
 
+## Code Flow
+
+```text
+Pandas reference: previous_application.groupby(SK_ID_CURR).size()
+                  -> merge count into application_train
+                  -> expected count per anonymous app_index
+
+Source layout:    map SK_ID_CURR to app_index locally
+                  -> create N x K 0/1 history-mask matrix
+                  -> keep app_index -> SK_ID_CURR, TARGET private
+
+HEIR runner:      encrypt one K-slot history row and K encrypted ones
+                  -> generated CKKS dot_product
+                  -> decrypt anonymous count
+
+Validation:       compare decrypted count with pandas count by app_index
+```
+
+For a row `[1, 1, 1, 0, 0]`, the HE operation is encrypted dot-product with
+`[1, 1, 1, 1, 1]`, so the decrypted result is `3`.
+
 ## HEIR CKKS Calculation
 
 ```text
