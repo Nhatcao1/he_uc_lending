@@ -523,3 +523,109 @@ def prepare_single_missing_count_tensors(
     }
     (output_dir / "heir_workload_spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
     return spec
+
+
+def prepare_single_pearson_tensors(
+    input_path: Path, feature_x: str, feature_y: str, row_limit: int, output_dir: Path
+) -> dict[str, Any]:
+    """Prepare one normalized numeric pair for an encrypted Pearson trial."""
+    started = time.perf_counter()
+    load_started = time.perf_counter()
+    frame = read_application(input_path, row_limit)
+    pandas_load_seconds = time.perf_counter() - load_started
+    missing = [column for column in (feature_x, feature_y) if column not in frame]
+    if missing:
+        raise ValueError(f"application_train missing Pearson feature(s): {', '.join(missing)}")
+
+    reference_started = time.perf_counter()
+    pair = frame[[feature_x, feature_y]].apply(pd.to_numeric, errors="coerce").dropna()
+    if len(pair) < 2:
+        raise ValueError("Pearson benchmark requires at least two complete numeric rows")
+    x_min, x_max = float(pair[feature_x].min()), float(pair[feature_x].max())
+    y_min, y_max = float(pair[feature_y].min()), float(pair[feature_y].max())
+    if x_max <= x_min or y_max <= y_min:
+        raise ValueError("Pearson benchmark requires non-constant features")
+    x = ((pair[feature_x] - x_min) / (x_max - x_min)).astype(float)
+    y = ((pair[feature_y] - y_min) / (y_max - y_min)).astype(float)
+    n = int(len(pair))
+    mean_x, mean_y = float(x.mean()), float(y.mean())
+    mean_xy = float((x * y).mean())
+    mean_x2, mean_y2 = float((x * x).mean()), float((y * y).mean())
+    covariance = mean_xy - mean_x * mean_y
+    variance_x, variance_y = mean_x2 - mean_x * mean_x, mean_y2 - mean_y * mean_y
+    variance_product = variance_x * variance_y
+    if variance_product <= 0:
+        raise ValueError("Pearson benchmark has non-positive normalized variance product")
+    # Calibrate z near 1 for a small, stable inverse-square-root approximation.
+    # This aggregate calibration is public benchmark metadata, not ciphertext data.
+    inverse_sqrt_scale = 1.0 / variance_product
+    reference_correlation = float(pair[feature_x].corr(pair[feature_y], method="pearson"))
+    pandas_reference_seconds = time.perf_counter() - reference_started
+
+    tensor_started = time.perf_counter()
+    tensor_dir = output_dir / "tensors"
+    x_values, y_values = x.tolist(), y.tolist()
+    inverse_n = 1.0 / n
+    vector_specs = {
+        "x": x_values,
+        "y": y_values,
+        "x_times_inverse_n": [value * inverse_n for value in x_values],
+        "y_times_inverse_n": [value * inverse_n for value in y_values],
+        "inverse_n": [inverse_n] * n,
+        "ones": [1.0] * n,
+    }
+    tensor_rows = []
+    for name, values in vector_specs.items():
+        path = tensor_dir / f"{name}.csv"
+        write_vector(path, values)
+        tensor_rows.append({"name": name, "kind": "pearson_vector", "label": name, "file": path.relative_to(output_dir).as_posix(), "rows": n})
+    prepared_tensor_count = validate_tensor_artifacts(output_dir, tensor_rows)
+    manifest_path = output_dir / "tensor_manifest.csv"
+    write_csv(manifest_path, ["name", "kind", "label", "file", "rows"], tensor_rows)
+    reference_path = output_dir / "pandas_reference.csv"
+    reference_row = {
+        "feature_x": feature_x,
+        "feature_y": feature_y,
+        "complete_rows": n,
+        "correlation": reference_correlation,
+        "normalized_mean_x": mean_x,
+        "normalized_mean_y": mean_y,
+        "normalized_mean_xy": mean_xy,
+        "normalized_mean_x2": mean_x2,
+        "normalized_mean_y2": mean_y2,
+        "normalized_variance_product": variance_product,
+        "inverse_sqrt_scale": inverse_sqrt_scale,
+        "x_min": x_min,
+        "x_max": x_max,
+        "y_min": y_min,
+        "y_max": y_max,
+    }
+    write_csv(reference_path, list(reference_row), [reference_row])
+    tensor_materialization_seconds = time.perf_counter() - tensor_started
+    prepare_wall_seconds = time.perf_counter() - started
+    spec = {
+        "workload": "single_pair_full_pearson",
+        "notebook_section": "Pearson correlation selected-pair trial",
+        "title": f"Full HE Pearson: {feature_x} vs {feature_y}",
+        "input": str(input_path),
+        "feature_x": feature_x,
+        "feature_y": feature_y,
+        "requested_row_limit": row_limit,
+        "actual_rows": int(len(frame)),
+        "complete_pair_rows": n,
+        "normalization": {"x_min": x_min, "x_max": x_max, "y_min": y_min, "y_max": y_max},
+        "inverse_sqrt_scale": inverse_sqrt_scale,
+        "kernel": "heir_dot_moments_plus_ckks_chebyshev_inverse_sqrt",
+        "pandas_reference_code": f'application_train[["{feature_x}", "{feature_y}"]].dropna().corr(method="pearson")',
+        "tensor_manifest": str(manifest_path),
+        "pandas_reference": str(reference_path),
+        "timings_seconds": {
+            "pandas_load_seconds": pandas_load_seconds,
+            "pandas_reference_seconds": pandas_reference_seconds,
+            "normal_python_baseline_seconds": pandas_load_seconds + pandas_reference_seconds,
+            "tensor_materialization_seconds": tensor_materialization_seconds,
+            "prepare_wall_seconds": prepare_wall_seconds,
+        },
+    }
+    (output_dir / "heir_workload_spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
+    return spec

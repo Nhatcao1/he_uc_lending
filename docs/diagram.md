@@ -87,35 +87,40 @@ percent = dot(category_mask, 100 / valid_category_rows)
 Unlike 5.14, percentage is explicitly calculated under CKKS by using an
 encrypted vector whose entries are `100/N`.
 
-## Pearson Correlation: Next HEIR Kernel
+## Pearson Correlation: Full Pair Trial
 
 The existing direct OpenFHE correlation benchmark computes encrypted sufficient
-statistics. A complete HEIR-generated Pearson kernel is the next extension;
-the final square root/division remains a CKKS approximation challenge.
+statistics. The implemented full-pair trial uses HEIR-generated CKKS dot
+products plus an OpenFHE CKKS Chebyshev inverse-square-root adapter. It is not
+a generic encrypted replacement for `pandas.DataFrame.corr()`; pairs are
+selected, normalized, and accepted one at a time. The final
+square-root/division remains a CKKS approximation challenge.
 
 ```mermaid
 flowchart LR
-    A[Two numeric feature columns x and y] --> B[Source numeric conversion, scaling, valid_mask]
-    B --> C[Encrypt valid_mask, x, y, ones]
+    A[Selected numeric pair x and y] --> B[Trusted numeric conversion, drop incomplete pairs, normalize]
+    B --> C[Encrypt x, y, x/n, y/n, 1/n, ones]
     C --> D[HEIR CKKS dot-product calls]
-    D --> E[Enc n, sum_x, sum_y, sum_xy, sum_x2, sum_y2]
-    E --> F[Trusted decrypt exact Pearson, or future CKKS approximation]
+    D --> E[Enc n, mean_x, mean_y, mean_xy, mean_x2, mean_y2]
+    E --> F[OpenFHE CKKS covariance, variance, Chebyshev inverse square root]
+    F --> G[Decrypt only for benchmark acceptance]
 ```
 
-The encrypted sufficient statistics are:
+The HEIR-generated encrypted moment calculations are:
 
 ```text
-n      = sum(valid_mask)
-sum_x  = sum(valid_mask * x)
-sum_y  = sum(valid_mask * y)
-sum_xy = sum(valid_mask * x * y)
-sum_x2 = sum(valid_mask * x * x)
-sum_y2 = sum(valid_mask * y * y)
+n       = dot(ones, ones)
+mean_x  = dot(x, 1/n)
+mean_y  = dot(y, 1/n)
+mean_xy = dot(x, y/n)
+mean_x2 = dot(x, x/n)
+mean_y2 = dot(y, y/n)
 ```
 
-Current state: sufficient-statistics approach is implemented in the direct
-OpenFHE benchmark; full HEIR-generated Pearson and fully encrypted
-inverse-square-root/division are not yet claimed as complete.
+Current state: HEIR-generated dot moments and a fully encrypted OpenFHE CKKS
+Chebyshev inverse-square-root adapter are implemented for selected pairs. The
+adapter is not yet generated directly from HEIR MLIR, and the design does not
+claim a generic encrypted dataframe-wide `corr()` implementation.
 
 ## Final Workload: Previous Loan Count Per Applicant
 
