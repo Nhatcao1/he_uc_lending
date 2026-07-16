@@ -589,6 +589,8 @@ def write_full_pearson_report(path: Path, summary: dict[str, Any]) -> None:
         ["HEIR generated dot source", proof.get("heir_output_cpp", "")],
         ["HEIR source SHA256", proof.get("heir_output_cpp_sha256", "")],
         ["Detected HEIR vector size", proof.get("detected_vector_size", "")],
+        ["Logical-slot adapter", proof.get("logical_slot_adapter", "")],
+        ["Adapter replacements", proof.get("logical_slot_adapter_replacements", "")],
     ] if isinstance(proof, dict) and proof else [["status", "not run"]]
     report = f"""# HEIR CKKS Full Pearson Trial
 

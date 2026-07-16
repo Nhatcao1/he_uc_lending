@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 from code.heir.home_credit.backends.generated_ckks import (
     CMAKE_TEMPLATE,
@@ -13,6 +14,7 @@ from code.heir.home_credit.backends.generated_ckks import (
     generate_heir_sources,
     read_result,
     run_command,
+    sha256_file,
     validate_generated_ckks,
 )
 
@@ -69,8 +71,10 @@ std::vector<CiphertextT> generatedDot(
     // logical slots. Encode those slots directly and call the unchanged HEIR
     // generated dot_product kernel below.
     const auto encryptStarted = std::chrono::steady_clock::now();
-    auto leftCt = std::vector<CiphertextT>{cc->Encrypt(pk, cc->MakeCKKSPackedPlaintext(leftChunk))};
-    auto rightCt = std::vector<CiphertextT>{cc->Encrypt(pk, cc->MakeCKKSPackedPlaintext(rightChunk))};
+    auto leftCt = std::vector<CiphertextT>{cc->Encrypt(
+        pk, cc->MakeCKKSPackedPlaintext(leftChunk, 1, 0, nullptr, static_cast<uint32_t>(kChunkSize)))};
+    auto rightCt = std::vector<CiphertextT>{cc->Encrypt(
+        pk, cc->MakeCKKSPackedPlaintext(rightChunk, 1, 0, nullptr, static_cast<uint32_t>(kChunkSize)))};
     const auto encryptEnded = std::chrono::steady_clock::now();
     encryptionSeconds += std::chrono::duration<double>(encryptEnded - encryptStarted).count();
     const auto computeStarted = std::chrono::steady_clock::now();
@@ -219,6 +223,36 @@ int main(int argc, char** argv) {
 '''
 
 
+def constrain_generated_source_to_logical_slots(work_dir: Path, vector_size: int) -> dict[str, Any]:
+    """Keep a static HEIR vector kernel independent of physical CKKS ring size.
+
+    HEIR's OpenFHE emitter currently fills ciphertext/plaintext helper vectors
+    using ring_dimension / 2. That is fine for a shallow context whose physical
+    slots equal the static tensor size, but not for the deeper Pearson context
+    where OpenFHE increases the ring to preserve security. The emitted
+    dot_product arithmetic is untouched; only its serialization/preprocessing
+    helpers are restricted to the static logical tensor width.
+    """
+    source = work_dir / "heir_output.cpp"
+    original = source.read_text(encoding="utf-8")
+    expression = "cc->GetCryptoParameters()->GetElementParams()->GetRingDimension() / 2"
+    occurrences = original.count(expression)
+    if occurrences == 0:
+        raise ValueError(
+            "cannot constrain HEIR logical slots: expected ring-dimension helper expression was not found"
+        )
+    original_hash = sha256_file(source)
+    patched = original.replace(expression, f"static_cast<size_t>({vector_size})")
+    source.write_text(patched, encoding="utf-8")
+    return {
+        "logical_slot_adapter": "fixed_generated_helpers_to_static_tensor_width",
+        "logical_slot_adapter_vector_size": vector_size,
+        "logical_slot_adapter_replacements": occurrences,
+        "heir_output_cpp_original_sha256": original_hash,
+        "heir_output_cpp_adapted_sha256": sha256_file(source),
+    }
+
+
 def run_full_pearson_generated_ckks_backend(
     run_dir: Path, generated_dir: Path, openfhe_dir: str, vector_size: int,
     heir_opt: str, heir_translate: str, heir_opt_pipeline: str,
@@ -238,7 +272,9 @@ def run_full_pearson_generated_ckks_backend(
         timings.update(generated_timings); logs.append(output)
     else:
         copy_generated_sources(generated_dir, work_dir)
+    adapter_proof = constrain_generated_source_to_logical_slots(work_dir, vector_size)
     proof = validate_generated_ckks(work_dir)
+    proof.update(adapter_proof)
     if proof.get("detected_vector_size") and int(proof["detected_vector_size"]) != vector_size:
         raise ValueError("generated CKKS vector size does not match requested Pearson vector size")
     (work_dir / "home_credit_heir_generated_ckks_runner.cpp").write_text(

@@ -27,10 +27,14 @@ implemented in full.
 ## Encrypted Flow
 
 HEIR-generated CKKS code provides the packed encrypted dot-product primitive.
-The benchmark runner encrypts each fixed-size input chunk directly with CKKS;
-this avoids tying the 8,192 logical HEIR vector to OpenFHE's larger physical
-ring selected for the deeper polynomial calculation. It then calculates the
-following encrypted moments for normalized `x` and `y`:
+The benchmark runner encrypts each fixed-size input chunk directly with CKKS.
+Before compilation it also adapts only the HEIR emitter's generated
+encoding/preprocessing helpers from `ring_dimension / 2` to the static
+logical vector width of 8,192. OpenFHE may choose a larger physical ring for
+the deeper polynomial calculation; the generated `dot_product` arithmetic
+itself is not changed. The source hashes and the number of adapted helper
+expressions are recorded in the report. It then calculates the following
+encrypted moments for normalized `x` and `y`:
 
 ```text
 n       = dot(ones, ones)
