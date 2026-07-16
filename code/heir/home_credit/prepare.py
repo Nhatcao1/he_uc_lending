@@ -439,3 +439,87 @@ def prepare_previous_loan_count_tensors(
     }
     (output_dir / "heir_workload_spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
     return spec
+
+
+def prepare_single_missing_count_tensors(
+    input_path: Path, column: str, row_limit: int, output_dir: Path
+) -> dict[str, Any]:
+    """Prepare one encrypted 0/1 missing-value mask for a demonstration count."""
+    started = time.perf_counter()
+    load_started = time.perf_counter()
+    frame = read_application(input_path, row_limit)
+    pandas_load_seconds = time.perf_counter() - load_started
+    if column not in frame:
+        raise ValueError(f"application_train has no column {column}")
+
+    reference_started = time.perf_counter()
+    missing_count = int(frame[column].isnull().sum())
+    row_count = int(len(frame))
+    pandas_reference_seconds = time.perf_counter() - reference_started
+    if row_count == 0:
+        raise ValueError("single missing-count benchmark requires at least one application row")
+
+    tensor_started = time.perf_counter()
+    tensor_dir = output_dir / "tensors"
+    missing_mask_path = tensor_dir / "missing_mask.csv"
+    unit_weights_path = tensor_dir / "unit_weights.csv"
+    missing_mask = [float(value) for value in frame[column].isnull().tolist()]
+    write_vector(missing_mask_path, missing_mask)
+    write_vector(unit_weights_path, [1.0] * row_count)
+    tensor_rows = [
+        {
+            "name": "missing_mask",
+            "kind": "missing_mask",
+            "label": f"{column}.isnull()",
+            "file": missing_mask_path.relative_to(output_dir).as_posix(),
+            "rows": row_count,
+        },
+        {
+            "name": "unit_weights",
+            "kind": "unit_weight",
+            "label": "1",
+            "file": unit_weights_path.relative_to(output_dir).as_posix(),
+            "rows": row_count,
+        },
+    ]
+    prepared_tensor_count = validate_tensor_artifacts(output_dir, tensor_rows)
+    manifest_path = output_dir / "tensor_manifest.csv"
+    write_csv(manifest_path, ["name", "kind", "label", "file", "rows"], tensor_rows)
+    reference_path = output_dir / "pandas_reference.csv"
+    write_csv(
+        reference_path,
+        ["column", "row_count", "missing_count", "missing_percent"],
+        [
+            {
+                "column": column,
+                "row_count": row_count,
+                "missing_count": missing_count,
+                "missing_percent": 100.0 * missing_count / row_count if row_count else 0.0,
+            }
+        ],
+    )
+    tensor_materialization_seconds = time.perf_counter() - tensor_started
+    prepare_wall_seconds = time.perf_counter() - started
+    spec = {
+        "workload": "single_missing_count",
+        "notebook_section": "4.x missing-data check",
+        "title": f"Missing Count: {column}",
+        "input": str(input_path),
+        "column": column,
+        "requested_row_limit": row_limit,
+        "actual_rows": row_count,
+        "prepared_tensor_count": prepared_tensor_count,
+        "kernel": "single_mask_count",
+        "pandas_reference_code": f'application_train["{column}"].isnull().sum()',
+        "tensor_manifest": str(manifest_path),
+        "pandas_reference": str(reference_path),
+        "timings_seconds": {
+            "pandas_load_seconds": pandas_load_seconds,
+            "pandas_reference_seconds": pandas_reference_seconds,
+            "normal_python_baseline_seconds": pandas_load_seconds + pandas_reference_seconds,
+            "tensor_materialization_seconds": tensor_materialization_seconds,
+            "prepare_wall_seconds": prepare_wall_seconds,
+        },
+    }
+    (output_dir / "heir_workload_spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
+    return spec

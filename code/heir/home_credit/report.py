@@ -480,3 +480,90 @@ to calculate correlation or a linear score without exposing either input.
 """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(report, encoding="utf-8")
+
+
+def write_single_missing_count_report(path: Path, summary: dict[str, Any]) -> None:
+    """Write the compact report for a one-column encrypted null-count demo."""
+    timings = summary.get("timings_seconds", {})
+    artifacts = summary.get("artifact_sizes_bytes", {})
+    result = summary.get("heir_result", {})
+    accuracy = summary.get("heir_correctness", {})
+    reference = summary.get("pandas_reference_row", {})
+    result_rows = [
+        ["Pandas missing count", reference.get("missing_count", "") if isinstance(reference, dict) else ""],
+        ["CKKS decrypted missing count", result.get("missing_count", "") if isinstance(result, dict) else ""],
+        ["Absolute error", accuracy.get("absolute_error", "") if isinstance(accuracy, dict) else ""],
+        ["Accepted", accuracy.get("passed", "") if isinstance(accuracy, dict) else ""],
+    ]
+    timing_rows = [[key, f"{float(value):.6f}"] for key, value in timings.items()]
+    artifact_rows = [[key, human_bytes(value), value] for key, value in artifacts.items() if value]
+    proof = result.get("heir_proof", {}) if isinstance(result, dict) else {}
+    proof_rows = [
+        ["heir_output.cpp sha256", proof.get("heir_output_cpp_sha256", "")],
+        ["heir_output.h sha256", proof.get("heir_output_h_sha256", "")],
+        ["detected vector size", proof.get("detected_vector_size", "")],
+    ] if isinstance(proof, dict) and proof else [["status", "not run"]]
+    report = f"""# HEIR CKKS Single Missing-Value Count
+
+## Case
+
+| Field | Value |
+| --- | --- |
+| Input | `{summary.get('input', '')}` |
+| Column | `{summary.get('column', '')}` |
+| Rows loaded | `{summary.get('actual_rows', '')}` |
+| HEIR vector size | `{summary.get('heir_vector_size', '')}` |
+| Kernel | `single_mask_count` |
+| Backend status | `{summary.get('backend_status', '')}` |
+
+## Normal Pandas Reference
+
+```python
+{summary.get('pandas_reference_code', '')}
+```
+
+## Source Encoding
+
+```text
+missing_mask[i] = 1 when application_train[column].isnull() is true
+missing_mask[i] = 0 otherwise
+unit_weights[i] = 1
+```
+
+Raw values are not an HE input. This demo proves only the encrypted sum of a
+source-provided 0/1 missingness mask.
+
+## HEIR CKKS Operation
+
+```text
+encrypted_missing_count = dot_product(Enc(missing_mask), Enc(unit_weights))
+```
+
+The benchmark runner creates keys, encrypts, computes, and decrypts in one
+timed process. In deployment, source-side encryption/decryption moves outside
+the HE server.
+
+## Result And Accuracy
+
+{markdown_table(["Field", "Value"], result_rows)}
+
+## Generated Source Proof
+
+{markdown_table(["Field", "Value"], proof_rows)}
+
+## Artifact Size Summary
+
+{markdown_table(["Artifact", "Size", "Bytes"], artifact_rows)}
+
+## Timing Summary
+
+{markdown_table(["Metric", "Seconds"], timing_rows)}
+
+## Raw Summary
+
+```json
+{json.dumps(summary, indent=2)}
+```
+"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(report, encoding="utf-8")
