@@ -63,9 +63,14 @@ std::vector<CiphertextT> generatedDot(
       leftChunk[i] = left[offset + i];
       rightChunk[i] = right[offset + i];
     }
+    // HEIR's generated input wrappers fill every physical CKKS slot. For the
+    // deeper Pearson context OpenFHE can choose a larger secure ring, while
+    // this generated kernel deliberately operates on exactly kChunkSize
+    // logical slots. Encode those slots directly and call the unchanged HEIR
+    // generated dot_product kernel below.
     const auto encryptStarted = std::chrono::steady_clock::now();
-    auto leftCt = dot_product__encrypt__arg0(cc, leftChunk, pk);
-    auto rightCt = dot_product__encrypt__arg1(cc, rightChunk, pk);
+    auto leftCt = std::vector<CiphertextT>{cc->Encrypt(pk, cc->MakeCKKSPackedPlaintext(leftChunk))};
+    auto rightCt = std::vector<CiphertextT>{cc->Encrypt(pk, cc->MakeCKKSPackedPlaintext(rightChunk))};
     const auto encryptEnded = std::chrono::steady_clock::now();
     encryptionSeconds += std::chrono::duration<double>(encryptEnded - encryptStarted).count();
     const auto computeStarted = std::chrono::steady_clock::now();
@@ -96,7 +101,12 @@ CiphertextT multiplyScalar(CryptoContextT cc, const CiphertextT& value, double f
 
 double decryptScalar(CryptoContextT cc, const CiphertextT& value, PrivateKeyT sk, double& decryptionSeconds) {
   const auto started = std::chrono::steady_clock::now();
-  const double result = static_cast<double>(dot_product__decrypt__result0(cc, {value}, sk));
+  Plaintext plaintext;
+  cc->Decrypt(sk, value, &plaintext);
+  plaintext->SetLength(1);
+  const auto values = plaintext->GetRealPackedValue();
+  if (values.empty()) throw std::runtime_error("decrypted CKKS scalar is empty");
+  const double result = values.front();
   decryptionSeconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
   return result;
 }
@@ -179,6 +189,8 @@ int main(int argc, char** argv) {
            << "  \"generated_function\": \"dot_product\",\n"
            << "  \"analysis_mode\": \"single_pair_full_pearson\",\n"
            << "  \"chunk_size\": @VECTOR_SIZE@,\n"
+           << "  \"ring_dimension\": " << cc->GetRingDimension() << ",\n"
+           << "  \"logical_batch_size\": " << cc->GetEncodingParams()->GetBatchSize() << ",\n"
            << "  \"complete_rows\": " << x.size() << ",\n"
            << "  \"inverse_sqrt_scale\": " << inverseSqrtScale << ",\n"
            << "  \"chebyshev_degree\": " << chebyshevDegree << ",\n"
