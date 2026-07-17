@@ -11,7 +11,11 @@ from typing import Any
 
 import pandas as pd
 
-from code.heir.home_credit.workloads import PREVIOUS_CATEGORY_WORKLOADS, TARGET_GROUP_WORKLOADS
+from code.heir.home_credit.workloads import (
+    APPLICATION_CATEGORY_WORKLOADS,
+    PREVIOUS_CATEGORY_WORKLOADS,
+    TARGET_GROUP_WORKLOADS,
+)
 
 
 def read_application(path: Path, row_limit: int) -> pd.DataFrame:
@@ -163,11 +167,11 @@ def prepare_target_group_tensors(input_path: Path, workload: str, row_limit: int
     return spec
 
 
-def previous_reference_code(column: str) -> str:
+def category_reference_code(frame_name: str, column: str) -> str:
     return "\n".join(
         [
-            f'previous_application["{column}"].value_counts()',
-            f'previous_application["{column}"].value_counts(normalize=True) * 100',
+            f'{frame_name}["{column}"].value_counts()',
+            f'{frame_name}["{column}"].value_counts(normalize=True) * 100',
         ]
     )
 
@@ -182,17 +186,21 @@ def tensor_label_token(label: str) -> str:
     return f"{safe_label(label)}_{digest}"
 
 
-def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit: int, output_dir: Path) -> dict[str, Any]:
-    """Prepare encrypted numeric masks for one notebook 5.15 value-count table."""
-    started = time.perf_counter()
-    cfg = PREVIOUS_CATEGORY_WORKLOADS[workload]
-    column = str(cfg["column"])
-
-    load_started = time.perf_counter()
-    frame = read_previous_application(input_path, row_limit)
-    pandas_load_seconds = time.perf_counter() - load_started
+def prepare_category_count_tensors(
+    frame: pd.DataFrame,
+    input_path: Path,
+    workload: str,
+    config: dict[str, Any],
+    row_limit: int,
+    output_dir: Path,
+    pandas_load_seconds: float,
+    frame_name: str,
+    started: float,
+) -> dict[str, Any]:
+    """Prepare encrypted masks for one application or previous-table count table."""
+    column = str(config["column"])
     if column not in frame:
-        raise ValueError(f"previous_application has no column {column}")
+        raise ValueError(f"{frame_name} has no column {column}")
 
     reference_started = time.perf_counter()
     raw_series = frame[column]
@@ -201,7 +209,7 @@ def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit
     # numeric. Use one stable comparison representation for both cases.
     category_series = raw_series.astype(str).where(valid_values)
     value_counts = category_series.value_counts()
-    top_k = int(cfg.get("top_k", 0))
+    top_k = int(config.get("top_k", 0))
     selected_labels = [str(label) for label in (value_counts.head(top_k) if top_k else value_counts).index]
     selected_set = set(selected_labels)
     if top_k:
@@ -266,8 +274,8 @@ def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit
     prepare_wall_seconds = time.perf_counter() - started
     spec = {
         "workload": workload,
-        "notebook_section": cfg["section"],
-        "title": cfg["title"],
+        "notebook_section": config["section"],
+        "title": config["title"],
         "input": str(input_path),
         "requested_row_limit": row_limit,
         "actual_rows": int(len(frame)),
@@ -275,7 +283,7 @@ def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit
         "valid_category_rows": total_rows,
         "column": column,
         "kernel": "category_count_and_percent",
-        "pandas_reference_code": previous_reference_code(column),
+        "pandas_reference_code": category_reference_code(frame_name, column),
         "tensor_manifest": str(manifest_path),
         "pandas_reference": str(reference_path),
         "timings_seconds": {
@@ -288,6 +296,44 @@ def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit
     }
     (output_dir / "heir_workload_spec.json").write_text(json.dumps(spec, indent=2), encoding="utf-8")
     return spec
+
+
+def prepare_application_category_tensors(input_path: Path, workload: str, row_limit: int, output_dir: Path) -> dict[str, Any]:
+    """Prepare encrypted numeric masks for notebook sections 5.4 to 5.7."""
+    started = time.perf_counter()
+    load_started = time.perf_counter()
+    frame = read_application(input_path, row_limit)
+    pandas_load_seconds = time.perf_counter() - load_started
+    return prepare_category_count_tensors(
+        frame=frame,
+        input_path=input_path,
+        workload=workload,
+        config=APPLICATION_CATEGORY_WORKLOADS[workload],
+        row_limit=row_limit,
+        output_dir=output_dir,
+        pandas_load_seconds=pandas_load_seconds,
+        frame_name="application_train",
+        started=started,
+    )
+
+
+def prepare_previous_category_tensors(input_path: Path, workload: str, row_limit: int, output_dir: Path) -> dict[str, Any]:
+    """Prepare encrypted numeric masks for one notebook 5.15 value-count table."""
+    started = time.perf_counter()
+    load_started = time.perf_counter()
+    frame = read_previous_application(input_path, row_limit)
+    pandas_load_seconds = time.perf_counter() - load_started
+    return prepare_category_count_tensors(
+        frame=frame,
+        input_path=input_path,
+        workload=workload,
+        config=PREVIOUS_CATEGORY_WORKLOADS[workload],
+        row_limit=row_limit,
+        output_dir=output_dir,
+        pandas_load_seconds=pandas_load_seconds,
+        frame_name="previous_application",
+        started=started,
+    )
 
 
 def previous_loan_count_reference_code() -> str:

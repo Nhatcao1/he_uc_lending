@@ -203,10 +203,10 @@ category counts, not default-rate multiplication.
 
 | Notebook section | Candidate workload | Column(s) | Client preparation | HE server calculation | Output table | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 5.4 Suite / accompanied client | `app_suite_type` | `NAME_TYPE_SUITE` | normalize category, missing bucket, one-hot masks | `sum(mask)` | label, count, percent | supported in broad flow, not clean benchmarked |
-| 5.5 Target balance | `app_target_balance` | `TARGET` | create `TARGET=0` and `TARGET=1` masks | `sum(mask)` | target value, count, percent | supported in broad flow, not clean benchmarked |
-| 5.6 Loan type | `app_loan_type` | `NAME_CONTRACT_TYPE` | one-hot masks | `sum(mask)` | label, count, percent | supported in broad flow, not clean benchmarked |
-| 5.7 Own car / realty | `app_own_car_realty` | `FLAG_OWN_CAR`, `FLAG_OWN_REALTY` | one-hot masks for each flag | `sum(mask)` | flag, value, count, percent | supported in broad flow, not clean benchmarked |
+| 5.4 Suite / accompanied client | `app_suite_type` | `NAME_TYPE_SUITE` | normalize category, missing bucket, one-hot masks | `sum(mask)`, `sum(mask * 100/N)` | label, count, HE-computed percent | individual HEIR CKKS benchmark workload |
+| 5.5 Target balance | `app_target_balance` | `TARGET` | create `TARGET=0` and `TARGET=1` masks | `sum(mask)`, `sum(mask * 100/N)` | target value, count, HE-computed percent | individual HEIR CKKS benchmark workload |
+| 5.6 Loan type | `app_loan_type` | `NAME_CONTRACT_TYPE` | one-hot masks | `sum(mask)`, `sum(mask * 100/N)` | label, count, HE-computed percent | individual HEIR CKKS benchmark workload |
+| 5.7 Own car / own realty | `app_own_car`, `app_own_realty` | `FLAG_OWN_CAR`, `FLAG_OWN_REALTY` | one-hot masks per flag column | `sum(mask)`, `sum(mask * 100/N)` | flag value, count, HE-computed percent | two individual HEIR CKKS benchmark workloads |
 | 5.8 Income type | `app_income_type` | `NAME_INCOME_TYPE` | one-hot masks | `sum(mask)` | label, count, percent | supported in broad flow, not clean benchmarked |
 | 5.9 Family status | `app_family_status` | `NAME_FAMILY_STATUS` | one-hot masks | `sum(mask)` | label, count, percent | supported in broad flow, not clean benchmarked |
 | 5.10 Occupation | `app_occupation_type` | `OCCUPATION_TYPE` | top-K plus missing/other masks | `sum(mask)` | label, count, percent | supported in broad flow, size-sensitive |

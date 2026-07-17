@@ -168,6 +168,34 @@ TARGET_GROUP_WORKLOADS = {
     },
 }
 
+APPLICATION_CATEGORY_WORKLOADS = {
+    "app_suite_type": {
+        "section": "5.4",
+        "title": "Who Accompanied the Client",
+        "column": "NAME_TYPE_SUITE",
+    },
+    "app_target_balance": {
+        "section": "5.5",
+        "title": "Target Balance",
+        "column": "TARGET",
+    },
+    "app_loan_type": {
+        "section": "5.6",
+        "title": "Application Contract Type",
+        "column": "NAME_CONTRACT_TYPE",
+    },
+    "app_own_car": {
+        "section": "5.7",
+        "title": "Applicant Owns a Car",
+        "column": "FLAG_OWN_CAR",
+    },
+    "app_own_realty": {
+        "section": "5.7",
+        "title": "Applicant Owns Realty",
+        "column": "FLAG_OWN_REALTY",
+    },
+}
+
 # Notebook section 5.15 runs categorical distributions over previous_application.
 # High-cardinality columns use the notebook-friendly top-K plus __OTHER__ view.
 PREVIOUS_CATEGORY_WORKLOADS = {
@@ -189,4 +217,8 @@ PREVIOUS_CATEGORY_WORKLOADS = {
     "prev_insured_on_approval": {"section": "5.15.16", "title": "Previous Insured on Approval", "column": "NFLAG_INSURED_ON_APPROVAL"},
 }
 
-HEIR_WORKLOADS = {**TARGET_GROUP_WORKLOADS, **PREVIOUS_CATEGORY_WORKLOADS}
+HEIR_WORKLOADS = {
+    **APPLICATION_CATEGORY_WORKLOADS,
+    **TARGET_GROUP_WORKLOADS,
+    **PREVIOUS_CATEGORY_WORKLOADS,
+}

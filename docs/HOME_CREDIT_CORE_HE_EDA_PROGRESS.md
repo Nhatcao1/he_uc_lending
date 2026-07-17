@@ -92,8 +92,8 @@ notebook calculation kernel
 | --- | --- | --- | --- | --- |
 | Missing-value checks | encrypted missing masks | map null/blank values to 0/1 masks | `sum(mask)` | Implemented, needs timing |
 | Numeric distributions | encrypted numeric sums | clean numeric column, pack vector | `sum(x)` | Implemented, needs timing |
-| Category counts | encrypted one-hot category masks | normalize category, top-K policy, one-hot masks | `sum(category_mask)` | Implemented, demo-ready |
-| Target balance | encrypted target masks | encode `TARGET=1` and `TARGET=0` masks | `sum(target_mask)` | Implemented, needs timing |
+| Category counts | encrypted one-hot category masks | normalize category, top-K policy, one-hot masks | `sum(category_mask)` | 5.4, 5.6 and 5.7 have individual HEIR CKKS benchmark workloads |
+| Target balance | encrypted target masks | encode `TARGET=1` and `TARGET=0` masks | `sum(target_mask)` | 5.5 has an individual HEIR CKKS benchmark workload |
 | Target by category | encrypted conditional count | category masks plus `TARGET=1` mask | `sum(mask)`, `sum(mask * target)` | Implemented, demo-ready |
 | Previous application EDA | encrypted previous-table masks | prepare previous_application category masks | `sum(previous_mask)` | Implemented, size/perf needs work |
 | Correlation support | encrypted sufficient statistics | select numeric pairs, create pair-valid vectors, zero-fill invalid pairs | `sum(x)`, `sum(y)`, `sum(xy)`, `sum(x^2)`, `sum(y^2)` | Clean benchmark wrapper added |

@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 from code.heir.home_credit.report import write_report
 from code.heir.home_credit.runner import probe_tool, run_template
-from code.heir.home_credit.workloads import HEIR_WORKLOADS, TARGET_GROUP_WORKLOADS
+from code.heir.home_credit.workloads import APPLICATION_CATEGORY_WORKLOADS, HEIR_WORKLOADS, TARGET_GROUP_WORKLOADS
 
 
 def parse_args() -> argparse.Namespace:
@@ -251,7 +251,11 @@ def parse_expected_actual(output: str) -> dict[str, object]:
 
 def main() -> None:
     args = parse_args()
-    from code.heir.home_credit.prepare import prepare_previous_category_tensors, prepare_target_group_tensors
+    from code.heir.home_credit.prepare import (
+        prepare_application_category_tensors,
+        prepare_previous_category_tensors,
+        prepare_target_group_tensors,
+    )
 
     repo = Path.cwd()
     run_name = args.run_name or f"{args.workload}_{args.row_limit or 'all'}_{int(time.time())}"
@@ -260,6 +264,8 @@ def main() -> None:
 
     if args.workload in TARGET_GROUP_WORKLOADS:
         summary = prepare_target_group_tensors(Path(args.input), args.workload, args.row_limit, run_dir)
+    elif args.workload in APPLICATION_CATEGORY_WORKLOADS:
+        summary = prepare_application_category_tensors(Path(args.input), args.workload, args.row_limit, run_dir)
     else:
         summary = prepare_previous_category_tensors(
             Path(args.previous_application), args.workload, args.row_limit, run_dir
